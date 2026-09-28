@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas ERP — Bibliothèque de thèmes</title>
+<style>
+  :root{
+    --primary:#2563EB; --primary-hover:#1D4ED8; --on-primary:#FFFFFF;
+    --secondary:#475569; --accent:#0EA5E9;
+    --success:#16A34A; --warning:#D97706; --danger:#DC2626; --info:#0284C7;
+    --bg-app:#F8FAFC; --bg-surface:#FFFFFF; --bg-elevated:#FFFFFF;
+    --text-primary:#0F172A; --text-secondary:#475569; --text-muted:#94A3B8;
+    --border:#E2E8F0; --border-strong:#CBD5E1;
+    --radius:10px; --radius-sm:6px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font);
+    background:#0b0d10;
+    color:var(--text-primary);
+    -webkit-font-smoothing:antialiased;
+  }
+  .shell{
+    display:grid;
+    grid-template-columns: 268px 1fr 300px;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "head head head"
+      "nav  main tokens";
+    height:100vh;
+    background:#0b0d10;
+  }
+  /* ===== Chrome header (outside theme, static brand of this tool) ===== */
+  .chrome-head{
+    grid-area:head;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 20px;
+    background:#0b0d10;
+    border-bottom:1px solid #1c2027;
+  }
+  .chrome-head h1{
+    font-size:15px;font-weight:600;color:#EDEFF2;margin:0;
+    letter-spacing:.01em;
+  }
+  .chrome-head p{margin:2px 0 0;font-size:12.5px;color:#7a8290;}
+  .chrome-actions{display:flex;gap:8px;}
+  .chrome-btn{
+    background:#151920;border:1px solid #262c36;color:#c9cdd4;
+    font-size:12.5px;padding:7px 12px;border-radius:7px;cursor:pointer;
+    font-family:var(--font);
+  }
+  .chrome-btn:hover{background:#1b202a;}
+  .chrome-btn.primary{background:#EDEFF2;color:#0b0d10;border-color:#EDEFF2;font-weight:600;}
+  .chrome-btn.primary:hover{background:#d7dade;}
+
+  /* ===== Theme nav list ===== */
+  .theme-nav{
+    grid-area:nav;
+    background:#0e1116;
+    border-right:1px solid #1c2027;
+    overflow-y:auto;
+    padding:14px 10px 40px;
+  }
+  .theme-nav::-webkit-scrollbar{width:8px;}
+  .theme-nav::-webkit-scrollbar-thumb{background:#232833;border-radius:4px;}
+  .fam-title{
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;
+    color:#5c6472;font-weight:700;margin:16px 10px 6px;
+  }
+  .fam-title:first-child{margin-top:2px;}
+  .theme-item{
+    display:flex;align-items:center;gap:9px;
+    padding:7px 10px;border-radius:8px;cursor:pointer;
+    color:#b7bcc5;font-size:13px;
+    border:1px solid transparent;
+  }
+  .theme-item:hover{background:#151920;color:#EDEFF2;}
+  .theme-item.active{background:#181d25;border-color:#2a303c;color:#fff;font-weight:600;}
+  .swatchdot{
+    width:15px;height:15px;border-radius:50%;flex:none;
+    border:1px solid rgba(255,255,255,.15);
+    background:linear-gradient(135deg, var(--sw1) 0 50%, var(--sw2) 50% 100%);
+  }
+  .mode-pill{
+    margin-left:auto;font-size:9.5px;padding:2px 6px;border-radius:20px;
+    background:#1c2129;color:#7d8492;flex:none;
+  }
+
+  /* ===== Live preview area (this IS the themed zone) ===== */
+  .preview-wrap{
+    grid-area:main;
+    overflow-y:auto;
+    background:var(--bg-app);
+  }
+  .app-topbar{
+    display:flex;align-items:center;gap:16px;
+    padding:12px 22px;
+    background:var(--bg-surface);
+    border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:5;
+  }
+  .app-logo{
+    display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;color:var(--text-primary);
+  }
+  .app-logo .mark{
+    width:26px;height:26px;border-radius:7px;background:var(--primary);
+    display:flex;align-items:center;justify-content:center;color:var(--on-primary);
+    font-size:12px;font-weight:800;
+  }
+  .app-search{
+    flex:1;max-width:340px;
+    background:var(--bg-app);border:1px solid var(--border);border-radius:8px;
+    padding:8px 12px;font-size:13px;color:var(--text-muted);
+  }
+  .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;}
+  .icon-btn{
+    width:32px;height:32px;border-radius:8px;background:var(--bg-app);
+    border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+    color:var(--text-secondary);font-size:14px;position:relative;
+  }
+  .icon-btn .dot{
+    position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;
+    background:var(--danger);border:2px solid var(--bg-surface);
+  }
+  .avatar{
+    width:32px;height:32px;border-radius:50%;background:var(--secondary);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
+  }
+
+  .app-body{display:flex;min-height:calc(100vh - 57px);}
+  .app-sidebar{
+    width:196px;flex:none;
+    background:var(--bg-surface);border-right:1px solid var(--border);
+    padding:16px 10px;
+  }
+  .nav-group-label{
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);
+    padding:4px 10px;margin-top:14px;font-weight:700;
+  }
+  .nav-group-label:first-child{margin-top:0;}
+  .nav-link{
+    display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;
+    font-size:13px;color:var(--text-secondary);cursor:pointer;margin-bottom:2px;
+  }
+  .nav-link .dot{width:6px;height:6px;border-radius:50%;background:var(--text-muted);flex:none;}
+  .nav-link:hover{background:var(--bg-app);color:var(--text-primary);}
+  .nav-link.active{
+    background:var(--primary);color:var(--on-primary);font-weight:600;
+  }
+  .nav-link.active .dot{background:var(--on-primary);}
+
+  .app-main{flex:1;padding:22px 24px 60px;}
+  .page-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;}
+  .page-head h2{margin:0;font-size:19px;color:var(--text-primary);font-weight:700;}
+  .page-head span{font-size:12.5px;color:var(--text-muted);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+  .stat-card{
+    background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px;
+  }
+  .stat-label{font-size:12px;color:var(--text-secondary);margin-bottom:8px;}
+  .stat-value{font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:6px;}
+  .stat-trend{font-size:11.5px;font-weight:600;padding:2px 7px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;}
+  .stat-trend.up{background:var(--success-soft);color:var(--success);}
+  .stat-trend.down{background:var(--danger-soft);color:var(--danger);}
+
+  .panel{
+    background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);
+    margin-bottom:20px;overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid var(--border);
+  }
+  .panel-head h3{margin:0;font-size:14px;color:var(--text-primary);font-weight:700;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--text-muted);padding:10px 16px;border-bottom:1px solid var(--border);font-weight:700;
+  }
+  td{padding:11px 16px;border-bottom:1px solid var(--border);color:var(--text-secondary);}
+  tr:last-child td{border-bottom:none;}
+  td.client{color:var(--text-primary);font-weight:600;}
+  .badge{
+    font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;display:inline-block;
+  }
+  .badge.success{background:var(--success-soft);color:var(--success);}
+  .badge.warning{background:var(--warning-soft);color:var(--warning);}
+  .badge.danger{background:var(--danger-soft);color:var(--danger);}
+  .badge.info{background:var(--info-soft);color:var(--info);}
+
+  .controls-row{padding:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+  .btn{
+    font-family:var(--font);font-size:13px;font-weight:600;padding:9px 15px;border-radius:8px;
+    cursor:pointer;border:1px solid transparent;
+  }
+  .btn.primary{background:var(--primary);color:var(--on-primary);}
+  .btn.secondary{background:var(--secondary);color:#fff;}
+  .btn.outline{background:transparent;border-color:var(--border-strong);color:var(--text-primary);}
+  .btn.danger{background:var(--danger);color:#fff;}
+  .btn.ghost{background:transparent;color:var(--text-secondary);}
+  .field{
+    flex:1;min-width:160px;
+    border:1px solid var(--border-strong);border-radius:8px;padding:9px 11px;
+    font-size:13px;color:var(--text-primary);background:var(--bg-app);font-family:var(--font);
+  }
+
+  /* ===== Token / export panel ===== */
+  .token-panel{
+    grid-area:tokens;
+    background:#0e1116;border-left:1px solid #1c2027;
+    overflow-y:auto;padding:16px 14px 40px;
+  }
+  .token-panel h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#8a92a1;margin:0 0 10px;}
+  .theme-title{font-size:15px;font-weight:700;color:#EDEFF2;margin-bottom:2px;}
+  .theme-sub{font-size:12px;color:#7a8290;margin-bottom:16px;}
+  .token-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;}
+  .token-chip{
+    display:flex;align-items:center;gap:8px;background:#151920;border:1px solid #232936;
+    border-radius:8px;padding:7px 8px;cursor:pointer;font-size:11px;color:#c9cdd4;
+  }
+  .token-chip:hover{border-color:#3a4150;}
+  .token-chip .sw{width:18px;height:18px;border-radius:5px;flex:none;border:1px solid rgba(255,255,255,.12);}
+  .token-chip .lbl{display:flex;flex-direction:column;overflow:hidden;}
+  .token-chip .lbl b{font-size:10.5px;color:#e5e7eb;}
+  .token-chip .lbl span{font-size:10px;color:#7a8290;font-family:ui-monospace,Menlo,monospace;}
+  .export-btn{
+    width:100%;background:#EDEFF2;color:#0b0d10;border:none;border-radius:8px;
+    padding:10px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:var(--font);margin-bottom:10px;
+  }
+  .export-btn:hover{background:#d7dade;}
+  .export-area{
+    width:100%;background:#0b0d10;border:1px solid #232936;border-radius:8px;color:#9fe6a8;
+    font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.55;padding:10px;
+    height:220px;resize:none;
+  }
+  .copied-toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:#EDEFF2;color:#0b0d10;font-size:12.5px;font-weight:600;
+    padding:8px 16px;border-radius:20px;opacity:0;pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;z-index:50;
+  }
+  .copied-toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+
+  @media (max-width: 980px){
+    .shell{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;grid-template-areas:"head" "nav" "main";}
+    .token-panel{display:none;}
+    .theme-nav{max-height:180px;}
+    .stat-grid{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header class="chrome-head">
+    <div>
+      <h1>Atlas ERP — Bibliothèque de thèmes</h1>
+      <p>36 thèmes complets · aperçu en direct sur un mini-dashboard ERP</p>
+    </div>
+    <div class="chrome-actions">
+      <button class="chrome-btn" id="randomBtn">Thème aléatoire</button>
+      <button class="chrome-btn primary" id="exportTopBtn">Exporter le CSS</button>
+    </div>
+  </header>
+
+  <nav class="theme-nav" id="themeNav"></nav>
+
+  <main class="preview-wrap">
+    <div class="app-topbar">
+      <div class="app-logo"><span class="mark">A</span> Atlas ERP</div>
+      <input class="app-search" placeholder="Rechercher un client, une commande, un article…" readonly>
+      <div class="topbar-right">
+        <div class="icon-btn">🔔<span class="dot"></span></div>
+        <div class="icon-btn">⚙️</div>
+        <div class="avatar">MK</div>
+      </div>
+    </div>
+
+    <div class="app-body">
+      <aside class="app-sidebar">
+        <div class="nav-group-label">Général</div>
+        <div class="nav-link active"><span class="dot"></span> Tableau de bord</div>
+        <div class="nav-link"><span class="dot"></span> Rapports</div>
+        <div class="nav-group-label">Opérations</div>
+        <div class="nav-link"><span class="dot"></span> Ventes</div>
+        <div class="nav-link"><span class="dot"></span> Achats</div>
+        <div class="nav-link"><span class="dot"></span> Stock</div>
+        <div class="nav-link"><span class="dot"></span> Production</div>
+        <div class="nav-group-label">Gestion</div>
+        <div class="nav-link"><span class="dot"></span> Finance</div>
+        <div class="nav-link"><span class="dot"></span> Ressources humaines</div>
+        <div class="nav-link"><span class="dot"></span> Paramètres</div>
+      </aside>
+
+      <div class="app-main">
+        <div class="page-head">
+          <h2>Tableau de bord</h2>
+          <span>Mardi 8 septembre 2026</span>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">Revenu du mois</div>
+            <div class="stat-value">148 250 €</div>
+            <span class="stat-trend up">▲ 12,4 %</span>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Commandes ouvertes</div>
+            <div class="stat-value">312</div>
+            <span class="stat-trend up">▲ 3,1 %</span>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Articles en stock bas</div>
+            <div class="stat-value">27</div>
+            <span class="stat-trend down">▼ 5 nouveaux</span>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Factures impayées</div>
+            <div class="stat-value">9 840 €</div>
+            <span class="stat-trend down">▼ 4 en retard</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Commandes récentes</h3>
+            <div style="display:flex;gap:8px;">
+              <button class="btn outline">Filtrer</button>
+              <button class="btn primary">+ Nouvelle commande</button>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>N° commande</th><th>Client</th><th>Statut</th><th>Montant</th><th>Date</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CMD-10482</td><td class="client">Nzeza Distribution</td><td><span class="badge success">Payée</span></td><td>4 210 €</td><td>07/09/2026</td></tr>
+              <tr><td>CMD-10481</td><td class="client">Groupe Kavira SA</td><td><span class="badge warning">En attente</span></td><td>1 980 €</td><td>07/09/2026</td></tr>
+              <tr><td>CMD-10480</td><td class="client">Buregeya & Fils</td><td><span class="badge info">Expédiée</span></td><td>7 340 €</td><td>06/09/2026</td></tr>
+              <tr><td>CMD-10479</td><td class="client">Coopérative Sano</td><td><span class="badge danger">En retard</span></td><td>2 105 €</td><td>05/09/2026</td></tr>
+              <tr><td>CMD-10478</td><td class="client">Atelier Uwimana</td><td><span class="badge success">Payée</span></td><td>960 €</td><td>05/09/2026</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h3>Composants</h3></div>
+          <div class="controls-row">
+            <button class="btn primary">Enregistrer</button>
+            <button class="btn secondary">Exporter</button>
+            <button class="btn outline">Annuler</button>
+            <button class="btn danger">Supprimer</button>
+            <button class="btn ghost">Voir plus</button>
+          </div>
+          <div class="controls-row" style="border-top:1px solid var(--border);padding-top:14px;">
+            <input class="field" placeholder="Nom du fournisseur">
+            <input class="field" placeholder="Référence article">
+            <select class="field"><option>Statut : actif</option></select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="token-panel">
+    <div class="theme-title" id="tkTitle">Corporate Slate</div>
+    <div class="theme-sub" id="tkSub">Clair · Corporate & Professionnel</div>
+
+    <h3>Tokens de couleur</h3>
+    <div class="token-grid" id="tokenGrid"></div>
+
+    <h3>Export</h3>
+    <button class="export-btn" id="exportBtn">Copier les variables CSS</button>
+    <textarea class="export-area" id="exportArea" readonly></textarea>
+  </aside>
+</div>
+
+<div class="copied-toast" id="toast">Copié dans le presse-papiers</div>
+
+<script>
+/* ============ 36 THÈMES ERP — TOKENS COMPLETS ============ */
+const THEMES = [
+  // ---- Corporate ----
+  {id:'corp-light', name:'Corporate Slate', family:'Corporate & Professionnel', mode:'Clair', c:{primary:'#2563EB',secondary:'#475569',accent:'#0EA5E9',success:'#16A34A',warning:'#D97706',danger:'#DC2626',info:'#0284C7',bgApp:'#F8FAFC',bgSurface:'#FFFFFF',textPrimary:'#0F172A',textSecondary:'#475569',textMuted:'#94A3B8',border:'#E2E8F0',borderStrong:'#CBD5E1',onPrimary:'#FFFFFF'}},
+  {id:'corp-dark', name:'Corporate Slate', family:'Corporate & Professionnel', mode:'Sombre', c:{primary:'#3B82F6',secondary:'#94A3B8',accent:'#38BDF8',success:'#22C55E',warning:'#F59E0B',danger:'#EF4444',info:'#38BDF8',bgApp:'#0B1220',bgSurface:'#111827',textPrimary:'#F1F5F9',textSecondary:'#CBD5E1',textMuted:'#64748B',border:'#1E293B',borderStrong:'#334155',onPrimary:'#FFFFFF'}},
+
+  // ---- Finance ----
+  {id:'fin-light', name:'Finance Navy', family:'Finance & Banque', mode:'Clair', c:{primary:'#1E3A5F',secondary:'#B08D57',accent:'#0F6E5C',success:'#157A4A',warning:'#C77D14',danger:'#B3261E',info:'#2C6F9B',bgApp:'#F4F6F8',bgSurface:'#FFFFFF',textPrimary:'#0B1F33',textSecondary:'#45607A',textMuted:'#8DA0B3',border:'#DDE3E9',borderStrong:'#C3CDD6',onPrimary:'#FFFFFF'}},
+  {id:'fin-dark', name:'Finance Navy', family:'Finance & Banque', mode:'Sombre', c:{primary:'#4A7FB5',secondary:'#D4B778',accent:'#2FA98C',success:'#3FB273',warning:'#E0A93D',danger:'#E5615A',info:'#5A9BC9',bgApp:'#0A1420',bgSurface:'#101E30',textPrimary:'#E8EEF3',textSecondary:'#A9BCCB',textMuted:'#5E7387',border:'#1D2E42',borderStrong:'#2C4157',onPrimary:'#FFFFFF'}},
+
+  // ---- Santé ----
+  {id:'health-light', name:'Healthcare Teal', family:'Santé', mode:'Clair', c:{primary:'#0D9488',secondary:'#64748B',accent:'#14B8A6',success:'#22A45D',warning:'#D97706',danger:'#DC2626',info:'#0891B2',bgApp:'#F5FBFA',bgSurface:'#FFFFFF',textPrimary:'#0F2A27',textSecondary:'#4B6663',textMuted:'#8FA6A3',border:'#DCEEEC',borderStrong:'#BEDDD9',onPrimary:'#FFFFFF'}},
+  {id:'health-dark', name:'Healthcare Teal', family:'Santé', mode:'Sombre', c:{primary:'#2DD4BF',secondary:'#94A3B8',accent:'#5EEAD4',success:'#34D399',warning:'#F5A83D',danger:'#F0645D',info:'#22D3EE',bgApp:'#08151A',bgSurface:'#0E2024',textPrimary:'#E6F4F2',textSecondary:'#A7C5C1',textMuted:'#5C7A76',border:'#1B3532',borderStrong:'#275048',onPrimary:'#04211D'}},
+
+  // ---- Industrie ----
+  {id:'ind-light', name:'Manufacturing Steel', family:'Industrie & Manufacturing', mode:'Clair', c:{primary:'#475569',secondary:'#F59E0B',accent:'#DC2626',success:'#16A34A',warning:'#F59E0B',danger:'#DC2626',info:'#2563EB',bgApp:'#F7F8FA',bgSurface:'#FFFFFF',textPrimary:'#1E2530',textSecondary:'#52606D',textMuted:'#94A0AC',border:'#E1E5EA',borderStrong:'#C9D0D8',onPrimary:'#FFFFFF'}},
+  {id:'ind-dark', name:'Manufacturing Steel', family:'Industrie & Manufacturing', mode:'Sombre', c:{primary:'#94A3B8',secondary:'#FBBF24',accent:'#F87171',success:'#4ADE80',warning:'#FBBF24',danger:'#F87171',info:'#60A5FA',bgApp:'#0E1013',bgSurface:'#16191D',textPrimary:'#EAEDEF',textSecondary:'#B0B8C1',textMuted:'#626B75',border:'#262B31',borderStrong:'#383F47',onPrimary:'#12161B'}},
+
+  // ---- Commerce ----
+  {id:'retail-light', name:'Retail Coral', family:'Commerce & Retail', mode:'Clair', c:{primary:'#E85D45',secondary:'#2D3142',accent:'#F2A65A',success:'#2E9E5B',warning:'#E0A63D',danger:'#D64545',info:'#3D7EC0',bgApp:'#FFFAF7',bgSurface:'#FFFFFF',textPrimary:'#2A211E',textSecondary:'#6B5B54',textMuted:'#A6968D',border:'#F1E1DA',borderStrong:'#E3C7BA',onPrimary:'#FFFFFF'}},
+  {id:'retail-dark', name:'Retail Coral', family:'Commerce & Retail', mode:'Sombre', c:{primary:'#F0836B',secondary:'#B8BEC9',accent:'#F5BC7C',success:'#4FBE7C',warning:'#EFC069',danger:'#E8746B',info:'#6AA3DA',bgApp:'#170F0D',bgSurface:'#201613',textPrimary:'#F6EBE7',textSecondary:'#CBB6AE',textMuted:'#7D6A63',border:'#33231D',borderStrong:'#4A322A',onPrimary:'#2A130C'}},
+
+  // ---- Logistique ----
+  {id:'log-light', name:'Logistics Amber', family:'Logistique & Transport', mode:'Clair', c:{primary:'#B45309',secondary:'#1F2937',accent:'#2563EB',success:'#15803D',warning:'#D97706',danger:'#B91C1C',info:'#1D4ED8',bgApp:'#FFFBF5',bgSurface:'#FFFFFF',textPrimary:'#24211B',textSecondary:'#6B5E4C',textMuted:'#A79A83',border:'#F0E4CF',borderStrong:'#E1CDA6',onPrimary:'#FFFFFF'}},
+  {id:'log-dark', name:'Logistics Amber', family:'Logistique & Transport', mode:'Sombre', c:{primary:'#F0A73B',secondary:'#94A3B8',accent:'#5B8DEF',success:'#4ADE80',warning:'#FBBF24',danger:'#F0645D',info:'#7AA6F0',bgApp:'#150F08',bgSurface:'#1E1610',textPrimary:'#F5ECDD',textSecondary:'#C9B591',textMuted:'#7A6C54',border:'#30251A',borderStrong:'#473526',onPrimary:'#241705'}},
+
+  // ---- Agriculture ----
+  {id:'agri-light', name:'Agriculture Sage', family:'Agriculture & Agroalimentaire', mode:'Clair', c:{primary:'#4D7C4E',secondary:'#8B7355',accent:'#A3B18A',success:'#3F8B4C',warning:'#C68A2E',danger:'#B3452F',info:'#4A7A8C',bgApp:'#F7F9F4',bgSurface:'#FFFFFF',textPrimary:'#232A1F',textSecondary:'#5A6650',textMuted:'#97A28A',border:'#E3E9D9',borderStrong:'#CBD7B8',onPrimary:'#FFFFFF'}},
+  {id:'agri-dark', name:'Agriculture Sage', family:'Agriculture & Agroalimentaire', mode:'Sombre', c:{primary:'#8FBB7F',secondary:'#C2A87C',accent:'#B7C79E',success:'#6FCB7C',warning:'#E0AA55',danger:'#E07B62',info:'#6FA6BB',bgApp:'#0F130D',bgSurface:'#171C13',textPrimary:'#E9EFE3',textSecondary:'#B6C2A9',textMuted:'#66735A',border:'#262E1E',borderStrong:'#38442A',onPrimary:'#10190D'}},
+
+  // ---- BTP ----
+  {id:'con-light', name:'Construction Ochre', family:'BTP & Construction', mode:'Clair', c:{primary:'#C2760C',secondary:'#2B2B2B',accent:'#EAB308',success:'#2F7A3D',warning:'#C2760C',danger:'#B23A2E',info:'#2A5F8A',bgApp:'#FCF9F3',bgSurface:'#FFFFFF',textPrimary:'#241E12',textSecondary:'#6B5E45',textMuted:'#A69878',border:'#EDE0C4',borderStrong:'#DEC994',onPrimary:'#FFFFFF'}},
+  {id:'con-dark', name:'Construction Ochre', family:'BTP & Construction', mode:'Sombre', c:{primary:'#E8A23D',secondary:'#A8A8A8',accent:'#F2D14E',success:'#5CAE68',warning:'#E8A23D',danger:'#E37862',info:'#5C93C0',bgApp:'#141008',bgSurface:'#1E1810',textPrimary:'#F4EBDA',textSecondary:'#C9B892',textMuted:'#7A6E53',border:'#2E2517',borderStrong:'#453623',onPrimary:'#211505'}},
+
+  // ---- Tech / SaaS ----
+  {id:'tech-light', name:'Tech SaaS Indigo', family:'Tech & SaaS', mode:'Clair', c:{primary:'#4F46E5',secondary:'#64748B',accent:'#EC4899',success:'#10B981',warning:'#F59E0B',danger:'#EF4444',info:'#3B82F6',bgApp:'#F8F8FC',bgSurface:'#FFFFFF',textPrimary:'#1B1B2E',textSecondary:'#52526B',textMuted:'#9393AC',border:'#E4E4F1',borderStrong:'#CDCDE6',onPrimary:'#FFFFFF'}},
+  {id:'tech-dark', name:'Tech SaaS Indigo', family:'Tech & SaaS', mode:'Sombre', c:{primary:'#818CF8',secondary:'#A1A1B5',accent:'#F472B6',success:'#34D399',warning:'#FBBF24',danger:'#F87171',info:'#60A5FA',bgApp:'#0C0C14',bgSurface:'#14141F',textPrimary:'#ECECF6',textSecondary:'#B7B7CB',textMuted:'#63637A',border:'#22222F',borderStrong:'#333349',onPrimary:'#14122E'}},
+
+  // ---- Juridique ----
+  {id:'legal-light', name:'Legal Burgundy', family:'Juridique & Conseil', mode:'Clair', c:{primary:'#7B2D3B',secondary:'#2E2A26',accent:'#A9825C',success:'#2F6B3F',warning:'#B5792C',danger:'#9B2A2A',info:'#385A78',bgApp:'#FAF7F5',bgSurface:'#FFFFFF',textPrimary:'#241A1B',textSecondary:'#665052',textMuted:'#A38C8D',border:'#ECDFE0',borderStrong:'#DABEC0',onPrimary:'#FFFFFF'}},
+  {id:'legal-dark', name:'Legal Burgundy', family:'Juridique & Conseil', mode:'Sombre', c:{primary:'#B25A6B',secondary:'#A69B8F',accent:'#C79E71',success:'#5A9C6C',warning:'#D69A55',danger:'#C6635F',info:'#5F87A5',bgApp:'#140D0E',bgSurface:'#1E1416',textPrimary:'#F2E4E5',textSecondary:'#C6A9AC',textMuted:'#755B5D',border:'#2C1B1D',borderStrong:'#44282B',onPrimary:'#FFFFFF'}},
+
+  // ---- Éducation ----
+  {id:'edu-light', name:'Education Sky', family:'Éducation', mode:'Clair', c:{primary:'#0284C7',secondary:'#475569',accent:'#F59E0B',success:'#16A34A',warning:'#F59E0B',danger:'#DC2626',info:'#0284C7',bgApp:'#F5FAFE',bgSurface:'#FFFFFF',textPrimary:'#0C2333',textSecondary:'#48657A',textMuted:'#8CA5B7',border:'#DCEBF5',borderStrong:'#BEDCED',onPrimary:'#FFFFFF'}},
+  {id:'edu-dark', name:'Education Sky', family:'Éducation', mode:'Sombre', c:{primary:'#38BDF8',secondary:'#94A3B8',accent:'#FBBF24',success:'#4ADE80',warning:'#FBBF24',danger:'#F87171',info:'#38BDF8',bgApp:'#071319',bgSurface:'#0D1F29',textPrimary:'#E4F2FA',textSecondary:'#A9C8D8',textMuted:'#587786',border:'#182F3A',borderStrong:'#234657',onPrimary:'#052330'}},
+
+  // ---- Énergie ----
+  {id:'energy-light', name:'Energy Emerald', family:'Énergie & Utilities', mode:'Clair', c:{primary:'#047857',secondary:'#1E293B',accent:'#84CC16',success:'#059669',warning:'#D97706',danger:'#DC2626',info:'#0369A1',bgApp:'#F5FBF7',bgSurface:'#FFFFFF',textPrimary:'#0D211A',textSecondary:'#47645A',textMuted:'#8AA69C',border:'#DCEEE4',borderStrong:'#BEDECE',onPrimary:'#FFFFFF'}},
+  {id:'energy-dark', name:'Energy Emerald', family:'Énergie & Utilities', mode:'Sombre', c:{primary:'#34D399',secondary:'#94A3B8',accent:'#A3E635',success:'#4ADE80',warning:'#FBBF24',danger:'#F87171',info:'#38BDF8',bgApp:'#071310',bgSurface:'#0D211B',textPrimary:'#E3F5EC',textSecondary:'#A6CCBC',textMuted:'#588470',border:'#17332A',borderStrong:'#234E3F',onPrimary:'#04211A'}},
+
+  // ---- Secteur public ----
+  {id:'gov-light', name:'Government Blue', family:'Secteur public', mode:'Clair', c:{primary:'#1E40AF',secondary:'#374151',accent:'#6366F1',success:'#15803D',warning:'#B45309',danger:'#B91C1C',info:'#1D4ED8',bgApp:'#F7F8FA',bgSurface:'#FFFFFF',textPrimary:'#131A26',textSecondary:'#4B5768',textMuted:'#8D97A6',border:'#E2E5EB',borderStrong:'#C7CDD8',onPrimary:'#FFFFFF'}},
+  {id:'gov-dark', name:'Government Blue', family:'Secteur public', mode:'Sombre', c:{primary:'#6D8FE0',secondary:'#9AA5B5',accent:'#9295F5',success:'#4ADE80',warning:'#E0A93D',danger:'#E5615A',info:'#7AA0EE',bgApp:'#0A0E15',bgSurface:'#101623',textPrimary:'#E9ECF3',textSecondary:'#AEB8C9',textMuted:'#5D6879',border:'#1C2435',borderStrong:'#2C374D',onPrimary:'#FFFFFF'}},
+
+  // ---- Hôtellerie ----
+  {id:'hosp-light', name:'Hospitality Terracotta', family:'Hôtellerie & Restauration', mode:'Clair', c:{primary:'#C1502E',secondary:'#4A4038',accent:'#D9A566',success:'#3F7D4E',warning:'#C1802E',danger:'#A63A2A',info:'#3B6C82',bgApp:'#FCF8F4',bgSurface:'#FFFFFF',textPrimary:'#291E17',textSecondary:'#6C5A4C',textMuted:'#A99483',border:'#EFE1D3',borderStrong:'#E0C7AC',onPrimary:'#FFFFFF'}},
+  {id:'hosp-dark', name:'Hospitality Terracotta', family:'Hôtellerie & Restauration', mode:'Sombre', c:{primary:'#E38A63',secondary:'#B6A99B',accent:'#E8C081',success:'#63AD76',warning:'#E0AA55',danger:'#E37862',info:'#6A9CB0',bgApp:'#160F0B',bgSurface:'#201612',textPrimary:'#F5EAE1',textSecondary:'#CBB5A6',textMuted:'#7C685D',border:'#33241C',borderStrong:'#4C332A',onPrimary:'#2A1610'}},
+
+  // ---- Pharma ----
+  {id:'pharma-light', name:'Pharma Cyan', family:'Pharma & Sciences de la vie', mode:'Clair', c:{primary:'#0891B2',secondary:'#334155',accent:'#6366F1',success:'#16A34A',warning:'#D97706',danger:'#DC2626',info:'#0891B2',bgApp:'#F5FBFD',bgSurface:'#FFFFFF',textPrimary:'#0C2028',textSecondary:'#45606C',textMuted:'#8AA3AC',border:'#DCEEF2',borderStrong:'#BEDEE6',onPrimary:'#FFFFFF'}},
+  {id:'pharma-dark', name:'Pharma Cyan', family:'Pharma & Sciences de la vie', mode:'Sombre', c:{primary:'#22D3EE',secondary:'#94A3B8',accent:'#818CF8',success:'#4ADE80',warning:'#FBBF24',danger:'#F87171',info:'#38BDF8',bgApp:'#06131A',bgSurface:'#0C2028',textPrimary:'#E1F4F9',textSecondary:'#A3C7D1',textMuted:'#567680',border:'#16323C',borderStrong:'#214956',onPrimary:'#052227'}},
+
+  // ---- Luxe ----
+  {id:'lux-light', name:'Charcoal & Gold', family:'Luxe & Premium', mode:'Clair', c:{primary:'#1A1A1A',secondary:'#6B6459',accent:'#B8975A',success:'#3F7D4E',warning:'#B8975A',danger:'#A6392F',info:'#3B5D74',bgApp:'#FAF9F7',bgSurface:'#FFFFFF',textPrimary:'#17171A',textSecondary:'#5C5952',textMuted:'#9B9689',border:'#E7E3DB',borderStrong:'#D3CCBC',onPrimary:'#FFFFFF'}},
+  {id:'lux-dark', name:'Charcoal & Gold', family:'Luxe & Premium', mode:'Sombre', c:{primary:'#E8E6E1',secondary:'#A69C89',accent:'#D4B26A',success:'#5DAE72',warning:'#D4B26A',danger:'#D0685D',info:'#6F97AC',bgApp:'#0C0C0C',bgSurface:'#161615',textPrimary:'#F4F2EE',textSecondary:'#C4BDAD',textMuted:'#756E60',border:'#262523',borderStrong:'#38352F',onPrimary:'#17171A'}},
+
+  // ---- Accessibilité ----
+  {id:'a11y-light', name:'High Contrast', family:'Accessibilité (WCAG AAA)', mode:'Clair', c:{primary:'#0000CC',secondary:'#1A1A1A',accent:'#B30000',success:'#006600',warning:'#995C00',danger:'#CC0000',info:'#0000CC',bgApp:'#FFFFFF',bgSurface:'#FFFFFF',textPrimary:'#000000',textSecondary:'#1A1A1A',textMuted:'#4D4D4D',border:'#000000',borderStrong:'#000000',onPrimary:'#FFFFFF'}},
+  {id:'a11y-dark', name:'High Contrast', family:'Accessibilité (WCAG AAA)', mode:'Sombre', c:{primary:'#66B3FF',secondary:'#E6E6E6',accent:'#FF6666',success:'#66FF66',warning:'#FFCC66',danger:'#FF6666',info:'#66B3FF',bgApp:'#000000',bgSurface:'#000000',textPrimary:'#FFFFFF',textSecondary:'#E6E6E6',textMuted:'#B3B3B3',border:'#FFFFFF',borderStrong:'#FFFFFF',onPrimary:'#001433'}},
+
+  // ---- Minimal ----
+  {id:'mono-light', name:'Minimal Monochrome', family:'Minimal', mode:'Clair', c:{primary:'#18181B',secondary:'#52525B',accent:'#71717A',success:'#16A34A',warning:'#CA8A04',danger:'#DC2626',info:'#2563EB',bgApp:'#FAFAFA',bgSurface:'#FFFFFF',textPrimary:'#18181B',textSecondary:'#52525B',textMuted:'#A1A1AA',border:'#E4E4E7',borderStrong:'#D4D4D8',onPrimary:'#FFFFFF'}},
+  {id:'mono-dark', name:'Minimal Monochrome', family:'Minimal', mode:'Sombre', c:{primary:'#FAFAFA',secondary:'#A1A1AA',accent:'#D4D4D8',success:'#4ADE80',warning:'#FBBF24',danger:'#F87171',info:'#60A5FA',bgApp:'#09090B',bgSurface:'#131316',textPrimary:'#FAFAFA',textSecondary:'#D4D4D8',textMuted:'#71717A',border:'#27272A',borderStrong:'#3A3A3F',onPrimary:'#18181B'}},
+];
+
+/* ============ Helpers ============ */
+function hexToRgba(hex, a){
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+function mix(hex, target, amt){ // simple lighten/darken toward a target hex
+  const h1=hex.replace('#',''), h2=target.replace('#','');
+  const r=Math.round(parseInt(h1.substring(0,2),16)*(1-amt)+parseInt(h2.substring(0,2),16)*amt);
+  const g=Math.round(parseInt(h1.substring(2,4),16)*(1-amt)+parseInt(h2.substring(2,4),16)*amt);
+  const b=Math.round(parseInt(h1.substring(4,6),16)*(1-amt)+parseInt(h2.substring(4,6),16)*amt);
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+const TOKEN_LABELS = [
+  ['primary','Primaire'],['secondary','Secondaire'],['accent','Accent'],
+  ['success','Succès'],['warning','Avertissement'],['danger','Danger'],['info','Info'],
+  ['bgApp','Fond app'],['bgSurface','Surface'],
+  ['textPrimary','Texte principal'],['textSecondary','Texte secondaire'],['textMuted','Texte atténué'],
+  ['border','Bordure'],['borderStrong','Bordure forte'],
+];
+
+/* ============ Rendu de la liste de thèmes ============ */
+const nav = document.getElementById('themeNav');
+let lastFamily = null;
+THEMES.forEach(t=>{
+  if(t.family !== lastFamily){
+    const h = document.createElement('div');
+    h.className='fam-title';
+    h.textContent = t.family;
+    nav.appendChild(h);
+    lastFamily = t.family;
+  }
+  const item = document.createElement('div');
+  item.className='theme-item';
+  item.dataset.id = t.id;
+  item.style.setProperty('--sw1', t.c.primary);
+  item.style.setProperty('--sw2', t.c.accent);
+  item.innerHTML = `<span class="swatchdot"></span><span>${t.name}</span><span class="mode-pill">${t.mode}</span>`;
+  item.addEventListener('click', ()=>applyTheme(t.id));
+  nav.appendChild(item);
+});
+
+/* ============ Application d'un thème ============ */
+function applyTheme(id){
+  const t = THEMES.find(x=>x.id===id);
+  if(!t) return;
+  const c = t.c;
+  const root = document.documentElement.style;
+  root.setProperty('--primary', c.primary);
+  root.setProperty('--primary-hover', mix(c.primary,'#000000',0.14));
+  root.setProperty('--on-primary', c.onPrimary);
+  root.setProperty('--secondary', c.secondary);
+  root.setProperty('--accent', c.accent);
+  root.setProperty('--success', c.success);
+  root.setProperty('--warning', c.warning);
+  root.setProperty('--danger', c.danger);
+  root.setProperty('--info', c.info);
+  root.setProperty('--success-soft', hexToRgba(c.success,0.14));
+  root.setProperty('--warning-soft', hexToRgba(c.warning,0.14));
+  root.setProperty('--danger-soft', hexToRgba(c.danger,0.14));
+  root.setProperty('--info-soft', hexToRgba(c.info,0.14));
+  root.setProperty('--bg-app', c.bgApp);
+  root.setProperty('--bg-surface', c.bgSurface);
+  root.setProperty('--bg-elevated', c.bgSurface);
+  root.setProperty('--text-primary', c.textPrimary);
+  root.setProperty('--text-secondary', c.textSecondary);
+  root.setProperty('--text-muted', c.textMuted);
+  root.setProperty('--border', c.border);
+  root.setProperty('--border-strong', c.borderStrong);
+
+  document.querySelectorAll('.theme-item').forEach(el=>el.classList.toggle('active', el.dataset.id===id));
+  document.getElementById('tkTitle').textContent = t.name;
+  document.getElementById('tkSub').textContent = `${t.mode} · ${t.family}`;
+
+  const grid = document.getElementById('tokenGrid');
+  grid.innerHTML='';
+  TOKEN_LABELS.forEach(([key,label])=>{
+    const val = c[key];
+    const chip = document.createElement('div');
+    chip.className='token-chip';
+    chip.innerHTML = `<span class="sw" style="background:${val}"></span><span class="lbl"><b>${label}</b><span>${val}</span></span>`;
+    chip.addEventListener('click', ()=>copyText(val));
+    grid.appendChild(chip);
+  });
+
+  const css = buildCss(t);
+  document.getElementById('exportArea').value = css;
+
+  localStorage.removeItem && null; // no-op, artifacts must not use storage
+  window.__currentThemeId = id;
+}
+
+function buildCss(t){
+  const c = t.c;
+  return `/* ${t.name} — ${t.mode} (${t.family}) */\n:root{\n` +
+`  --primary: ${c.primary};\n  --primary-hover: ${mix(c.primary,'#000000',0.14)};\n  --on-primary: ${c.onPrimary};\n` +
+`  --secondary: ${c.secondary};\n  --accent: ${c.accent};\n\n` +
+`  --success: ${c.success};\n  --warning: ${c.warning};\n  --danger: ${c.danger};\n  --info: ${c.info};\n` +
+`  --success-soft: ${hexToRgba(c.success,0.14)};\n  --warning-soft: ${hexToRgba(c.warning,0.14)};\n  --danger-soft: ${hexToRgba(c.danger,0.14)};\n  --info-soft: ${hexToRgba(c.info,0.14)};\n\n` +
+`  --bg-app: ${c.bgApp};\n  --bg-surface: ${c.bgSurface};\n  --bg-elevated: ${c.bgSurface};\n\n` +
+`  --text-primary: ${c.textPrimary};\n  --text-secondary: ${c.textSecondary};\n  --text-muted: ${c.textMuted};\n\n` +
+`  --border: ${c.border};\n  --border-strong: ${c.borderStrong};\n\n` +
+`  --radius: 10px;\n  --radius-sm: 6px;\n}`;
+}
+
+function copyText(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  showToast(text.length < 20 ? `Copié : ${text}` : 'CSS copié dans le presse-papiers');
+}
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>el.classList.remove('show'), 1600);
+}
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  copyText(document.getElementById('exportArea').value);
+});
+document.getElementById('exportTopBtn').addEventListener('click', ()=>{
+  document.getElementById('exportBtn').click();
+});
+document.getElementById('randomBtn').addEventListener('click', ()=>{
+  const others = THEMES.filter(t=>t.id !== window.__currentThemeId);
+  const pick = others[Math.floor(Math.random()*others.length)];
+  applyTheme(pick.id);
+});
+
+applyTheme('corp-light');
+</script>
+</body>
+</html>

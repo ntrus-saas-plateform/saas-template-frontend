@@ -1,0 +1,2 @@
+export const fieldControlClass =
+  "h-[var(--control-height)] w-full rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--bg-surface)] px-[var(--space-3)] type-base text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus-visible:border-[var(--primary)] focus-visible:border-2 disabled:cursor-not-allowed disabled:bg-[var(--bg-app)] disabled:text-[var(--text-muted)] read-only:border-dashed read-only:bg-transparent aria-[invalid=true]:border-[var(--danger)] aria-[invalid=true]:pr-10";
