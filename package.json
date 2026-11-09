@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:marketing": "playwright test e2e/edge-marketing-smoke.spec.ts e2e/edge-marketing-scenarios.spec.ts",
+    "test:e2e:marketing:auth": "playwright test e2e/edge-marketing-scenarios.spec.ts",
     "docs:openapi": "pnpm --dir .. docs:openapi"
   },
   "dependencies": {

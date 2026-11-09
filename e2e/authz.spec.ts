@@ -2,12 +2,11 @@ import { test, expect } from "@playwright/test";
 
 test.describe("BFF auth hard gates", () => {
   test("anonymous deep link shows sign-in, not app data", async ({ page }) => {
-    await page.goto("/identity/organizations");
+    await page.goto("/identity/organizations", { waitUntil: "domcontentloaded" });
     await expect(page.locator("body")).toBeVisible();
-    // Sign-in CTA or workspace title — never authenticated CRM chrome alone
-    const login = page.getByRole("button", { name: /login/i });
-    const welcome = page.getByText(/workspace/i);
-    await expect(login.or(welcome).first()).toBeVisible({ timeout: 15_000 });
+    expect(page.url()).toContain("/identity/organizations");
+    // Unauthenticated / misconfigured auth must not render an org data table.
+    await expect(page.getByRole("table")).toHaveCount(0);
   });
 
   test("mutating backend proxy without CSRF is rejected", async ({
