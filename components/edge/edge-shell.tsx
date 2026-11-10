@@ -4,6 +4,7 @@ import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Boxes,
   Building2,
   CheckCircle2,
   ClipboardList,
@@ -54,6 +55,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/provisioning-requests",
     label: "Provisioning Ops",
     icon: ServerCog,
+  },
+  {
+    href: "/edge/provisioning/registry",
+    label: "Registry Management",
+    icon: Boxes,
   },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },

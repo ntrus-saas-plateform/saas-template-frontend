@@ -35,6 +35,30 @@ import type {
   PublishEdgeProductInput,
   UpdateEdgeProductInput,
 } from "@/types/edge";
+import type {
+  CompatibilityEvaluation,
+  CreateControlContractInput,
+  CreateEnvironmentInput,
+  CreatePlatformInput,
+  CreateProductRegistryInput,
+  CreateTechnicalVersionInput,
+  DeploymentProfile,
+  EvaluateCompatibilityInput,
+  ProductControlContract,
+  ProductPlatform,
+  ProductRegistryRecord,
+  ProductTechnicalVersion,
+  RegistryHistoryEntry,
+  RegistryListPage,
+  RegistryListQuery,
+  RegistryTransitionInput,
+  RuntimeEnvironment,
+  UpdateControlContractInput,
+  UpdateEnvironmentInput,
+  UpdatePlatformInput,
+  UpdateProductRegistryInput,
+  UpdateProfileInput,
+} from "@/types/edge-registry";
 
 function toQuery(params: Record<string, string | number | undefined | null>): string {
   const search = new URLSearchParams();
@@ -2060,4 +2084,299 @@ export const edgeApi = {
 
   getProvisioningEventCompatibility: () =>
     edgeRequest("/api/edge-backend/provisioning-requests/event-compatibility"),
+
+  // P7.2 — Product / Platform / Runtime Registry
+  listRegistryProducts: (opts?: RegistryListQuery) =>
+    edgeRequest<RegistryListPage<ProductRegistryRecord>>(
+      `/api/edge-backend/registry/products${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  getRegistryProduct: (id: string) =>
+    edgeRequest<ProductRegistryRecord>(
+      `/api/edge-backend/registry/products/${id}`,
+    ),
+
+  createRegistryProduct: (body: CreateProductRegistryInput) =>
+    edgeRequest<ProductRegistryRecord>("/api/edge-backend/registry/products", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateRegistryProduct: (id: string, body: UpdateProductRegistryInput) =>
+    edgeRequest<ProductRegistryRecord>(
+      `/api/edge-backend/registry/products/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  transitionRegistryProduct: (id: string, body: RegistryTransitionInput) =>
+    edgeRequest<ProductRegistryRecord>(
+      `/api/edge-backend/registry/products/${id}/transition`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listRegistryProductVersions: (
+    productRegistryId: string,
+    opts?: RegistryListQuery,
+  ) =>
+    edgeRequest<RegistryListPage<ProductTechnicalVersion>>(
+      `/api/edge-backend/registry/products/${productRegistryId}/versions${toQuery(
+        {
+          limit: opts?.limit,
+          offset: opts?.offset,
+          status: opts?.status,
+          q: opts?.q,
+        },
+      )}`,
+    ),
+
+  createRegistryProductVersion: (
+    productRegistryId: string,
+    body: CreateTechnicalVersionInput,
+  ) =>
+    edgeRequest<ProductTechnicalVersion>(
+      `/api/edge-backend/registry/products/${productRegistryId}/versions`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  transitionRegistryVersion: (id: string, body: RegistryTransitionInput) =>
+    edgeRequest<ProductTechnicalVersion>(
+      `/api/edge-backend/registry/versions/${id}/transition`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  getRegistryVersion: (id: string) =>
+    edgeRequest<ProductTechnicalVersion>(
+      `/api/edge-backend/registry/versions/${id}`,
+    ),
+
+  listRegistryPlatforms: (opts?: RegistryListQuery) =>
+    edgeRequest<RegistryListPage<ProductPlatform>>(
+      `/api/edge-backend/registry/platforms${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  getRegistryPlatform: (id: string) =>
+    edgeRequest<ProductPlatform>(`/api/edge-backend/registry/platforms/${id}`),
+
+  createRegistryPlatform: (body: CreatePlatformInput) =>
+    edgeRequest<ProductPlatform>("/api/edge-backend/registry/platforms", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateRegistryPlatform: (id: string, body: UpdatePlatformInput) =>
+    edgeRequest<ProductPlatform>(
+      `/api/edge-backend/registry/platforms/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  transitionRegistryPlatform: (id: string, body: RegistryTransitionInput) =>
+    edgeRequest<ProductPlatform>(
+      `/api/edge-backend/registry/platforms/${id}/transition`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listRegistryEnvironments: (
+    opts?: RegistryListQuery & { platformId?: string },
+  ) =>
+    edgeRequest<RegistryListPage<RuntimeEnvironment>>(
+      `/api/edge-backend/registry/environments${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        platformId: opts?.platformId,
+      })}`,
+    ),
+
+  getRegistryEnvironment: (id: string) =>
+    edgeRequest<RuntimeEnvironment>(
+      `/api/edge-backend/registry/environments/${id}`,
+    ),
+
+  createRegistryEnvironment: (body: CreateEnvironmentInput) =>
+    edgeRequest<RuntimeEnvironment>(
+      "/api/edge-backend/registry/environments",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  updateRegistryEnvironment: (id: string, body: UpdateEnvironmentInput) =>
+    edgeRequest<RuntimeEnvironment>(
+      `/api/edge-backend/registry/environments/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  transitionRegistryEnvironment: (
+    id: string,
+    body: RegistryTransitionInput,
+  ) =>
+    edgeRequest<RuntimeEnvironment>(
+      `/api/edge-backend/registry/environments/${id}/transition`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listRegistryDeploymentProfiles: (opts?: RegistryListQuery) =>
+    edgeRequest<RegistryListPage<DeploymentProfile>>(
+      `/api/edge-backend/registry/deployment-profiles${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  getRegistryDeploymentProfile: (id: string) =>
+    edgeRequest<DeploymentProfile>(
+      `/api/edge-backend/registry/deployment-profiles/${id}`,
+    ),
+
+  updateRegistryDeploymentProfile: (id: string, body: UpdateProfileInput) =>
+    edgeRequest<DeploymentProfile>(
+      `/api/edge-backend/registry/deployment-profiles/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  transitionRegistryDeploymentProfile: (
+    id: string,
+    body: RegistryTransitionInput,
+  ) =>
+    edgeRequest<DeploymentProfile>(
+      `/api/edge-backend/registry/deployment-profiles/${id}/transition`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listRegistryControlContracts: (
+    opts?: RegistryListQuery & { productId?: string; platformId?: string },
+  ) =>
+    edgeRequest<RegistryListPage<ProductControlContract>>(
+      `/api/edge-backend/registry/control-contracts${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        productId: opts?.productId,
+        platformId: opts?.platformId,
+      })}`,
+    ),
+
+  getRegistryControlContract: (id: string) =>
+    edgeRequest<ProductControlContract>(
+      `/api/edge-backend/registry/control-contracts/${id}`,
+    ),
+
+  createRegistryControlContract: (body: CreateControlContractInput) =>
+    edgeRequest<ProductControlContract>(
+      "/api/edge-backend/registry/control-contracts",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  updateRegistryControlContract: (
+    id: string,
+    body: UpdateControlContractInput,
+  ) =>
+    edgeRequest<ProductControlContract>(
+      `/api/edge-backend/registry/control-contracts/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  transitionRegistryControlContract: (
+    id: string,
+    body: RegistryTransitionInput,
+  ) =>
+    edgeRequest<ProductControlContract>(
+      `/api/edge-backend/registry/control-contracts/${id}/transition`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  evaluateRegistryCompatibility: (body: EvaluateCompatibilityInput) =>
+    edgeRequest<CompatibilityEvaluation>(
+      "/api/edge-backend/registry/compatibility/evaluate",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listRegistryCompatibilityEvaluations: (opts?: RegistryListQuery) =>
+    edgeRequest<RegistryListPage<CompatibilityEvaluation>>(
+      `/api/edge-backend/registry/compatibility/evaluations${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  getRegistryCompatibilityEvaluation: (id: string) =>
+    edgeRequest<CompatibilityEvaluation>(
+      `/api/edge-backend/registry/compatibility/evaluations/${id}`,
+    ),
+
+  listRegistryHistory: (
+    opts?: RegistryListQuery & {
+      resourceType?: string;
+      resourceId?: string;
+    },
+  ) =>
+    edgeRequest<RegistryListPage<RegistryHistoryEntry>>(
+      `/api/edge-backend/registry/history${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        resourceType: opts?.resourceType,
+        resourceId: opts?.resourceId,
+      })}`,
+    ),
 };
