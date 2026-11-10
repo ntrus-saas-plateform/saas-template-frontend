@@ -105,6 +105,20 @@ import type {
   WorkflowStepRecord,
   WorkflowWorkerRecord,
 } from "@/types/edge-workflow";
+import type {
+  ControlExchangeRecord,
+  CredentialBindingRecord,
+  NegotiatedContractRecord,
+  PatchProductControlEndpointInput,
+  ProductControlCapabilityRecord,
+  ProductControlEndpointRecord,
+  ProductControlHealthCheckRecord,
+  ProductControlHistoryEntry,
+  ProductControlListPage,
+  ProductControlListQuery,
+  QuarantineProductControlEndpointInput,
+  RegisterProductControlEndpointInput,
+} from "@/types/edge-product-control";
 
 function toQuery(params: Record<string, string | number | undefined | null>): string {
   const search = new URLSearchParams();
@@ -2804,6 +2818,175 @@ export const edgeApi = {
         offset: opts?.offset,
         status: opts?.status,
         q: opts?.q,
+      })}`,
+    ),
+
+  // P7.5 — Product Control Integration
+  listProductControlEndpoints: (opts?: ProductControlListQuery) =>
+    edgeRequest<ProductControlListPage<ProductControlEndpointRecord>>(
+      `/api/edge-backend/product-controls/endpoints${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        productId: opts?.productId,
+        platformId: opts?.platformId,
+      })}`,
+    ),
+
+  getProductControlEndpoint: (id: string) =>
+    edgeRequest<ProductControlEndpointRecord>(
+      `/api/edge-backend/product-controls/endpoints/${id}`,
+    ),
+
+  createProductControlEndpoint: (body: RegisterProductControlEndpointInput) =>
+    edgeRequest<ProductControlEndpointRecord>(
+      "/api/edge-backend/product-controls/endpoints",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  patchProductControlEndpoint: (
+    id: string,
+    body: PatchProductControlEndpointInput,
+  ) =>
+    edgeRequest<ProductControlEndpointRecord>(
+      `/api/edge-backend/product-controls/endpoints/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  validateProductControlEndpoint: (id: string) =>
+    edgeRequest<ProductControlEndpointRecord>(
+      `/api/edge-backend/product-controls/endpoints/${id}/validate`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  handshakeProductControlEndpoint: (id: string) =>
+    edgeRequest<ProductControlEndpointRecord>(
+      `/api/edge-backend/product-controls/endpoints/${id}/handshake`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  discoverProductControlContract: (id: string) =>
+    edgeRequest<NegotiatedContractRecord | ProductControlEndpointRecord>(
+      `/api/edge-backend/product-controls/endpoints/${id}/discover-contract`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  discoverProductControlCapabilities: (id: string) =>
+    edgeRequest<
+      | ProductControlCapabilityRecord[]
+      | ProductControlListPage<ProductControlCapabilityRecord>
+    >(
+      `/api/edge-backend/product-controls/endpoints/${id}/discover-capabilities`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  healthCheckProductControlEndpoint: (id: string) =>
+    edgeRequest<ProductControlHealthCheckRecord | ProductControlEndpointRecord>(
+      `/api/edge-backend/product-controls/endpoints/${id}/health-check`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  quarantineProductControlEndpoint: (
+    id: string,
+    body: QuarantineProductControlEndpointInput,
+  ) =>
+    edgeRequest<ProductControlEndpointRecord>(
+      `/api/edge-backend/product-controls/endpoints/${id}/quarantine`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listProductControlEndpointExchanges: (
+    id: string,
+    opts?: ProductControlListQuery,
+  ) =>
+    edgeRequest<ProductControlListPage<ControlExchangeRecord>>(
+      `/api/edge-backend/product-controls/endpoints/${id}/exchanges${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  listProductControlEndpointContracts: (id: string) =>
+    edgeRequest<
+      | NegotiatedContractRecord[]
+      | ProductControlListPage<NegotiatedContractRecord>
+    >(`/api/edge-backend/product-controls/endpoints/${id}/contracts`),
+
+  listProductControlEndpointCapabilities: (id: string) =>
+    edgeRequest<
+      | ProductControlCapabilityRecord[]
+      | ProductControlListPage<ProductControlCapabilityRecord>
+    >(`/api/edge-backend/product-controls/endpoints/${id}/capabilities`),
+
+  listProductControlEndpointHealthChecks: (
+    id: string,
+    opts?: ProductControlListQuery,
+  ) =>
+    edgeRequest<
+      | ProductControlHealthCheckRecord[]
+      | ProductControlListPage<ProductControlHealthCheckRecord>
+    >(
+      `/api/edge-backend/product-controls/endpoints/${id}/health-checks${toQuery(
+        {
+          limit: opts?.limit,
+          offset: opts?.offset,
+        },
+      )}`,
+    ),
+
+  listProductControlEndpointHistory: (
+    id: string,
+    opts?: ProductControlListQuery,
+  ) =>
+    edgeRequest<ProductControlListPage<ProductControlHistoryEntry>>(
+      `/api/edge-backend/product-controls/endpoints/${id}/history${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  listProductControlExchanges: (opts?: ProductControlListQuery) =>
+    edgeRequest<ProductControlListPage<ControlExchangeRecord>>(
+      `/api/edge-backend/product-controls/exchanges${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        endpointId: opts?.endpointId,
+      })}`,
+    ),
+
+  getProductControlExchange: (id: string) =>
+    edgeRequest<ControlExchangeRecord>(
+      `/api/edge-backend/product-controls/exchanges/${id}`,
+    ),
+
+  reconcileProductControlExchange: (id: string) =>
+    edgeRequest<ControlExchangeRecord>(
+      `/api/edge-backend/product-controls/exchanges/${id}/reconcile`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  listProductControlCredentials: (opts?: ProductControlListQuery) =>
+    edgeRequest<ProductControlListPage<CredentialBindingRecord>>(
+      `/api/edge-backend/product-controls/credentials${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        endpointId: opts?.endpointId,
       })}`,
     ),
 };

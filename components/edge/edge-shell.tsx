@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Boxes,
   Building2,
+  Cable,
   CheckCircle2,
   ClipboardList,
   LayoutDashboard,
@@ -72,6 +73,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/provisioning/workflows",
     label: "Workflow Operations",
     icon: Workflow,
+  },
+  {
+    href: "/edge/provisioning/product-controls",
+    label: "Product Control",
+    icon: Cable,
   },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },
