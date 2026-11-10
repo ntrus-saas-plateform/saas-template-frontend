@@ -18,6 +18,7 @@ import {
   Handshake,
   CreditCard,
   RefreshCw,
+  ServerCog,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/billing",
     label: "Billing",
     icon: CreditCard,
+  },
+  {
+    href: "/edge/provisioning-requests",
+    label: "Provisioning Ops",
+    icon: ServerCog,
   },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },

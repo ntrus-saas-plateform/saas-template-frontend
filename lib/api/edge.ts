@@ -2006,4 +2006,58 @@ export const edgeApi = {
 
   listRevenuePolicies: () =>
     edgeRequest<unknown[]>("/api/edge-backend/billing/revenue-policies"),
+
+  // P7.1 — Provisioning requests (durable authorization foundation; not technical ACTIVE)
+  getProvisioningRequestStats: () =>
+    edgeRequest<{
+      total: number;
+      requested: number;
+      accepted: number;
+      rejected: number;
+      cancelled: number;
+      failed: number;
+    }>("/api/edge-backend/provisioning-requests/stats"),
+
+  listProvisioningRequests: (opts?: {
+    status?: string;
+    accountId?: string;
+    productId?: string;
+    subscriptionId?: string;
+    environmentSlot?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<{ items: unknown[]; total: number }>(
+      `/api/edge-backend/provisioning-requests${toQuery({
+        status: opts?.status,
+        accountId: opts?.accountId,
+        productId: opts?.productId,
+        subscriptionId: opts?.subscriptionId,
+        environmentSlot: opts?.environmentSlot,
+        from: opts?.from,
+        to: opts?.to,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getProvisioningRequest: (id: string) =>
+    edgeRequest(`/api/edge-backend/provisioning-requests/${id}`),
+
+  getProvisioningRequestHistory: (id: string) =>
+    edgeRequest<unknown[]>(`/api/edge-backend/provisioning-requests/${id}/history`),
+
+  getProvisioningRequestAuthorization: (id: string) =>
+    edgeRequest(`/api/edge-backend/provisioning-requests/${id}/authorization`),
+
+  cancelProvisioningRequest: (id: string, reason: string) =>
+    edgeRequest(`/api/edge-backend/provisioning-requests/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  getProvisioningEventCompatibility: () =>
+    edgeRequest("/api/edge-backend/provisioning-requests/event-compatibility"),
 };
