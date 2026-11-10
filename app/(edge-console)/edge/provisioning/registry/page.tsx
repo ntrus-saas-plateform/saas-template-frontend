@@ -316,7 +316,7 @@ export default function RegistryManagementPage() {
   });
   const [versionForm, setVersionForm] = useState({
     technicalVersion: "",
-    releaseChannel: "stable",
+    releaseChannel: "STABLE",
     changeSummary: "",
   });
   const [platformForm, setPlatformForm] = useState({
@@ -391,13 +391,13 @@ export default function RegistryManagementPage() {
     mutationFn: () =>
       edgeApi.createRegistryProductVersion(versionProductId, {
         technicalVersion: versionForm.technicalVersion.trim(),
-        releaseChannel: versionForm.releaseChannel.trim() || "stable",
+        releaseChannel: versionForm.releaseChannel.trim().toUpperCase() || "STABLE",
         changeSummary: versionForm.changeSummary.trim() || null,
       }),
     onSuccess: async () => {
       setVersionForm({
         technicalVersion: "",
-        releaseChannel: "stable",
+        releaseChannel: "STABLE",
         changeSummary: "",
       });
       setFormError(null);
@@ -979,10 +979,9 @@ function VersionsTab({
               })
             }
           />
-          <input
+          <select
             className={fieldControlClass}
             required
-            placeholder="Release channel"
             value={versionForm.releaseChannel}
             onChange={(e) =>
               setVersionForm({
@@ -990,7 +989,13 @@ function VersionsTab({
                 releaseChannel: e.target.value,
               })
             }
-          />
+          >
+            <option value="STABLE">STABLE</option>
+            <option value="LTS">LTS</option>
+            <option value="BETA">BETA</option>
+            <option value="DEV">DEV</option>
+            <option value="HOTFIX">HOTFIX</option>
+          </select>
           <input
             className={fieldControlClass}
             placeholder="Change summary"
