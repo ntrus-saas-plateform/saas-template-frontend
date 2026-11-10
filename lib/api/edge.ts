@@ -84,6 +84,27 @@ import type {
   ReleaseReservationInput,
   UpsertCapacityInventoryInput,
 } from "@/types/edge-placement";
+import type {
+  AssignWorkflowTaskInput,
+  CreateWorkflowDefinitionInput,
+  CreateWorkflowInstanceInput,
+  DecideWorkflowTaskInput,
+  RejectWorkflowTaskInput,
+  RetryWorkflowInput,
+  WorkflowAttemptRecord,
+  WorkflowCheckpointRecord,
+  WorkflowCompensationRecord,
+  WorkflowDeadLetterRecord,
+  WorkflowDefinitionRecord,
+  WorkflowHistoryEntry,
+  WorkflowHumanTaskRecord,
+  WorkflowInstanceRecord,
+  WorkflowListPage,
+  WorkflowListQuery,
+  WorkflowReasonInput,
+  WorkflowStepRecord,
+  WorkflowWorkerRecord,
+} from "@/types/edge-workflow";
 
 function toQuery(params: Record<string, string | number | undefined | null>): string {
   const search = new URLSearchParams();
@@ -2590,5 +2611,199 @@ export const edgeApi = {
         method: "PATCH",
         body: JSON.stringify(body),
       },
+    ),
+
+  // P7.4 — Workflow Operations
+  listWorkflowDefinitions: (opts?: WorkflowListQuery) =>
+    edgeRequest<WorkflowListPage<WorkflowDefinitionRecord>>(
+      `/api/edge-backend/workflows/definitions${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  getWorkflowDefinition: (id: string) =>
+    edgeRequest<WorkflowDefinitionRecord>(
+      `/api/edge-backend/workflows/definitions/${id}`,
+    ),
+
+  createWorkflowDefinition: (body: CreateWorkflowDefinitionInput) =>
+    edgeRequest<{
+      definition: WorkflowDefinitionRecord;
+      version?: { versionNumber?: number };
+    }>("/api/edge-backend/workflows/definitions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  validateWorkflowDefinition: (id: string) =>
+    edgeRequest<WorkflowDefinitionRecord>(
+      `/api/edge-backend/workflows/definitions/${id}/validate`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  publishWorkflowDefinition: (id: string) =>
+    edgeRequest<{
+      definition: WorkflowDefinitionRecord;
+      version?: { versionNumber?: number };
+    }>(`/api/edge-backend/workflows/definitions/${id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  deprecateWorkflowDefinition: (id: string, body?: WorkflowReasonInput) =>
+    edgeRequest<WorkflowDefinitionRecord>(
+      `/api/edge-backend/workflows/definitions/${id}/deprecate`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  listWorkflowInstances: (opts?: WorkflowListQuery) =>
+    edgeRequest<WorkflowListPage<WorkflowInstanceRecord>>(
+      `/api/edge-backend/workflows${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  getWorkflowInstance: (id: string) =>
+    edgeRequest<WorkflowInstanceRecord>(
+      `/api/edge-backend/workflows/${id}`,
+    ),
+
+  createWorkflowInstance: (body: CreateWorkflowInstanceInput) =>
+    edgeRequest<WorkflowInstanceRecord>("/api/edge-backend/workflows", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: body.idempotencyKey
+        ? { "Idempotency-Key": body.idempotencyKey }
+        : undefined,
+    }),
+
+  listWorkflowHistory: (id: string, opts?: WorkflowListQuery) =>
+    edgeRequest<WorkflowListPage<WorkflowHistoryEntry>>(
+      `/api/edge-backend/workflows/${id}/history${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  listWorkflowSteps: (id: string) =>
+    edgeRequest<WorkflowStepRecord[] | WorkflowListPage<WorkflowStepRecord>>(
+      `/api/edge-backend/workflows/${id}/steps`,
+    ),
+
+  listWorkflowAttempts: (id: string) =>
+    edgeRequest<
+      WorkflowAttemptRecord[] | WorkflowListPage<WorkflowAttemptRecord>
+    >(`/api/edge-backend/workflows/${id}/attempts`),
+
+  listWorkflowCheckpoints: (id: string) =>
+    edgeRequest<
+      WorkflowCheckpointRecord[] | WorkflowListPage<WorkflowCheckpointRecord>
+    >(`/api/edge-backend/workflows/${id}/checkpoints`),
+
+  listWorkflowCompensations: (id: string) =>
+    edgeRequest<
+      | WorkflowCompensationRecord[]
+      | WorkflowListPage<WorkflowCompensationRecord>
+    >(`/api/edge-backend/workflows/${id}/compensations`),
+
+  startWorkflow: (id: string) =>
+    edgeRequest<WorkflowInstanceRecord>(
+      `/api/edge-backend/workflows/${id}/start`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  pauseWorkflow: (id: string, body?: WorkflowReasonInput) =>
+    edgeRequest<WorkflowInstanceRecord>(
+      `/api/edge-backend/workflows/${id}/pause`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  resumeWorkflow: (id: string) =>
+    edgeRequest<WorkflowInstanceRecord>(
+      `/api/edge-backend/workflows/${id}/resume`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  cancelWorkflow: (id: string, body?: WorkflowReasonInput) =>
+    edgeRequest<WorkflowInstanceRecord>(
+      `/api/edge-backend/workflows/${id}/cancel`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  retryWorkflow: (id: string, body?: RetryWorkflowInput) =>
+    edgeRequest<unknown>(`/api/edge-backend/workflows/${id}/retry`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  reconcileWorkflow: (id: string) =>
+    edgeRequest<unknown>(`/api/edge-backend/workflows/${id}/reconcile`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  listWorkflowTasks: (opts?: WorkflowListQuery) =>
+    edgeRequest<WorkflowListPage<WorkflowHumanTaskRecord>>(
+      `/api/edge-backend/workflow-tasks${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        workflowId: opts?.workflowId,
+      })}`,
+    ),
+
+  getWorkflowTask: (id: string) =>
+    edgeRequest<WorkflowHumanTaskRecord>(
+      `/api/edge-backend/workflow-tasks/${id}`,
+    ),
+
+  assignWorkflowTask: (id: string, body: AssignWorkflowTaskInput) =>
+    edgeRequest<WorkflowHumanTaskRecord>(
+      `/api/edge-backend/workflow-tasks/${id}/assign`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  approveWorkflowTask: (id: string, body?: DecideWorkflowTaskInput) =>
+    edgeRequest<WorkflowHumanTaskRecord>(
+      `/api/edge-backend/workflow-tasks/${id}/approve`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  rejectWorkflowTask: (id: string, body: RejectWorkflowTaskInput) =>
+    edgeRequest<WorkflowHumanTaskRecord>(
+      `/api/edge-backend/workflow-tasks/${id}/reject`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listWorkflowWorkers: (opts?: WorkflowListQuery) =>
+    edgeRequest<WorkflowListPage<WorkflowWorkerRecord>>(
+      `/api/edge-backend/workflow-workers${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  listWorkflowDeadLetters: (opts?: WorkflowListQuery) =>
+    edgeRequest<WorkflowListPage<WorkflowDeadLetterRecord>>(
+      `/api/edge-backend/workflows/dead-letters${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
     ),
 };

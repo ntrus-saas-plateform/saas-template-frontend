@@ -22,6 +22,7 @@ import {
   RefreshCw,
   ServerCog,
   Users,
+  Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/components/edge/workspace-switcher";
@@ -66,6 +67,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/provisioning/capacity",
     label: "Placement & Capacity",
     icon: Gauge,
+  },
+  {
+    href: "/edge/provisioning/workflows",
+    label: "Workflow Operations",
+    icon: Workflow,
   },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },
