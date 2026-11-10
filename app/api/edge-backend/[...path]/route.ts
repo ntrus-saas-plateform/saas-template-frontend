@@ -56,6 +56,8 @@ async function proxy(req: NextRequest, pathParts: string[]) {
   );
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("Content-Type", contentType);
+  const idempotencyKey = req.headers.get("idempotency-key");
+  if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
 
   const session = await getEdgeSession();
   if (session.workspaceSessionToken) {

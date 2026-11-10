@@ -59,6 +59,31 @@ import type {
   UpdateProductRegistryInput,
   UpdateProfileInput,
 } from "@/types/edge-registry";
+import type {
+  CancelPlacementInput,
+  CapacityInventoryQuery,
+  CapacityInventoryRecord,
+  CapacityReservationRecord,
+  CapacityReservationsQuery,
+  ConfirmPlacementInput,
+  CreatePlacementPolicyInput,
+  CreatePlacementRequestInput,
+  EvaluatePlacementInput,
+  EvaluatePlacementResult,
+  PatchCapacityInventoryInput,
+  PatchPlacementPolicyInput,
+  PlacementCandidateEvaluation,
+  PlacementDecisionRecord,
+  PlacementHistoryEntry,
+  PlacementHistoryQuery,
+  PlacementListPage,
+  PlacementListQuery,
+  PlacementPolicyRecord,
+  PlacementRequestRecord,
+  ReEvaluatePlacementInput,
+  ReleaseReservationInput,
+  UpsertCapacityInventoryInput,
+} from "@/types/edge-placement";
 
 function toQuery(params: Record<string, string | number | undefined | null>): string {
   const search = new URLSearchParams();
@@ -2378,5 +2403,192 @@ export const edgeApi = {
         resourceType: opts?.resourceType,
         resourceId: opts?.resourceId,
       })}`,
+    ),
+
+  // P7.3 — Placement & Capacity
+  listPlacementRequests: (opts?: PlacementListQuery) =>
+    edgeRequest<PlacementListPage<PlacementRequestRecord>>(
+      `/api/edge-backend/placement/requests${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  getPlacementRequest: (id: string) =>
+    edgeRequest<PlacementRequestRecord>(
+      `/api/edge-backend/placement/requests/${id}`,
+    ),
+
+  createPlacementRequest: (body: CreatePlacementRequestInput) =>
+    edgeRequest<PlacementRequestRecord>(
+      "/api/edge-backend/placement/requests",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: body.idempotencyKey
+          ? { "Idempotency-Key": body.idempotencyKey }
+          : undefined,
+      },
+    ),
+
+  evaluatePlacementRequest: (id: string, body?: EvaluatePlacementInput) =>
+    edgeRequest<EvaluatePlacementResult>(
+      `/api/edge-backend/placement/requests/${id}/evaluate`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+        headers: body?.idempotencyKey
+          ? { "Idempotency-Key": body.idempotencyKey }
+          : undefined,
+      },
+    ),
+
+  confirmPlacementRequest: (id: string, body?: ConfirmPlacementInput) =>
+    edgeRequest<PlacementDecisionRecord>(
+      `/api/edge-backend/placement/requests/${id}/confirm`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  cancelPlacementRequest: (id: string, body?: CancelPlacementInput) =>
+    edgeRequest<PlacementRequestRecord>(
+      `/api/edge-backend/placement/requests/${id}/cancel`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  reEvaluatePlacementRequest: (id: string, body: ReEvaluatePlacementInput) =>
+    edgeRequest<EvaluatePlacementResult>(
+      `/api/edge-backend/placement/requests/${id}/re-evaluate`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": body.idempotencyKey },
+      },
+    ),
+
+  getPlacementDecision: (id: string) =>
+    edgeRequest<PlacementDecisionRecord>(
+      `/api/edge-backend/placement/decisions/${id}`,
+    ),
+
+  listPlacementDecisionCandidates: (decisionId: string) =>
+    edgeRequest<PlacementCandidateEvaluation[]>(
+      `/api/edge-backend/placement/decisions/${decisionId}/candidates`,
+    ),
+
+  listPlacementHistory: (opts?: PlacementHistoryQuery) =>
+    edgeRequest<PlacementListPage<PlacementHistoryEntry>>(
+      `/api/edge-backend/placement/history${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        resourceType: opts?.resourceType,
+        resourceId: opts?.resourceId,
+      })}`,
+    ),
+
+  listCapacityInventory: (opts?: CapacityInventoryQuery) =>
+    edgeRequest<PlacementListPage<CapacityInventoryRecord>>(
+      `/api/edge-backend/capacity/inventory${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        platformId: opts?.platformId,
+        environmentId: opts?.environmentId,
+        resourceType: opts?.resourceType,
+      })}`,
+    ),
+
+  upsertCapacityInventory: (body: UpsertCapacityInventoryInput) =>
+    edgeRequest<CapacityInventoryRecord>(
+      "/api/edge-backend/capacity/inventory",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  patchCapacityInventory: (id: string, body: PatchCapacityInventoryInput) =>
+    edgeRequest<CapacityInventoryRecord>(
+      `/api/edge-backend/capacity/inventory/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listCapacityReservations: (opts?: CapacityReservationsQuery) =>
+    edgeRequest<PlacementListPage<CapacityReservationRecord>>(
+      `/api/edge-backend/capacity/reservations${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        placementRequestId: opts?.placementRequestId,
+        environmentId: opts?.environmentId,
+      })}`,
+    ),
+
+  getCapacityReservation: (id: string) =>
+    edgeRequest<CapacityReservationRecord>(
+      `/api/edge-backend/capacity/reservations/${id}`,
+    ),
+
+  releaseCapacityReservation: (id: string, body: ReleaseReservationInput) =>
+    edgeRequest<CapacityReservationRecord>(
+      `/api/edge-backend/capacity/reservations/${id}/release`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  expireCapacityReservation: (
+    id: string,
+    body: { expectedVersion: number },
+  ) =>
+    edgeRequest<CapacityReservationRecord>(
+      `/api/edge-backend/capacity/reservations/${id}/expire`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listPlacementPolicies: (opts?: PlacementListQuery) =>
+    edgeRequest<PlacementListPage<PlacementPolicyRecord>>(
+      `/api/edge-backend/placement/policies${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  createPlacementPolicy: (body: CreatePlacementPolicyInput) =>
+    edgeRequest<PlacementPolicyRecord>(
+      "/api/edge-backend/placement/policies",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  patchPlacementPolicy: (id: string, body: PatchPlacementPolicyInput) =>
+    edgeRequest<PlacementPolicyRecord>(
+      `/api/edge-backend/placement/policies/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
     ),
 };
