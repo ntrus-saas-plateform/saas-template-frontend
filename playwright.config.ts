@@ -39,7 +39,8 @@ export default defineConfig({
               ...devices["Desktop Chrome"],
               storageState,
             },
-            testMatch: /edge-(marketing|commercial)-scenarios\.spec\.ts/,
+            testMatch:
+              /edge-(marketing|commercial|sales|subscriptions|billing)-scenarios\.spec\.ts/,
             dependencies: ["edge-auth-setup"],
           },
         ]

@@ -16,6 +16,8 @@ import {
   Tags,
   Megaphone,
   Handshake,
+  CreditCard,
+  RefreshCw,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,16 @@ const PLATFORM_NAV: NavItem[] = [
   { href: "/edge/commercial", label: "Commercial", icon: Tags },
   { href: "/edge/marketing", label: "Marketing", icon: Megaphone },
   { href: "/edge/sales", label: "Sales", icon: Handshake },
+  {
+    href: "/edge/subscriptions",
+    label: "Subscriptions",
+    icon: RefreshCw,
+  },
+  {
+    href: "/edge/billing",
+    label: "Billing",
+    icon: CreditCard,
+  },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },
   { href: "/edge/verticals", label: "Verticals", icon: Building2 },

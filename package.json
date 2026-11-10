@@ -13,6 +13,12 @@
     "test:e2e": "playwright test",
     "test:e2e:marketing": "playwright test e2e/edge-marketing-smoke.spec.ts e2e/edge-marketing-scenarios.spec.ts",
     "test:e2e:marketing:auth": "playwright test e2e/edge-marketing-scenarios.spec.ts",
+    "test:e2e:sales": "playwright test e2e/edge-sales-smoke.spec.ts e2e/edge-sales-scenarios.spec.ts",
+    "test:e2e:sales:auth": "playwright test e2e/edge-sales-scenarios.spec.ts",
+    "test:e2e:subscriptions": "playwright test e2e/edge-subscriptions-smoke.spec.ts e2e/edge-subscriptions-scenarios.spec.ts",
+    "test:e2e:subscriptions:auth": "playwright test e2e/edge-subscriptions-scenarios.spec.ts",
+    "test:e2e:billing": "playwright test e2e/edge-billing-smoke.spec.ts e2e/edge-billing-scenarios.spec.ts",
+    "test:e2e:billing:auth": "playwright test e2e/edge-billing-scenarios.spec.ts",
     "docs:openapi": "pnpm --dir .. docs:openapi"
   },
   "dependencies": {

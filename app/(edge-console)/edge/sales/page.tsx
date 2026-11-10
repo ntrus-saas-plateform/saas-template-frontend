@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,9 +26,12 @@ type Tab =
   | "pipeline"
   | "activities"
   | "quotes"
+  | "proposals"
+  | "consulting"
   | "dealdesk"
   | "contracts"
   | "orders"
+  | "governance"
   | "performance"
   | "teams"
   | "tasks";
@@ -70,6 +74,16 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
     permission: "platform:sales:quotes:read",
   },
   {
+    id: "proposals",
+    label: "Proposals",
+    permission: "platform:sales:proposals:manage",
+  },
+  {
+    id: "consulting",
+    label: "Consulting",
+    permission: "platform:sales:assessments:manage",
+  },
+  {
     id: "dealdesk",
     label: "Deal Desk",
     permission: "platform:sales:discounts:request",
@@ -83,6 +97,11 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
     id: "orders",
     label: "Orders",
     permission: "platform:sales:orders:manage",
+  },
+  {
+    id: "governance",
+    label: "Governance",
+    permission: "platform:sales:governance:manage",
   },
   {
     id: "performance",
@@ -148,6 +167,7 @@ export default function EdgeSalesPage() {
     contractId: "",
     opportunityId: "",
   });
+  const [searchQ, setSearchQ] = useState("");
 
   const canReadAny = useMemo(
     () =>
@@ -249,6 +269,30 @@ export default function EdgeSalesPage() {
     queryKey: ["edge", "sales", "forecast"],
     queryFn: () => edgeApi.getSalesForecast({ model: "WEIGHTED" }),
     enabled: tab === "performance" && canReadAny,
+  });
+
+  const searchQuery = useQuery({
+    queryKey: ["edge", "sales", "search", searchQ],
+    queryFn: () => edgeApi.searchSales({ q: searchQ, limit: 20 }),
+    enabled: searchQ.trim().length >= 2 && canReadAny,
+  });
+
+  const proposalsQuery = useQuery({
+    queryKey: ["edge", "sales", "proposals"],
+    queryFn: () => edgeApi.listSalesProposals(),
+    enabled: tab === "proposals" && canReadAny,
+  });
+
+  const questionnairesQuery = useQuery({
+    queryKey: ["edge", "sales", "questionnaires"],
+    queryFn: () => edgeApi.listSalesQuestionnaires(),
+    enabled: tab === "consulting" && canReadAny,
+  });
+
+  const approvalsQuery = useQuery({
+    queryKey: ["edge", "sales", "approvals"],
+    queryFn: () => edgeApi.listSalesApprovals({ status: "PENDING" }),
+    enabled: tab === "governance" && canReadAny,
   });
 
   const createAccount = useMutation({
@@ -550,6 +594,34 @@ export default function EdgeSalesPage() {
           contracts, orders and handoff. Accounts are not tenants; provisioning
           stays outside P4.
         </p>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <input
+            className={fieldControlClass + " min-w-[16rem] flex-1"}
+            placeholder="Global search (accounts, contacts, opportunities…)"
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+          />
+        </div>
+        {searchQ.trim().length >= 2 ? (
+          <ul className="mt-2 max-h-48 overflow-auto rounded-xl border border-border/70 text-sm">
+            {searchQuery.isLoading ? (
+              <li className="p-3 text-muted-foreground">Searching…</li>
+            ) : !(searchQuery.data as unknown[] | undefined)?.length ? (
+              <li className="p-3 text-muted-foreground">No matches</li>
+            ) : (
+              ((searchQuery.data as Record<string, unknown>[]) ?? []).map(
+                (hit) => (
+                  <li key={`${hit.entityType}-${hit.id}`} className="border-b border-border/50 p-3">
+                    <span className="font-medium">{String(hit.title)}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {String(hit.entityType)} · {String(hit.subtitle ?? "")}
+                    </span>
+                  </li>
+                ),
+              )
+            )}
+          </ul>
+        ) : null}
       </header>
 
       <nav className="flex flex-wrap gap-2 border-b border-border/60 pb-3">
@@ -962,7 +1034,12 @@ export default function EdgeSalesPage() {
                 {(opportunities as Record<string, unknown>[]).map((o) => (
                   <li key={String(o.id)} className="flex flex-wrap gap-3 p-4">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium">{String(o.name)}</p>
+                      <Link
+                        href={`/edge/sales/opportunities/${String(o.id)}`}
+                        className="font-medium hover:underline"
+                      >
+                        {String(o.name)}
+                      </Link>
                       <p className="text-xs text-muted-foreground">
                         {String(o.opportunityNumber)} ·{" "}
                         {String(o.estimatedValue ?? "—")} {String(o.currency)}
@@ -1226,6 +1303,97 @@ export default function EdgeSalesPage() {
                     <Badge variant="outline">{String(q.status)}</Badge>
                   </li>
                 ))}
+              </ul>
+            )}
+          </section>
+        </EdgePermissionGate>
+      ) : null}
+
+      {tab === "proposals" ? (
+        <EdgePermissionGate permission="platform:sales:proposals:manage">
+          <section className="space-y-4">
+            {proposalsQuery.isLoading ? (
+              <EdgeLoadingState label="Loading proposals…" />
+            ) : !(proposalsQuery.data as unknown[] | undefined)?.length ? (
+              <EdgeEmptyState title="No proposals yet" />
+            ) : (
+              <ul className="divide-y divide-border/60 rounded-xl border border-border/70">
+                {((proposalsQuery.data as Record<string, unknown>[]) ?? []).map(
+                  (p) => (
+                    <li
+                      key={String(p.id)}
+                      className="flex items-center justify-between gap-3 p-4"
+                    >
+                      <div>
+                        <p className="font-medium">{String(p.title)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {String(p.proposalNumber)} · {String(p.status)}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          void edgeApi.generateSalesProposalDocument(String(p.id))
+                        }
+                      >
+                        PDF
+                      </Button>
+                    </li>
+                  ),
+                )}
+              </ul>
+            )}
+          </section>
+        </EdgePermissionGate>
+      ) : null}
+
+      {tab === "consulting" ? (
+        <EdgePermissionGate permission="platform:sales:assessments:manage">
+          <section className="space-y-4">
+            {questionnairesQuery.isLoading ? (
+              <EdgeLoadingState label="Loading questionnaires…" />
+            ) : !(questionnairesQuery.data as unknown[] | undefined)?.length ? (
+              <EdgeEmptyState title="No discovery questionnaires yet" />
+            ) : (
+              <ul className="divide-y divide-border/60 rounded-xl border border-border/70">
+                {(
+                  (questionnairesQuery.data as Record<string, unknown>[]) ?? []
+                ).map((q) => (
+                  <li key={String(q.id)} className="p-4">
+                    <p className="font-medium">{String(q.name)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {String(q.code)} · {String(q.status)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </EdgePermissionGate>
+      ) : null}
+
+      {tab === "governance" ? (
+        <EdgePermissionGate permission="platform:sales:governance:manage">
+          <section className="space-y-4">
+            {approvalsQuery.isLoading ? (
+              <EdgeLoadingState label="Loading approvals…" />
+            ) : !(approvalsQuery.data as unknown[] | undefined)?.length ? (
+              <EdgeEmptyState title="No pending approvals" />
+            ) : (
+              <ul className="divide-y divide-border/60 rounded-xl border border-border/70">
+                {((approvalsQuery.data as Record<string, unknown>[]) ?? []).map(
+                  (a) => (
+                    <li key={String(a.id)} className="p-4">
+                      <p className="font-medium">
+                        {String(a.subjectType)} · {String(a.requiredLevel)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {String(a.status)} · {String(a.subjectId)}
+                      </p>
+                    </li>
+                  ),
+                )}
               </ul>
             )}
           </section>

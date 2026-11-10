@@ -1311,4 +1311,699 @@ export const edgeApi = {
 
   getSalesPerformance: () =>
     edgeRequest("/api/edge-backend/sales/analytics/performance"),
+
+  listSalesProposals: (opportunityId?: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/proposals${toQuery({ opportunityId })}`,
+    ),
+
+  createSalesProposal: (body: {
+    opportunityId: string;
+    quoteId?: string | null;
+    title: string;
+    language?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/proposals", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  issueSalesProposal: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/proposals/${id}/issue`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  listOpportunityAssessments: (opportunityId: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/opportunities/${opportunityId}/assessments`,
+    ),
+
+  createOpportunityAssessment: (
+    opportunityId: string,
+    body: {
+      currentSituation?: string | null;
+      objectives?: string | null;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/opportunities/${opportunityId}/assessments`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listSalesHandoffs: (opts?: { status?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/handoffs${toQuery({ status: opts?.status })}`,
+    ),
+
+  acceptSalesHandoff: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/handoffs/${id}/accept`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  receiveSalesProvisioningStatus: (
+    id: string,
+    body: {
+      confirmed: boolean;
+      externalSystem?: string;
+      externalRef?: string | null;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/handoffs/${id}/provisioning-status`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  searchSales: (opts: {
+    q: string;
+    visibilityMode?: string;
+    limit?: number;
+  }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/search${toQuery({
+        q: opts.q,
+        visibilityMode: opts.visibilityMode,
+        limit: opts.limit,
+      })}`,
+    ),
+
+  getSalesAccountHierarchy: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/accounts/${id}/hierarchy`),
+
+  listSalesQuestionnaires: () =>
+    edgeRequest("/api/edge-backend/sales/questionnaires"),
+
+  createSalesQuestionnaire: (body: {
+    code: string;
+    name: string;
+    questions: unknown[];
+  }) =>
+    edgeRequest("/api/edge-backend/sales/questionnaires", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listSalesSavedViews: (entityType?: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/views${toQuery({ entityType })}`,
+    ),
+
+  createSalesSavedView: (body: {
+    name: string;
+    scope: string;
+    entityType: string;
+    filters?: Record<string, unknown>;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/views", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  exportSalesEntities: (body: {
+    entityType: string;
+    format?: "JSON" | "CSV";
+  }) =>
+    edgeRequest("/api/edge-backend/sales/exports", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  generateSalesProposalDocument: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/proposals/${id}/document`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  listSalesApprovals: (opts?: { status?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/approvals${toQuery({ status: opts?.status })}`,
+    ),
+
+  persistSalesForecastSnapshot: (body: {
+    periodType: string;
+    periodKey: string;
+    model?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/forecast/snapshots", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  // --- P5 Subscriptions ---
+  getSubscriptionOverview: () =>
+    edgeRequest("/api/edge-backend/subscriptions/overview"),
+
+  getSubscriptionAnalytics: () =>
+    edgeRequest("/api/edge-backend/subscriptions/analytics"),
+
+  listSubscriptions: (opts?: {
+    accountId?: string;
+    productId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions${toQuery({
+        accountId: opts?.accountId,
+        productId: opts?.productId,
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getSubscription: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}`),
+
+  getSubscriptionWorkspace: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/workspace`),
+
+  getSubscriptionHistory: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/history`),
+
+  createSubscription: (body: {
+    accountId: string;
+    productId: string;
+    contractId?: string;
+    planId?: string;
+    packageId?: string;
+    currency?: string;
+    billingFrequency?: string;
+    correlationId?: string;
+    enterpriseProfile?: Record<string, unknown>;
+  }) =>
+    edgeRequest("/api/edge-backend/subscriptions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createSubscriptionFromHandoff: (body: {
+    handoffId: string;
+    acceptHandoff?: boolean;
+  }) =>
+    edgeRequest("/api/edge-backend/subscriptions/from-handoff", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  submitSubscription: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  approveSubscription: (id: string, body?: { requestedBy?: string }) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  requestSubscriptionActivation: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/activate-request`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  activateSubscription: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/activate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  suspendSubscription: (id: string, body: { reason: string }) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/suspend`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  reactivateSubscription: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/reactivate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  cancelSubscription: (
+    id: string,
+    body: { reason: string; noticeDays?: number },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  terminateSubscription: (id: string, body?: { reason?: string }) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/terminate`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  listSubscriptionItems: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/items`),
+
+  addSubscriptionItem: (
+    id: string,
+    body: {
+      itemType: string;
+      productId?: string;
+      offerRef?: string;
+      quantity?: number;
+      snapshot?: Record<string, unknown>;
+      available?: boolean;
+      eligible?: boolean;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/items`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listSubscriptionEntitlements: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/entitlements`),
+
+  calculateSubscriptionEntitlements: (
+    id: string,
+    body?: { reason?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/entitlements/calculate`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  publishSubscriptionEntitlements: (id: string, body?: { snapshotId?: string }) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/entitlements/publish`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  listSubscriptionChanges: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/changes`),
+
+  createSubscriptionChange: (
+    id: string,
+    body: {
+      changeType: string;
+      proposedConfig?: Record<string, unknown>;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/changes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  executeSubscriptionChange: (id: string, changeId: string) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/${id}/changes/${changeId}/execute`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  listSubscriptionRenewals: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/renewals`),
+
+  createSubscriptionRenewal: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/renewals`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  listSubscriptionTrials: (opts?: {
+    accountId?: string;
+    subscriptionId?: string;
+    status?: string;
+  }) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/trials${toQuery({
+        accountId: opts?.accountId,
+        subscriptionId: opts?.subscriptionId,
+        status: opts?.status,
+      })}`,
+    ),
+
+  startSubscriptionTrial: (body: {
+    accountId: string;
+    productId: string;
+    subscriptionId?: string;
+    durationDays?: number;
+    packageId?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/subscriptions/trials", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  convertSubscriptionTrial: (trialId: string, body: { subscriptionId: string }) =>
+    edgeRequest(`/api/edge-backend/subscriptions/trials/${trialId}/convert`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  expireSubscriptionTrial: (trialId: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/trials/${trialId}/expire`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  requestSubscriptionBillingCoordination: (
+    id: string,
+    body?: { billingAccountRef?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/billing-coordination`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  confirmSubscriptionBillingCoordination: (
+    id: string,
+    coordId: string,
+    body?: { externalRef?: string },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/${id}/billing-coordination/${coordId}/confirm`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  requestSubscriptionProvisioning: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/provisioning`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  completeSubscriptionProvisioning: (
+    id: string,
+    reqId: string,
+    body?: { tenantRef?: string; externalRef?: string },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/${id}/provisioning/${reqId}/complete`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  listSubscriptionBillingCoordination: (id: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/subscriptions/${id}/billing-coordination`,
+    ),
+
+  listSubscriptionProvisioning: (id: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/subscriptions/${id}/provisioning`,
+    ),
+
+  listSubscriptionSuspensions: (id: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/subscriptions/${id}/suspensions`,
+    ),
+
+  listSubscriptionCancellations: (id: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/subscriptions/${id}/cancellations`,
+    ),
+
+  approveSubscriptionChange: (id: string, changeId: string) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/${id}/changes/${changeId}/approve`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  reconcileSubscriptionEntitlements: (
+    id: string,
+    body?: { reason?: string; force?: boolean },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/entitlements/reconcile`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  patchSubscription: (
+    id: string,
+    body: {
+      currency?: string;
+      billingFrequency?: string;
+      correlationId?: string;
+      planId?: string;
+      packageId?: string;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  getSubscriptionPolicies: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/subscriptions/policies"),
+
+  // --- P6 Billing ---
+  getBillingOverview: () =>
+    edgeRequest("/api/edge-backend/billing/overview"),
+
+  getBillingAnalytics: () =>
+    edgeRequest("/api/edge-backend/billing/analytics"),
+
+  listBillingAccounts: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/accounts"),
+
+  getBillingAccount: (id: string) =>
+    edgeRequest(`/api/edge-backend/billing/accounts/${id}`),
+
+  createBillingAccount: (body: {
+    commercialAccountId: string;
+    currency?: string;
+    paymentTermsDays?: number;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/accounts", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createDraftInvoiceFromSubscription: (body: {
+    subscriptionId: string;
+    periodId?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/invoices/draft-from-subscription", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  approveBillingInvoice: (id: string) =>
+    edgeRequest(`/api/edge-backend/billing/invoices/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  issueBillingInvoice: (id: string) =>
+    edgeRequest(`/api/edge-backend/billing/invoices/${id}/issue`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  voidBillingInvoice: (id: string, body: { reason: string }) =>
+    edgeRequest(`/api/edge-backend/billing/invoices/${id}/void`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createBillingPaymentIntent: (body: {
+    billingAccountId: string;
+    invoiceId?: string | null;
+    amount: string;
+    currency: string;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/payments/intents", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  confirmBillingPaymentIntent: (id: string) =>
+    edgeRequest(`/api/edge-backend/billing/payments/intents/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  approveBillingRefund: (id: string, body: { requesterId: string }) =>
+    edgeRequest(`/api/edge-backend/billing/refunds/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listBillingInvoices: (params?: {
+    billingAccountId?: string;
+    status?: string;
+    limit?: number;
+  }) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/invoices${toQuery({
+        billingAccountId: params?.billingAccountId,
+        status: params?.status,
+        limit: params?.limit,
+      })}`,
+    ),
+
+  getBillingInvoice: (id: string) =>
+    edgeRequest(`/api/edge-backend/billing/invoices/${id}`),
+
+  upsertBillingProfile: (
+    accountId: string,
+    body: {
+      legalName: string;
+      tradeName?: string | null;
+      country?: string | null;
+      currency: string;
+      paymentTermsDays: number;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/billing/accounts/${accountId}/profiles`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  applyBillingTax: (
+    invoiceId: string,
+    body?: { country?: string | null; category?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/billing/invoices/${invoiceId}/apply-tax`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  createBillingRefund: (body: {
+    paymentIntentId: string;
+    amount: string;
+    currency: string;
+    reason?: string | null;
+    invoiceId?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/refunds", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listBillingPayments: (params?: {
+    billingAccountId?: string;
+    status?: string;
+    limit?: number;
+  }) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/payments${toQuery({
+        billingAccountId: params?.billingAccountId,
+        status: params?.status,
+        limit: params?.limit,
+      })}`,
+    ),
+
+  listCollectionCases: (params?: {
+    billingAccountId?: string;
+    status?: string;
+  }) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/collections${toQuery({
+        billingAccountId: params?.billingAccountId,
+        status: params?.status,
+      })}`,
+    ),
+
+  openCollectionCase: (body: {
+    billingAccountId: string;
+    invoiceId: string;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/collections", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  escalateCollectionCase: (id: string) =>
+    edgeRequest(`/api/edge-backend/billing/collections/${id}/escalate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  resolveCollectionCase: (id: string) =>
+    edgeRequest(`/api/edge-backend/billing/collections/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  runBillingReconciliation: (body: { provider: string }) =>
+    edgeRequest("/api/edge-backend/billing/reconciliation/runs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listReconciliationRuns: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/reconciliation/runs"),
+
+  listReconciliationExceptions: (params?: {
+    runId?: string;
+    status?: string;
+  }) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/reconciliation/exceptions${toQuery({
+        runId: params?.runId,
+        status: params?.status,
+      })}`,
+    ),
+
+  resolveReconciliationException: (id: string) =>
+    edgeRequest(
+      `/api/edge-backend/billing/reconciliation/exceptions/${id}/resolve`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  listBillingPolicies: (policyType?: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/policies${toQuery({ policyType })}`,
+    ),
+
+  listBillingFxRates: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/fx/rates"),
+
+  listBillingSettlements: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/settlements"),
+
+  listBillingDisputes: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/disputes"),
+
+  getBillingPortal: (billingAccountId: string) =>
+    edgeRequest(`/api/edge-backend/billing/portal/${billingAccountId}`),
+
+  processDueBillingSchedules: () =>
+    edgeRequest("/api/edge-backend/billing/schedules/process-due", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  generateBillingExport: (body?: {
+    exportType?: string;
+    currency?: string;
+    periodStart?: string | null;
+    periodEnd?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/exports", {
+      method: "POST",
+      body: JSON.stringify(body ?? { exportType: "FULL" }),
+    }),
+
+  listBillingExports: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/exports"),
+
+  listRevenuePolicies: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/revenue-policies"),
 };
