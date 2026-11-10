@@ -119,6 +119,14 @@ import type {
   QuarantineProductControlEndpointInput,
   RegisterProductControlEndpointInput,
 } from "@/types/edge-product-control";
+import type {
+  DatabaseResourceRecord,
+  InfrastructureProviderRecord,
+  InfrastructureResourceRecord,
+  ResourceBackupRecord,
+  ResourceHistoryRecord,
+  ResourcePlanRecord,
+} from "@/types/edge-infrastructure";
 
 function toQuery(params: Record<string, string | number | undefined | null>): string {
   const search = new URLSearchParams();
@@ -2988,5 +2996,140 @@ export const edgeApi = {
         q: opts?.q,
         endpointId: opts?.endpointId,
       })}`,
+    ),
+
+  // --- P7.6 Infrastructure & Database ---
+  listInfrastructureProviders: () =>
+    edgeRequest<{ items: InfrastructureProviderRecord[]; total: number }>(
+      `/api/edge-backend/infrastructure/providers`,
+    ),
+
+  getInfrastructureProvider: (id: string) =>
+    edgeRequest<InfrastructureProviderRecord>(
+      `/api/edge-backend/infrastructure/providers/${id}`,
+    ),
+
+  listInfrastructureResources: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    tenantId?: string;
+    resourceType?: string;
+  }) =>
+    edgeRequest<{ items: InfrastructureResourceRecord[]; total: number }>(
+      `/api/edge-backend/infrastructure/resources${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        tenantId: opts?.tenantId,
+        resourceType: opts?.resourceType,
+      })}`,
+    ),
+
+  getInfrastructureResource: (id: string) =>
+    edgeRequest<InfrastructureResourceRecord>(
+      `/api/edge-backend/infrastructure/resources/${id}`,
+    ),
+
+  reconcileInfrastructureResource: (id: string, body?: Record<string, unknown>) =>
+    edgeRequest<InfrastructureResourceRecord>(
+      `/api/edge-backend/infrastructure/resources/${id}/reconcile`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listResourcePlans: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    tenantId?: string;
+    productId?: string;
+  }) =>
+    edgeRequest<{ items: ResourcePlanRecord[]; total: number }>(
+      `/api/edge-backend/infrastructure/resource-plans${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+      })}`,
+    ),
+
+  getResourcePlan: (id: string) =>
+    edgeRequest<ResourcePlanRecord>(
+      `/api/edge-backend/infrastructure/resource-plans/${id}`,
+    ),
+
+  createResourcePlan: (body: Record<string, unknown>) =>
+    edgeRequest<ResourcePlanRecord>(
+      `/api/edge-backend/infrastructure/resource-plans`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  validateResourcePlan: (id: string, body?: Record<string, unknown>) =>
+    edgeRequest<ResourcePlanRecord>(
+      `/api/edge-backend/infrastructure/resource-plans/${id}/validate`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listDatabaseResources: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    tenantId?: string;
+    engine?: string;
+  }) =>
+    edgeRequest<{ items: DatabaseResourceRecord[]; total: number }>(
+      `/api/edge-backend/databases/resources${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        tenantId: opts?.tenantId,
+        engine: opts?.engine,
+      })}`,
+    ),
+
+  getDatabaseResource: (id: string) =>
+    edgeRequest<DatabaseResourceRecord>(
+      `/api/edge-backend/databases/resources/${id}`,
+    ),
+
+  verifyDatabaseResource: (id: string, body?: Record<string, unknown>) =>
+    edgeRequest<DatabaseResourceRecord>(
+      `/api/edge-backend/databases/resources/${id}/verify`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  rotateDatabaseCredentials: (id: string, body?: Record<string, unknown>) =>
+    edgeRequest<{ credentialRef: string }>(
+      `/api/edge-backend/databases/resources/${id}/rotate-credentials`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listResourceHistory: (id: string, opts?: { limit?: number }) =>
+    edgeRequest<{ items: ResourceHistoryRecord[]; total: number }>(
+      `/api/edge-backend/resources/${id}/history${toQuery({ limit: opts?.limit })}`,
+    ),
+
+  listResourceBackups: (id: string) =>
+    edgeRequest<{ items: ResourceBackupRecord[]; total: number }>(
+      `/api/edge-backend/resources/${id}/backups`,
+    ),
+
+  createResourceBackup: (id: string, body?: Record<string, unknown>) =>
+    edgeRequest<ResourceBackupRecord>(
+      `/api/edge-backend/resources/${id}/backups`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  restoreResourceBackup: (id: string, body: Record<string, unknown>) =>
+    edgeRequest<unknown>(`/api/edge-backend/resources/${id}/restore`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  deprovisionResource: (id: string, body?: Record<string, unknown>) =>
+    edgeRequest<InfrastructureResourceRecord>(
+      `/api/edge-backend/resources/${id}/deprovision`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
     ),
 };

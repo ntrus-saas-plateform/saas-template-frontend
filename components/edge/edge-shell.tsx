@@ -79,6 +79,11 @@ const PLATFORM_NAV: NavItem[] = [
     label: "Product Control",
     icon: Cable,
   },
+  {
+    href: "/edge/provisioning/infrastructure",
+    label: "Infrastructure & DB",
+    icon: ServerCog,
+  },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },
   { href: "/edge/verticals", label: "Verticals", icon: Building2 },
