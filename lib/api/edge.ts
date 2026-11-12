@@ -60,6 +60,20 @@ import type {
   UpdateProfileInput,
 } from "@/types/edge-registry";
 import type {
+  KeycloakCapabilitiesRecord,
+  KeycloakClientRecord,
+  KeycloakEvidenceRecord,
+  KeycloakHealthCheckRecord,
+  KeycloakHistoryRecord,
+  KeycloakOidcConfigurationRecord,
+  KeycloakProviderRecord,
+  KeycloakRealmRecord,
+  KeycloakReconciliationRunRecord,
+  KeycloakServerRecord,
+  KeycloakTopologyDetail,
+  KeycloakTopologyRecord,
+} from "@/types/edge-keycloak";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -3131,5 +3145,135 @@ export const edgeApi = {
     edgeRequest<InfrastructureResourceRecord>(
       `/api/edge-backend/resources/${id}/deprovision`,
       { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  // --- P7.7 Keycloak Topology & Identity Infrastructure ---
+  listKeycloakProviders: () =>
+    edgeRequest<{ items: KeycloakProviderRecord[]; total: number }>(
+      `/api/edge-backend/keycloak/providers`,
+    ),
+
+  getKeycloakProvider: (id: string) =>
+    edgeRequest<KeycloakProviderRecord>(
+      `/api/edge-backend/keycloak/providers/${id}`,
+    ),
+
+  listKeycloakServers: () =>
+    edgeRequest<{ items: KeycloakServerRecord[]; total: number }>(
+      `/api/edge-backend/keycloak/servers`,
+    ),
+
+  getKeycloakServer: (id: string) =>
+    edgeRequest<KeycloakServerRecord>(
+      `/api/edge-backend/keycloak/servers/${id}`,
+    ),
+
+  registerKeycloakServer: (body: {
+    providerId: string;
+    code: string;
+    name: string;
+    baseUrl: string;
+    adminRealm?: string;
+    adminClientId: string;
+    adminCredential?: string;
+    tlsMode?: string;
+    allowPrivateNetwork?: boolean;
+    environment?: string;
+  }) =>
+    edgeRequest<KeycloakServerRecord>(`/api/edge-backend/keycloak/servers`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  discoverKeycloakCapabilities: (serverId: string, body?: Record<string, unknown>) =>
+    edgeRequest<KeycloakCapabilitiesRecord>(
+      `/api/edge-backend/keycloak/servers/${serverId}/capabilities`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  getKeycloakCapabilities: (serverId: string) =>
+    edgeRequest<KeycloakCapabilitiesRecord | null>(
+      `/api/edge-backend/keycloak/servers/${serverId}/capabilities`,
+    ),
+
+  listKeycloakTopologies: (opts?: {
+    limit?: number;
+    offset?: number;
+    tenantId?: string;
+    productId?: string;
+    status?: string;
+    topologyType?: string;
+    serverId?: string;
+  }) =>
+    edgeRequest<{ items: KeycloakTopologyRecord[]; total: number }>(
+      `/api/edge-backend/keycloak/topologies${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        status: opts?.status,
+        topologyType: opts?.topologyType,
+        serverId: opts?.serverId,
+      })}`,
+    ),
+
+  getKeycloakTopology: (id: string) =>
+    edgeRequest<KeycloakTopologyDetail>(`/api/edge-backend/keycloak/topologies/${id}`),
+
+  createKeycloakTopology: (body: {
+    tenantId: string;
+    productId: string;
+    providerId: string;
+    serverId: string;
+    topologyType: string;
+    subscriptionId?: string;
+    placementDecisionId?: string;
+    deploymentProfileId?: string;
+    runtimeProfileId?: string;
+    profileOptions?: Record<string, unknown>;
+    provisioningRequestId?: string;
+  }) =>
+    edgeRequest<KeycloakTopologyRecord>(`/api/edge-backend/keycloak/topologies`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  reconcileKeycloakTopology: (id: string, body?: Record<string, unknown>) =>
+    edgeRequest<unknown>(`/api/edge-backend/keycloak/topologies/${id}/reconcile`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  deprovisionKeycloakTopology: (id: string, body: Record<string, unknown>) =>
+    edgeRequest<unknown>(`/api/edge-backend/keycloak/topologies/${id}/deprovision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  declareKeycloakClient: (body: Record<string, unknown>) =>
+    edgeRequest<unknown>(`/api/edge-backend/keycloak/clients`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listKeycloakEvidence: (topologyId: string, opts?: { limit?: number }) =>
+    edgeRequest<{ items: KeycloakEvidenceRecord[]; total: number }>(
+      `/api/edge-backend/keycloak/topologies/${topologyId}/evidence${toQuery({
+        limit: opts?.limit,
+      })}`,
+    ),
+
+  listKeycloakHistory: (topologyId: string, opts?: { limit?: number }) =>
+    edgeRequest<{ items: KeycloakHistoryRecord[]; total: number }>(
+      `/api/edge-backend/keycloak/topologies/${topologyId}/history${toQuery({
+        limit: opts?.limit,
+      })}`,
+    ),
+
+  listKeycloakReconciliations: (topologyId: string, opts?: { limit?: number }) =>
+    edgeRequest<{ items: KeycloakReconciliationRunRecord[]; total: number }>(
+      `/api/edge-backend/keycloak/topologies/${topologyId}/reconciliations${toQuery({
+        limit: opts?.limit,
+      })}`,
     ),
 };
