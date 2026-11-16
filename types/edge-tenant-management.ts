@@ -176,6 +176,8 @@ export type TenantPortfolioMetrics = {
   computedAt: string;
 };
 
+export type AvailabilityProjection = "AVAILABLE" | "PARTIAL" | "UNAVAILABLE" | "UNKNOWN";
+
 export type Tenant360Overview = {
   registry: TenantRegistryRecord;
   tags: TenantTagRecord[];
@@ -205,6 +207,181 @@ export type Tenant360Overview = {
   openExceptions: number;
   pendingLifecycleRequests: number;
   openFindings: number;
+  resources?: {
+    availability: AvailabilityProjection;
+    items?: Array<Record<string, unknown>>;
+    source?: string;
+    observedAt?: string | null;
+  };
+  applications?: {
+    availability: AvailabilityProjection;
+    items?: Array<Record<string, unknown>>;
+    source?: string;
+    observedAt?: string | null;
+  };
+  configuration?: {
+    availability: AvailabilityProjection;
+    items?: Array<Record<string, unknown>>;
+    source?: string;
+    observedAt?: string | null;
+  };
+  timeline?: Array<{
+    id: string;
+    label: string;
+    occurredAt: string;
+    source?: string;
+    details?: Record<string, unknown>;
+  }>;
+  risk?: {
+    level: string;
+    assessedAt: string | null;
+    availability: AvailabilityProjection;
+    ruleVersion?: string | null;
+  };
+  latestHealthSnapshot?: TenantHealthSnapshotRecord | null;
+};
+
+export type MigrationRequestRecord = {
+  id: string;
+  tenantRegistryId: string;
+  productTenantId: string;
+  migrationType: string;
+  status: string;
+  justification: string;
+  impactAssessment: string | null;
+  compatibilityAssessment: string | null;
+  dataResidencyReview: string | null;
+  downtimeAssessment: string | null;
+  targetRef: Record<string, unknown>;
+  scheduleAt: string | null;
+  requestedBy: string;
+  approverId: string | null;
+  approvedAt: string | null;
+  p7WorkflowId: string | null;
+  evidence: Record<string, unknown>;
+  result: Record<string, unknown>;
+  correlationId: string | null;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+export type RecoveryRequestRecord = {
+  id: string;
+  tenantRegistryId: string;
+  productTenantId: string;
+  recoveryType: string;
+  status: string;
+  priority: string;
+  scope: Record<string, unknown>;
+  backupRef: string | null;
+  restorePointRef: string | null;
+  justification: string;
+  rpoAssessment: string | null;
+  rtoMeasurement: string | null;
+  requestedBy: string;
+  approverId: string | null;
+  approvedAt: string | null;
+  p7WorkflowId: string | null;
+  evidence: Record<string, unknown>;
+  result: Record<string, unknown>;
+  correlationId: string | null;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+export type TerminationRequestRecord = {
+  id: string;
+  tenantRegistryId: string;
+  productTenantId: string;
+  status: string;
+  justification: string;
+  contractualCheck: Record<string, unknown>;
+  financialCheck: Record<string, unknown>;
+  retentionEvaluation: Record<string, unknown>;
+  legalHold: boolean;
+  dataExportRef: string | null;
+  graceUntil: string | null;
+  requestedBy: string;
+  approverId: string | null;
+  approvedAt: string | null;
+  p7WorkflowId: string | null;
+  evidence: Record<string, unknown>;
+  result: Record<string, unknown>;
+  correlationId: string | null;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+export type ReconciliationRunRecord = {
+  id: string;
+  mode: string;
+  status: string;
+  scope: Record<string, unknown>;
+  summary: Record<string, unknown>;
+  startedBy: string;
+  startedAt: string;
+  finishedAt: string | null;
+  correlationId: string | null;
+  createdAt: string;
+};
+
+export type TenantHealthSnapshotRecord = {
+  id: string;
+  tenantRegistryId: string;
+  productTenantId: string;
+  overallStatus: string;
+  indicators: Record<string, unknown>;
+  sourceSystem: string;
+  observedAt: string;
+  staleAfter: string;
+  createdAt: string;
+};
+
+export type TenantRiskAssessmentRecord = {
+  id: string;
+  tenantRegistryId: string;
+  productTenantId: string;
+  riskLevel: string;
+  score: number | null;
+  ruleVersion: string;
+  inputs: Record<string, unknown>;
+  result: Record<string, unknown>;
+  evidenceRefs: unknown[];
+  reviewerId: string | null;
+  evaluatedAt: string;
+  createdAt: string;
+};
+
+export type TenantBulkOperationRecord = {
+  id: string;
+  operationType: string;
+  status: string;
+  previewCount: number;
+  filter: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  results: unknown[];
+  requestedBy: string;
+  approverId: string | null;
+  correlationId: string | null;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TenantPoliciesPatch = {
+  expectedVersion: number;
+  legalHold?: boolean;
+  deletionProtection?: boolean;
+  dataResidencyRef?: string | null;
+  retentionPolicyRef?: string | null;
+  securityPolicyRef?: string | null;
+  correlationId?: string;
 };
 
 export type TenantManagementListPage<T> = {

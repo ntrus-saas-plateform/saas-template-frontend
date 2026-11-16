@@ -8,6 +8,11 @@ const getTenantPortfolioAnalytics = vi.fn();
 const listTenantLifecycleRequests = vi.fn();
 const listTenantExceptions = vi.fn();
 const listTenantReconciliationFindings = vi.fn();
+const listTenantMigrations = vi.fn();
+const listTenantRecoveries = vi.fn();
+const listTenantTerminations = vi.fn();
+const listTenantReconciliationRuns = vi.fn();
+const listBulkTenantOperations = vi.fn();
 
 vi.mock("@/lib/api/edge", () => ({
   EdgeApiError: class EdgeApiError extends Error {
@@ -27,7 +32,17 @@ vi.mock("@/lib/api/edge", () => ({
       listTenantExceptions(...args),
     listTenantReconciliationFindings: (...args: unknown[]) =>
       listTenantReconciliationFindings(...args),
+    listTenantMigrations: (...args: unknown[]) => listTenantMigrations(...args),
+    listTenantRecoveries: (...args: unknown[]) => listTenantRecoveries(...args),
+    listTenantTerminations: (...args: unknown[]) =>
+      listTenantTerminations(...args),
+    listTenantReconciliationRuns: (...args: unknown[]) =>
+      listTenantReconciliationRuns(...args),
+    listBulkTenantOperations: (...args: unknown[]) =>
+      listBulkTenantOperations(...args),
     syncTenantsFromP7: vi.fn(),
+    exportTenants: vi.fn(),
+    registerTenant: vi.fn(),
   },
 }));
 
@@ -62,6 +77,7 @@ beforeAll(() => {
 const ALL_PERMS = [
   "platform:tenant_management:search",
   "platform:tenant_management:analytics:read",
+  "platform:tenant_management:lifecycle:request",
 ];
 
 const TENANT = {
@@ -156,6 +172,13 @@ describe("EdgeTenantManagementModule (P8 console)", () => {
     listTenantReconciliationFindings.mockResolvedValue({
       data: { items: [], total: 0 },
     });
+    listTenantMigrations.mockResolvedValue({ data: { items: [], total: 0 } });
+    listTenantRecoveries.mockResolvedValue({ data: { items: [], total: 0 } });
+    listTenantTerminations.mockResolvedValue({ data: { items: [], total: 0 } });
+    listTenantReconciliationRuns.mockResolvedValue({
+      data: { items: [], total: 0 },
+    });
+    listBulkTenantOperations.mockResolvedValue({ data: { items: [], total: 0 } });
   });
 
   it("shows the forbidden state without tenant management permissions", async () => {
@@ -182,7 +205,14 @@ describe("EdgeTenantManagementModule (P8 console)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
     await screen.findByTestId("tm-registry-table");
     expect(listTenants).toHaveBeenCalledWith(
-      expect.objectContaining({ q: "acme", limit: 50 }),
+      expect.objectContaining({ q: "acme", limit: 50, sortBy: "updatedAt" }),
     );
+  });
+
+  it("exposes pagination controls in registry search", async () => {
+    renderModule();
+    expect(await screen.findByLabelText("Page limit")).toBeTruthy();
+    expect(screen.getByLabelText("Page offset")).toBeTruthy();
+    expect(screen.getByLabelText("Sort by")).toBeTruthy();
   });
 });

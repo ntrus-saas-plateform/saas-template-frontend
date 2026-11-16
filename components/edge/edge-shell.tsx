@@ -27,6 +27,9 @@ import {
   ServerCog,
   SlidersHorizontal,
   Sparkles,
+  Bot,
+  Award,
+  FileSearch,
   Users,
   Workflow,
 } from "lucide-react";
@@ -123,6 +126,21 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/provisioning/reconciliation",
     label: "Reconciliation",
     icon: Scale,
+  },
+  {
+    href: "/edge/provisioning/agents",
+    label: "Connectivity Agents",
+    icon: Bot,
+  },
+  {
+    href: "/edge/provisioning/certification",
+    label: "Certification",
+    icon: Award,
+  },
+  {
+    href: "/edge/provisioning/evidence",
+    label: "Evidence Viewer",
+    icon: FileSearch,
   },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },

@@ -128,14 +128,37 @@ import type {
   ReconciliationWaiver,
 } from "@/types/edge-reconciliation";
 import type {
+  AgentCommand,
+  AgentEvidence,
+  ConnectivityAgent,
+  ConnectivityAgentDetail,
+  ConnectivityAgentListPage,
+} from "@/types/edge-connectivity-agent";
+import type {
+  CertificationEvidence,
+  CertificationEvidenceItem,
+  CertificationListPage,
+  CertificationPackage,
+  CertificationPackageDetail,
+  CertificationRun,
+} from "@/types/edge-certification";
+import type {
   ActivityEventRecord,
   ExceptionRecord,
   LifecycleRequestRecord,
+  MigrationRequestRecord,
   ReconciliationFindingRecord,
+  ReconciliationRunRecord,
+  RecoveryRequestRecord,
   Tenant360Overview,
+  TenantBulkOperationRecord,
+  TenantHealthSnapshotRecord,
   TenantManagementListPage,
+  TenantPoliciesPatch,
   TenantPortfolioMetrics,
   TenantRegistryRecord,
+  TenantRiskAssessmentRecord,
+  TerminationRequestRecord,
 } from "@/types/edge-tenant-management";
 import type {
   CancelPlacementInput,
@@ -274,6 +297,41 @@ async function edgeRequest<T>(
   }
 
   return { data: json.data as T, pagination: json.pagination };
+}
+
+async function edgeRequestText(
+  path: string,
+  init?: RequestInit,
+): Promise<{ data: string; contentType: string | null }> {
+  const headers = new Headers(init?.headers);
+  headers.set("X-Correlation-Id", crypto.randomUUID());
+
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    const csrf = readEdgeCsrf();
+    if (csrf) headers.set(OKAPI_EDGE_CSRF_HEADER, csrf);
+  }
+
+  const url = path.startsWith("/") ? path : `/${path}`;
+  const res = await fetch(url, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    };
+    throw new EdgeApiError(
+      json.error?.message ?? res.statusText ?? "Request failed",
+      res.status,
+      json,
+    );
+  }
+
+  const data = await res.text();
+  return { data, contentType: res.headers.get("content-type") };
 }
 
 export const edgeApi = {
@@ -4297,6 +4355,246 @@ export const edgeApi = {
       })}`,
     ),
 
+  // --- P7.14 Connectivity Agent & Edge Agent Registry ---
+  listConnectivityAgents: (opts?: {
+    status?: string;
+    tenantId?: string;
+    productId?: string;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ConnectivityAgentListPage<ConnectivityAgent>>(
+      `/api/edge-backend/agents${toQuery({
+        status: opts?.status,
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        q: opts?.q,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getConnectivityAgent: (id: string) =>
+    edgeRequest<ConnectivityAgentDetail | null>(
+      `/api/edge-backend/agents/${id}`,
+    ),
+
+  createConnectivityAgent: (body: {
+    agentCode: string;
+    displayName: string;
+    publicKeyRef: string;
+    tenantId?: string;
+    productId?: string;
+    deploymentProfileCode?: string;
+    certificateRef?: string;
+    outboundOnly?: boolean;
+    provisioningRequestId?: string;
+    authorizationRowId?: string;
+    authorizationVersion?: number;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ConnectivityAgent>(`/api/edge-backend/agents`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  registerConnectivityAgent: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(`/api/edge-backend/agents/${id}/register`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  commandConnectivityAgent: (
+    id: string,
+    body: {
+      commandType: string;
+      nonce: string;
+      payloadRef?: string;
+      signatureRef?: string;
+      expiresAt?: string;
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      authorizationRowId?: string;
+      authorizationVersion?: number;
+      reason?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) =>
+    edgeRequest<unknown>(`/api/edge-backend/agents/${id}/command`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  revokeConnectivityAgent: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(`/api/edge-backend/agents/${id}/revoke`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  listConnectivityAgentCommands: (
+    id: string,
+    opts?: { status?: string; limit?: number; offset?: number },
+  ) =>
+    edgeRequest<ConnectivityAgentListPage<AgentCommand>>(
+      `/api/edge-backend/agents/${id}/commands${toQuery({
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  listConnectivityAgentEvidence: (id: string, opts?: { limit?: number }) =>
+    edgeRequest<AgentEvidence[]>(
+      `/api/edge-backend/agents/${id}/evidence${toQuery({
+        limit: opts?.limit,
+      })}`,
+    ),
+
+  // --- P7.15 Production Certification & Evidence Pack ---
+  listCertificationPackages: (opts?: {
+    status?: string;
+    productId?: string;
+    deploymentProfileCode?: string;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<CertificationListPage<CertificationPackage>>(
+      `/api/edge-backend/certification/packages${toQuery({
+        status: opts?.status,
+        productId: opts?.productId,
+        deploymentProfileCode: opts?.deploymentProfileCode,
+        q: opts?.q,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getCertificationPackage: (id: string) =>
+    edgeRequest<CertificationPackageDetail | null>(
+      `/api/edge-backend/certification/packages/${id}`,
+    ),
+
+  createCertificationPackage: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    productId?: string;
+    deploymentProfileCode?: string;
+    scope?: Record<string, unknown>;
+    provisioningRequestId?: string;
+    authorizationRowId?: string;
+    authorizationVersion?: number;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<CertificationPackage>(
+      `/api/edge-backend/certification/packages`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  assembleCertificationPackage: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+      includeOptionalAgents?: boolean;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/certification/packages/${id}/assemble`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  certifyCertificationPackage: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/certification/packages/${id}/certify`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  revokeCertificationPackage: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/certification/packages/${id}/revoke`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  attachCertificationEvidence: (
+    id: string,
+    body: {
+      evidenceKey: string;
+      phaseCode?: string;
+      required?: boolean;
+      itemStatus?: string;
+      sourceRef?: string;
+      checksum?: string;
+      details?: Record<string, unknown>;
+    },
+  ) =>
+    edgeRequest<CertificationEvidenceItem>(
+      `/api/edge-backend/certification/packages/${id}/evidence`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listCertificationEvidenceItems: (id: string) =>
+    edgeRequest<CertificationEvidenceItem[]>(
+      `/api/edge-backend/certification/packages/${id}/evidence-items`,
+    ),
+
+  listCertificationRuns: (
+    id: string,
+    opts?: { operation?: string; outcome?: string; limit?: number; offset?: number },
+  ) =>
+    edgeRequest<CertificationListPage<CertificationRun>>(
+      `/api/edge-backend/certification/packages/${id}/runs${toQuery({
+        operation: opts?.operation,
+        outcome: opts?.outcome,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  listCertificationEvidence: (id: string, opts?: { limit?: number }) =>
+    edgeRequest<CertificationEvidence[]>(
+      `/api/edge-backend/certification/packages/${id}/evidence${toQuery({
+        limit: opts?.limit,
+      })}`,
+    ),
+
   // --- P8 Tenant Management & Governance ---
   listTenants: (opts?: {
     q?: string;
@@ -4574,5 +4872,290 @@ export const edgeApi = {
         limit: opts?.limit,
         offset: opts?.offset,
       })}`,
+    ),
+
+  listTenantReconciliationRuns: (opts?: {
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<ReconciliationRunRecord>>(
+      `/api/edge-backend/tenant-management/reconciliation/runs${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  acknowledgeTenantFinding: (
+    id: string,
+    body?: { note?: string; correlationId?: string },
+  ) =>
+    edgeRequest<ReconciliationFindingRecord>(
+      `/api/edge-backend/tenant-management/reconciliation/findings/${id}/acknowledge`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listTenantMigrations: (opts?: {
+    tenantRegistryId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<MigrationRequestRecord>>(
+      `/api/edge-backend/tenant-management/migrations${toQuery({
+        tenantRegistryId: opts?.tenantRegistryId,
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  requestTenantMigration: (body: {
+    tenantRegistryId: string;
+    migrationType: string;
+    justification: string;
+    idempotencyKey: string;
+    impactAssessment?: string;
+    compatibilityAssessment?: string;
+    dataResidencyReview?: string;
+    downtimeAssessment?: string;
+    targetRef?: Record<string, unknown>;
+    scheduleAt?: string;
+    correlationId?: string;
+  }) =>
+    edgeRequest<MigrationRequestRecord>(
+      `/api/edge-backend/tenant-management/migrations`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  approveTenantMigration: (id: string, body?: { correlationId?: string }) =>
+    edgeRequest<MigrationRequestRecord>(
+      `/api/edge-backend/tenant-management/migrations/${id}/approve`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  rejectTenantMigration: (
+    id: string,
+    body: { rejectedReason: string; correlationId?: string },
+  ) =>
+    edgeRequest<MigrationRequestRecord>(
+      `/api/edge-backend/tenant-management/migrations/${id}/reject`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantRecoveries: (opts?: {
+    tenantRegistryId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<RecoveryRequestRecord>>(
+      `/api/edge-backend/tenant-management/recoveries${toQuery({
+        tenantRegistryId: opts?.tenantRegistryId,
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  requestTenantRecovery: (body: {
+    tenantRegistryId: string;
+    recoveryType: string;
+    justification: string;
+    idempotencyKey: string;
+    priority?: string;
+    scope?: Record<string, unknown>;
+    backupRef?: string;
+    restorePointRef?: string;
+    rpoAssessment?: string;
+    rtoMeasurement?: string;
+    correlationId?: string;
+  }) =>
+    edgeRequest<RecoveryRequestRecord>(
+      `/api/edge-backend/tenant-management/recoveries`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  approveTenantRecovery: (id: string, body?: { correlationId?: string }) =>
+    edgeRequest<RecoveryRequestRecord>(
+      `/api/edge-backend/tenant-management/recoveries/${id}/approve`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  rejectTenantRecovery: (
+    id: string,
+    body: { rejectedReason: string; correlationId?: string },
+  ) =>
+    edgeRequest<RecoveryRequestRecord>(
+      `/api/edge-backend/tenant-management/recoveries/${id}/reject`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantTerminations: (opts?: {
+    tenantRegistryId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<TerminationRequestRecord>>(
+      `/api/edge-backend/tenant-management/terminations${toQuery({
+        tenantRegistryId: opts?.tenantRegistryId,
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  requestTenantTermination: (body: {
+    tenantRegistryId: string;
+    justification: string;
+    idempotencyKey: string;
+    dataExportRef?: string;
+    graceUntil?: string;
+    correlationId?: string;
+  }) =>
+    edgeRequest<TerminationRequestRecord>(
+      `/api/edge-backend/tenant-management/terminations`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  approveTenantTermination: (id: string, body?: { correlationId?: string }) =>
+    edgeRequest<TerminationRequestRecord>(
+      `/api/edge-backend/tenant-management/terminations/${id}/approve`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  rejectTenantTermination: (
+    id: string,
+    body: { rejectedReason: string; correlationId?: string },
+  ) =>
+    edgeRequest<TerminationRequestRecord>(
+      `/api/edge-backend/tenant-management/terminations/${id}/reject`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  exportTenants: (opts?: {
+    q?: string;
+    productId?: string;
+    accountId?: string;
+    subscriptionId?: string;
+    region?: string;
+    classification?: string;
+    administrativeStatus?: string;
+    technicalStatus?: string;
+    governanceStatus?: string;
+    healthStatus?: string;
+    riskLevel?: string;
+    tagKey?: string;
+    tagValue?: string;
+    sortBy?: string;
+    sortDir?: "asc" | "desc";
+    format?: string;
+  }) =>
+    edgeRequestText(
+      `/api/edge-backend/tenants/export${toQuery({
+        q: opts?.q,
+        productId: opts?.productId,
+        accountId: opts?.accountId,
+        subscriptionId: opts?.subscriptionId,
+        region: opts?.region,
+        classification: opts?.classification,
+        administrativeStatus: opts?.administrativeStatus,
+        technicalStatus: opts?.technicalStatus,
+        governanceStatus: opts?.governanceStatus,
+        healthStatus: opts?.healthStatus,
+        riskLevel: opts?.riskLevel,
+        tagKey: opts?.tagKey,
+        tagValue: opts?.tagValue,
+        sortBy: opts?.sortBy,
+        sortDir: opts?.sortDir,
+        format: opts?.format,
+      })}`,
+    ),
+
+  previewBulkTenantOperation: (body: {
+    operationType: "TAG" | "ASSIGN" | "CLASSIFY";
+    filter: Record<string, unknown>;
+    payload: Record<string, unknown>;
+    idempotencyKey: string;
+    correlationId?: string;
+  }) =>
+    edgeRequest<TenantBulkOperationRecord>(
+      `/api/edge-backend/tenant-management/bulk/preview`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  executeBulkTenantOperation: (
+    id: string,
+    body?: { correlationId?: string },
+  ) =>
+    edgeRequest<TenantBulkOperationRecord>(
+      `/api/edge-backend/tenant-management/bulk/operations/${id}/execute`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listBulkTenantOperations: (opts?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<TenantBulkOperationRecord>>(
+      `/api/edge-backend/tenant-management/bulk/operations${toQuery({
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  recordTenantHealthSnapshot: (
+    tenantId: string,
+    body: {
+      overallStatus?: string;
+      indicators?: Record<string, unknown>;
+      sourceSystem: string;
+      observedAt: string;
+      staleAfter: string;
+      correlationId?: string;
+    },
+  ) =>
+    edgeRequest<TenantHealthSnapshotRecord>(
+      `/api/edge-backend/tenants/${tenantId}/health-snapshots`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantHealthSnapshots: (
+    tenantId: string,
+    opts?: { limit?: number; offset?: number },
+  ) =>
+    edgeRequest<TenantManagementListPage<TenantHealthSnapshotRecord>>(
+      `/api/edge-backend/tenants/${tenantId}/health-snapshots${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  evaluateTenantRisk: (
+    tenantId: string,
+    body?: { correlationId?: string; reviewerId?: string },
+  ) =>
+    edgeRequest<TenantRiskAssessmentRecord>(
+      `/api/edge-backend/tenants/${tenantId}/risk-assessments`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listTenantRiskAssessments: (
+    tenantId: string,
+    opts?: { limit?: number; offset?: number },
+  ) =>
+    edgeRequest<TenantManagementListPage<TenantRiskAssessmentRecord>>(
+      `/api/edge-backend/tenants/${tenantId}/risk-assessments${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  updateTenantPolicies: (tenantId: string, body: TenantPoliciesPatch) =>
+    edgeRequest<TenantRegistryRecord>(
+      `/api/edge-backend/tenants/${tenantId}/policies`,
+      { method: "PATCH", body: JSON.stringify(body) },
     ),
 };
