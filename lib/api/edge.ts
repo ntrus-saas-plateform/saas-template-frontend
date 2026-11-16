@@ -111,6 +111,14 @@ import type {
   TenantLifecycleRecord,
 } from "@/types/edge-lifecycle";
 import type {
+  OnboardingEvidence,
+  OnboardingJourney,
+  OnboardingJourneyDetail,
+  OnboardingListPage,
+  OnboardingRun,
+  OnboardingTemplate,
+} from "@/types/edge-onboarding";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -3916,5 +3924,159 @@ export const edgeApi = {
   listLifecycleEvidence: (recordId: string) =>
     edgeRequest<LifecycleListPage<LifecycleEvidence>>(
       `/api/edge-backend/lifecycle/records/${recordId}/evidence`,
+    ),
+
+  // --- P7.12 Onboarding Operations ---
+  listOnboardingTemplates: (opts?: {
+    status?: string;
+    productId?: string;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<OnboardingListPage<OnboardingTemplate>>(
+      `/api/edge-backend/onboarding/templates${toQuery({
+        status: opts?.status,
+        productId: opts?.productId,
+        q: opts?.q,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getOnboardingTemplate: (id: string) =>
+    edgeRequest<OnboardingTemplate | null>(
+      `/api/edge-backend/onboarding/templates/${id}`,
+    ),
+
+  createOnboardingTemplate: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    productId?: string;
+    deploymentProfileCode?: string;
+    stepPlan?: Array<Record<string, unknown>>;
+    slaPolicy?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<OnboardingTemplate>(
+      `/api/edge-backend/onboarding/templates`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  publishOnboardingTemplate: (
+    id: string,
+    body: { expectedVersion: number },
+  ) =>
+    edgeRequest<OnboardingTemplate>(
+      `/api/edge-backend/onboarding/templates/${id}/publish`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listOnboardingJourneys: (opts?: {
+    tenantId?: string;
+    productId?: string;
+    status?: string;
+    activationRecordId?: string;
+    templateId?: string;
+    provisioningRequestId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<OnboardingListPage<OnboardingJourney>>(
+      `/api/edge-backend/onboarding/journeys${toQuery({
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        status: opts?.status,
+        activationRecordId: opts?.activationRecordId,
+        templateId: opts?.templateId,
+        provisioningRequestId: opts?.provisioningRequestId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getOnboardingJourney: (id: string) =>
+    edgeRequest<OnboardingJourneyDetail | null>(
+      `/api/edge-backend/onboarding/journeys/${id}`,
+    ),
+
+  createOnboardingJourney: (body: {
+    activationRecordId: string;
+    templateId?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<OnboardingJourney>(
+      `/api/edge-backend/onboarding/journeys`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  startOnboardingJourney: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/onboarding/journeys/${id}/start`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  advanceOnboardingJourney: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+      handoverEvidenceRef?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/onboarding/journeys/${id}/advance`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  closeOnboardingJourney: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/onboarding/journeys/${id}/close`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  decideOnboardingTask: (
+    journeyId: string,
+    taskId: string,
+    body: {
+      decision: "APPROVE" | "REJECT";
+      reason?: string;
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/onboarding/journeys/${journeyId}/tasks/${taskId}/decide`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listOnboardingRuns: (journeyId: string) =>
+    edgeRequest<OnboardingListPage<OnboardingRun>>(
+      `/api/edge-backend/onboarding/journeys/${journeyId}/runs`,
+    ),
+
+  listOnboardingEvidence: (journeyId: string) =>
+    edgeRequest<OnboardingListPage<OnboardingEvidence>>(
+      `/api/edge-backend/onboarding/journeys/${journeyId}/evidence`,
     ),
 };
