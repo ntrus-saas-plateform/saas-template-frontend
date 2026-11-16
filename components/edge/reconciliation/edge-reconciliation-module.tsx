@@ -492,6 +492,7 @@ export function EdgeReconciliationModule() {
                     </div>
                   </CardBody>
                 </Card>
+                </div>
               ) : null}
             </div>
           )}
