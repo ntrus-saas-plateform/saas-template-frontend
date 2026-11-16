@@ -83,7 +83,7 @@ export default function SubscriptionWorkspacePage() {
   const provisioningListQuery = useQuery({
     queryKey: ["edge", "subscriptions", "provisioning-list", id],
     queryFn: () => edgeApi.listSubscriptionProvisioning(id),
-    enabled: Boolean(id) && section === "integrations",
+    enabled: Boolean(id),
     retry: false,
   });
 
@@ -334,6 +334,10 @@ export default function SubscriptionWorkspacePage() {
 
   const sub = data.subscription ?? {};
   const status = String(sub.status ?? "");
+  const meta =
+    sub.metadata && typeof sub.metadata === "object"
+      ? (sub.metadata as Record<string, unknown>)
+      : {};
 
   const billingCoordRows = billingCoordQuery.isSuccess
     ? asRecordList(billingCoordQuery.data)
@@ -349,6 +353,29 @@ export default function SubscriptionWorkspacePage() {
     : [];
 
   const changeRows = asRecordList(changesQuery.data);
+
+  const completedProvisioning = provisioningRows.find(
+    (row) =>
+      String(row.outcome ?? row.status ?? "").toUpperCase() === "COMPLETE" ||
+      Boolean(row.completedAt),
+  );
+  const tenantRefRaw =
+    sub.tenantRef ??
+    meta.tenantRef ??
+    meta.tenant_id ??
+    completedProvisioning?.tenantRef;
+  const tenantRef =
+    tenantRefRaw != null && String(tenantRefRaw).trim()
+      ? String(tenantRefRaw).trim()
+      : "";
+  const provisioningRequestIdRaw =
+    sub.provisioningRequestId ??
+    meta.provisioningRequestId ??
+    completedProvisioning?.id;
+  const provisioningRequestId =
+    provisioningRequestIdRaw != null && String(provisioningRequestIdRaw).trim()
+      ? String(provisioningRequestIdRaw).trim()
+      : "";
 
   return (
     <EdgePermissionGate permission="platform:subscriptions:read">
@@ -366,6 +393,30 @@ export default function SubscriptionWorkspacePage() {
           <p className="text-sm text-muted-foreground">
             {status} · {String(sub.currency ?? "—")} · Account{" "}
             {String(sub.accountId)}
+          </p>
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {tenantRef ? (
+              <Link
+                href={`/edge/tenants/${encodeURIComponent(tenantRef)}`}
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                Open tenant →
+              </Link>
+            ) : null}
+            {provisioningRequestId ? (
+              <Link
+                href={`/edge/provisioning-requests/${encodeURIComponent(provisioningRequestId)}`}
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                Provisioning request →
+              </Link>
+            ) : null}
+            <Link
+              href="/edge/billing"
+              className="text-primary underline-offset-2 hover:underline"
+            >
+              Billing console →
+            </Link>
           </p>
         </header>
 

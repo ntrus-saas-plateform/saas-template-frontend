@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
+import { LiveCompleteAdapterStatusBadge } from "@/components/edge/live-complete/adapter-status-badge";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -406,9 +407,12 @@ export default function EdgeBillingPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          Billing &amp; Financial Operations
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            Billing &amp; Financial Operations
+          </p>
+          <LiveCompleteAdapterStatusBadge />
+        </div>
         <h1 className="font-display text-3xl tracking-tight">
           Okapi Edge Billing
         </h1>
@@ -417,7 +421,13 @@ export default function EdgeBillingPage() {
           Collected = succeeded intents; recognized revenue follows the active
           policy (default CASH_BASED_NET after migrate 094).
         </p>
-        <p className="text-sm">
+        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <Link
+            href="/edge/subscriptions"
+            className="text-primary underline-offset-2 hover:underline"
+          >
+            Subscriptions console →
+          </Link>
           <Link
             href="/edge/billing/portal"
             className="text-primary underline-offset-2 hover:underline"

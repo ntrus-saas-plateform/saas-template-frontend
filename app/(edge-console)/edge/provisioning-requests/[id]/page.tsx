@@ -176,6 +176,24 @@ export default function ProvisioningRequestDetailPage() {
                 Not a technical ACTIVE tenant
               </span>
             </div>
+            <p className="flex flex-wrap gap-x-4 gap-y-1 type-sm">
+              {request.subscriptionId ? (
+                <Link
+                  href={`/edge/subscriptions/${encodeURIComponent(request.subscriptionId)}`}
+                  className="text-[var(--primary)] underline-offset-2 hover:underline"
+                >
+                  Subscription workspace →
+                </Link>
+              ) : null}
+              {request.productTenantId ? (
+                <Link
+                  href={`/edge/tenants/${encodeURIComponent(request.productTenantId)}`}
+                  className="text-[var(--primary)] underline-offset-2 hover:underline"
+                >
+                  Open tenant →
+                </Link>
+              ) : null}
+            </p>
           </header>
 
           <section className="grid gap-[var(--space-4)] md:grid-cols-2">
@@ -204,11 +222,25 @@ export default function ProvisioningRequestDetailPage() {
             <InfoCard title="References">
               <Row label="Account" value={request.accountId} mono />
               <Row label="Product" value={request.productId} mono />
-              <Row label="Subscription" value={request.subscriptionId} mono />
+              <Row
+                label="Subscription"
+                value={request.subscriptionId}
+                mono
+                href={
+                  request.subscriptionId
+                    ? `/edge/subscriptions/${encodeURIComponent(request.subscriptionId)}`
+                    : undefined
+                }
+              />
               <Row
                 label="Product tenant"
                 value={request.productTenantId ?? "— (not provisioned)"}
                 mono={Boolean(request.productTenantId)}
+                href={
+                  request.productTenantId
+                    ? `/edge/tenants/${encodeURIComponent(request.productTenantId)}`
+                    : undefined
+                }
               />
               <Row label="Authorization ID" value={request.authorizationId} mono />
               <Row
@@ -369,10 +401,12 @@ function Row({
   label,
   value,
   mono,
+  href,
 }: {
   label: string;
   value: string;
   mono?: boolean;
+  href?: string;
 }) {
   return (
     <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
@@ -380,7 +414,16 @@ function Row({
       <dd
         className={`type-sm text-[var(--text-primary)] break-all ${mono ? "font-mono type-xs" : ""}`}
       >
-        {value}
+        {href ? (
+          <Link
+            href={href}
+            className="text-[var(--primary)] underline-offset-2 hover:underline"
+          >
+            {value}
+          </Link>
+        ) : (
+          value
+        )}
       </dd>
     </div>
   );

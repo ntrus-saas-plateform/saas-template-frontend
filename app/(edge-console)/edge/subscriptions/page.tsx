@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
+import { LiveCompleteAdapterStatusBadge } from "@/components/edge/live-complete/adapter-status-badge";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -348,9 +349,12 @@ export default function EdgeSubscriptionsPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          Subscription &amp; Contract Lifecycle
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            Subscription &amp; Contract Lifecycle
+          </p>
+          <LiveCompleteAdapterStatusBadge />
+        </div>
         <h1 className="font-display text-3xl tracking-tight">
           Okapi Edge Subscriptions
         </h1>

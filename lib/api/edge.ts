@@ -6407,6 +6407,16 @@ export const edgeApi = {
       })}`,
     ),
 
+  /** Lab adapter readiness (payment / P7 / BB) — no secrets. */
+  getLiveCompleteLabStatus: () =>
+    edgeRequest<{
+      paymentAdapter: string;
+      provisioningAdapter: string;
+      bbControlConfigured: boolean;
+      mode: "LIVE" | "PARTIAL" | "UNAVAILABLE";
+      note?: string;
+    }>("/api/edge-backend/live-complete/status"),
+
   listRevenueMetricDefinitions: (params?: {
     status?: string;
     limit?: number;
