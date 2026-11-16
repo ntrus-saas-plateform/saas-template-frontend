@@ -74,6 +74,17 @@ import type {
   KeycloakTopologyRecord,
 } from "@/types/edge-keycloak";
 import type {
+  ConfigurationBundleRecord,
+  ConfigurationDeploymentRunRecord,
+  ConfigurationEvidenceRecord,
+  ConfigurationListPage,
+  ConfigurationSchemaRecord,
+  ConfigurationTemplateRecord,
+  EntitlementDeploymentRecord,
+  TenantConfigurationAssignmentDetail,
+  TenantConfigurationAssignmentRecord,
+} from "@/types/edge-configuration";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -3275,5 +3286,214 @@ export const edgeApi = {
       `/api/edge-backend/keycloak/topologies/${topologyId}/reconciliations${toQuery({
         limit: opts?.limit,
       })}`,
+    ),
+
+  // --- P7.8 Configuration & Entitlement Deployment ---
+  listConfigurationSchemas: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    q?: string;
+  }) =>
+    edgeRequest<ConfigurationListPage<ConfigurationSchemaRecord>>(
+      `/api/edge-backend/configuration/schemas${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  createConfigurationSchema: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    productId?: string;
+    schemaVersion?: number;
+    jsonSchema: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ConfigurationSchemaRecord>(
+      `/api/edge-backend/configuration/schemas`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listConfigurationTemplates: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    q?: string;
+  }) =>
+    edgeRequest<ConfigurationListPage<ConfigurationTemplateRecord>>(
+      `/api/edge-backend/configuration/templates${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  createConfigurationTemplate: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    productId?: string;
+    schemaId: string;
+    runtimeProfileCode?: string;
+    deploymentProfileCode?: string;
+    draftPayload: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ConfigurationTemplateRecord>(
+      `/api/edge-backend/configuration/templates`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  publishConfigurationTemplate: (
+    id: string,
+    body: { expectedVersion: number; versionNumber?: number },
+  ) =>
+    edgeRequest<ConfigurationTemplateRecord>(
+      `/api/edge-backend/configuration/templates/${id}/publish`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listConfigurationBundles: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    q?: string;
+  }) =>
+    edgeRequest<ConfigurationListPage<ConfigurationBundleRecord>>(
+      `/api/edge-backend/configuration/bundles${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+      })}`,
+    ),
+
+  createConfigurationBundle: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    productId?: string;
+    templateRefs: Array<{ templateId: string; versionNumber: number }>;
+    dependencyRefs?: string[];
+    payload?: Record<string, unknown>;
+    rolloutPolicy?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ConfigurationBundleRecord>(
+      `/api/edge-backend/configuration/bundles`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  publishConfigurationBundle: (
+    id: string,
+    body: { expectedVersion: number; versionNumber?: number },
+  ) =>
+    edgeRequest<ConfigurationBundleRecord>(
+      `/api/edge-backend/configuration/bundles/${id}/publish`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantConfigurationAssignments: (opts?: {
+    tenantId?: string;
+    productId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ConfigurationListPage<TenantConfigurationAssignmentRecord>>(
+      `/api/edge-backend/configuration/assignments${toQuery({
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getTenantConfigurationAssignment: (id: string) =>
+    edgeRequest<TenantConfigurationAssignmentDetail | null>(
+      `/api/edge-backend/configuration/assignments/${id}`,
+    ),
+
+  assignTenantConfiguration: (body: {
+    tenantId: string;
+    productId: string;
+    provisioningRequestId: string;
+    bundleId: string;
+    bundleVersion: number;
+    desiredConfig: Record<string, unknown>;
+    grantedEntitlements: {
+      capabilities?: Record<string, unknown>;
+      featureFlags?: Record<string, unknown>;
+      quotas?: Record<string, unknown>;
+      limits?: Record<string, unknown>;
+    };
+    subscriptionId?: string;
+    accountId?: string;
+    entitlementSnapshotRef?: string;
+    entitlementVersion?: string;
+    deploymentStrategy?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<TenantConfigurationAssignmentRecord>(
+      `/api/edge-backend/configuration/assignments`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  deployTenantConfiguration: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/configuration/assignments/${id}/deploy`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  rollbackTenantConfiguration: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/configuration/assignments/${id}/rollback`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listConfigurationDeploymentRuns: (assignmentId: string) =>
+    edgeRequest<ConfigurationListPage<ConfigurationDeploymentRunRecord>>(
+      `/api/edge-backend/configuration/assignments/${assignmentId}/runs`,
+    ),
+
+  listConfigurationEvidence: (assignmentId: string) =>
+    edgeRequest<ConfigurationListPage<ConfigurationEvidenceRecord>>(
+      `/api/edge-backend/configuration/assignments/${assignmentId}/evidence`,
+    ),
+
+  listEntitlementDeployments: (assignmentId: string) =>
+    edgeRequest<ConfigurationListPage<EntitlementDeploymentRecord>>(
+      `/api/edge-backend/entitlements/assignments/${assignmentId}`,
+    ),
+
+  reconcileTenantEntitlements: (
+    assignmentId: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/entitlements/assignments/${assignmentId}/reconcile`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
     ),
 };
