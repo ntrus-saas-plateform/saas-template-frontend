@@ -95,6 +95,15 @@ import type {
   TenantExperienceAssignmentDetail,
 } from "@/types/edge-experience";
 import type {
+  ActivationEvidence,
+  ActivationListPage,
+  ActivationRecord,
+  ActivationRecordDetail,
+  ActivationRun,
+  ReadinessEvaluationDetail,
+  TenantReadinessEvaluation,
+} from "@/types/edge-activation";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -3681,5 +3690,131 @@ export const edgeApi = {
     edgeRequest<ExperienceDomainBinding>(
       `/api/edge-backend/experience/domains`,
       { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  // --- P7.10 Technical Readiness & Activation ---
+  listActivationEvaluations: (opts?: {
+    tenantId?: string;
+    productId?: string;
+    status?: string;
+    provisioningRequestId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ActivationListPage<TenantReadinessEvaluation>>(
+      `/api/edge-backend/activation/evaluations${toQuery({
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        status: opts?.status,
+        provisioningRequestId: opts?.provisioningRequestId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getActivationEvaluation: (id: string) =>
+    edgeRequest<ReadinessEvaluationDetail | null>(
+      `/api/edge-backend/activation/evaluations/${id}`,
+    ),
+
+  createActivationEvaluation: (body: {
+    tenantId: string;
+    productId: string;
+    provisioningRequestId: string;
+    subscriptionId?: string;
+    accountId?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<TenantReadinessEvaluation>(
+      `/api/edge-backend/activation/evaluations`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  evaluateActivationEvaluation: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      activationRecordId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/activation/evaluations/${id}/evaluate`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listActivationRecords: (opts?: {
+    tenantId?: string;
+    productId?: string;
+    status?: string;
+    provisioningRequestId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ActivationListPage<ActivationRecord>>(
+      `/api/edge-backend/activation/records${toQuery({
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        status: opts?.status,
+        provisioningRequestId: opts?.provisioningRequestId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getActivationRecord: (id: string) =>
+    edgeRequest<ActivationRecordDetail | null>(
+      `/api/edge-backend/activation/records/${id}`,
+    ),
+
+  createActivationRecord: (body: {
+    tenantId: string;
+    productId: string;
+    provisioningRequestId: string;
+    readinessEvaluationId?: string;
+    subscriptionId?: string;
+    accountId?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ActivationRecord>(
+      `/api/edge-backend/activation/records`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  evaluateActivationRecord: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/activation/records/${id}/evaluate`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  activateActivationRecord: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/activation/records/${id}/activate`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listActivationRuns: (recordId: string) =>
+    edgeRequest<ActivationListPage<ActivationRun>>(
+      `/api/edge-backend/activation/records/${recordId}/runs`,
+    ),
+
+  listActivationEvidence: (recordId: string) =>
+    edgeRequest<ActivationListPage<ActivationEvidence>>(
+      `/api/edge-backend/activation/records/${recordId}/evidence`,
     ),
 };

@@ -96,6 +96,11 @@ const PLATFORM_NAV: NavItem[] = [
     label: "Experience",
     icon: Sparkles,
   },
+  {
+    href: "/edge/provisioning/readiness",
+    label: "Readiness",
+    icon: CheckCircle2,
+  },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },
   { href: "/edge/verticals", label: "Verticals", icon: Building2 },
