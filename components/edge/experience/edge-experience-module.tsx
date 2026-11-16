@@ -30,6 +30,7 @@ import type {
   ExperienceApplication,
   ExperienceDeploymentRun,
   ExperienceDomainBinding,
+  ExperienceEvidence,
   ExperienceProfile,
   TenantExperienceAssignment,
 } from "@/types/edge-experience";
@@ -242,7 +243,7 @@ export function EdgeExperienceModule() {
   );
   const domains = unwrapInfraList<ExperienceDomainBinding>(domainsQ.data?.data);
   const runs = unwrapInfraList<ExperienceDeploymentRun>(runsQ.data?.data);
-  const evidence = unwrapInfraList(evidenceQ.data?.data);
+  const evidence = unwrapInfraList<ExperienceEvidence>(evidenceQ.data?.data);
   const detail = detailQ.data?.data ?? null;
   const selectedAssignment =
     detail?.assignment ??

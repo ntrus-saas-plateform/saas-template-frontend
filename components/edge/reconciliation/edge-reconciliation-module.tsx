@@ -340,10 +340,10 @@ export function EdgeReconciliationModule() {
               {selectedRunId && detail?.run ? (
                 <div data-testid="recon-run-detail">
                 <Card>
-                  <CardHeader
-                    title="Détail du run"
-                    description="Statuts issus de l’API uniquement — jamais inventés."
-                  />
+                  <CardHeader title="Détail du run" />
+                  <p className="mb-[var(--space-3)] type-sm text-[var(--text-muted)]">
+                    Statuts issus de l&apos;API uniquement — jamais inventés.
+                  </p>
                   <CardBody className="space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <span data-testid="recon-run-status">

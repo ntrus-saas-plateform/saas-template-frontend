@@ -245,7 +245,10 @@ export function EdgeCertificationModule({
               ) : null}
 
               {packages.items.length === 0 ? (
-                <EdgeEmptyState title="Aucun package de certification" />
+                <EdgeEmptyState
+                  title="Aucun package de certification"
+                  description="Créez un package pour assembler le evidence pack P7.15."
+                />
               ) : (
                 <Select
                   aria-label="Choisir un package de certification"
@@ -414,7 +417,10 @@ export function EdgeCertificationModule({
                 Vue transversale des packages de certification et liens vers le détail.
               </p>
               {packages.items.length === 0 ? (
-                <EdgeEmptyState title="Aucune evidence de certification" />
+                <EdgeEmptyState
+                  title="Aucune evidence de certification"
+                  description="Attachez ou vérifiez les evidence items requis avant certify."
+                />
               ) : (
                 <ul className="space-y-2">
                   {packages.items.map((p) => (

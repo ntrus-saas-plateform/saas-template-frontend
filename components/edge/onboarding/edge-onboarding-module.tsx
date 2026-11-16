@@ -731,7 +731,10 @@ export function EdgeOnboardingModule() {
                     {runsQ.isLoading ? (
                       <EdgeLoadingState label="Chargement des runs..." />
                     ) : runs.items.length === 0 ? (
-                      <EdgeEmptyState title="Aucun run" />
+                      <EdgeEmptyState
+                        title="Aucun run"
+                        description="Aucun run d'onboarding pour ce parcours."
+                      />
                     ) : (
                       <ul className="flex flex-col gap-[var(--space-2)] type-sm">
                         {runs.items.map((r) => (
@@ -750,7 +753,10 @@ export function EdgeOnboardingModule() {
                     {evidenceQ.isLoading ? (
                       <EdgeLoadingState label="Chargement evidence..." />
                     ) : evidence.items.length === 0 ? (
-                      <EdgeEmptyState title="Aucune evidence" />
+                      <EdgeEmptyState
+                        title="Aucune evidence"
+                        description="Aucune evidence enregistrée pour ce parcours."
+                      />
                     ) : (
                       <ul className="flex flex-col gap-[var(--space-2)] type-sm">
                         {evidence.items.map((ev) => (

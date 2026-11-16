@@ -177,7 +177,7 @@ export default function EdgeBillingPage() {
 
   const reconRunsQuery = useQuery({
     queryKey: ["edge", "billing", "recon-runs"],
-    queryFn: () => edgeApi.listReconciliationRuns(),
+    queryFn: () => edgeApi.listBillingReconciliationRuns(),
     enabled: tab === "reconciliation" && canReadAny,
   });
 

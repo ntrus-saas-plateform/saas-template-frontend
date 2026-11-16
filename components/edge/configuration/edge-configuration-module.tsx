@@ -29,8 +29,10 @@ import { useEdgePlatform } from "@/providers/edge-platform-provider";
 import type {
   ConfigurationBundleRecord,
   ConfigurationDeploymentRunRecord,
+  ConfigurationEvidenceRecord,
   ConfigurationSchemaRecord,
   ConfigurationTemplateRecord,
+  EntitlementDeploymentRecord,
   TenantConfigurationAssignmentRecord,
 } from "@/types/edge-configuration";
 
@@ -218,8 +220,12 @@ export function EdgeConfigurationModule() {
     assignmentsQ.data?.data,
   );
   const runs = unwrapInfraList<ConfigurationDeploymentRunRecord>(runsQ.data?.data);
-  const evidence = unwrapInfraList(evidenceQ.data?.data);
-  const entitlements = unwrapInfraList(entitlementsQ.data?.data);
+  const evidence = unwrapInfraList<ConfigurationEvidenceRecord>(
+    evidenceQ.data?.data,
+  );
+  const entitlements = unwrapInfraList<EntitlementDeploymentRecord>(
+    entitlementsQ.data?.data,
+  );
   const detail = detailQ.data?.data ?? null;
   const selectedAssignment =
     detail?.assignment ??
