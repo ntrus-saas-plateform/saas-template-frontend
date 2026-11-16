@@ -165,6 +165,62 @@ import type {
   TerminationRequestRecord,
 } from "@/types/edge-tenant-management";
 import type {
+  AckAlertBody,
+  ApproveAutomationExecutionBody,
+  ApproveChangeBody,
+  ApproveStatusPublicationBody,
+  AutomationExecutionRecord,
+  CapacityMeasurementRecord,
+  ChangeRequestRecord,
+  ConfirmRootCauseBody,
+  CreateChangeBody,
+  CreateIncidentBody,
+  CreateMaintenanceBody,
+  CreateOnCallRotationBody,
+  CreateOperationalTaskBody,
+  CreateProblemBody,
+  CreateServiceRequestBody,
+  CreateSloBody,
+  DeclareMajorIncidentBody,
+  ExecuteAutomationBody,
+  IngestAlertBody,
+  IngestAlertResult,
+  IncidentRecord,
+  LinkProblemIncidentBody,
+  MaintenanceWindowRecord,
+  OnCallRotationRecord,
+  OperationalAlertRecord,
+  OperationalExceptionRecord,
+  OperationalRiskRecord,
+  OperationalTaskRecord,
+  OperationsAnalytics,
+  OperationsListFilter,
+  OperationsListPage,
+  OperationsOverview,
+  PlatformServiceDetail,
+  PlatformServiceRecord,
+  ProblemRecord,
+  PublishStatusBody,
+  RecordCapacityBody,
+  RecordSloMeasurementBody,
+  RecoveryOperationRecord,
+  RegisterPlatformServiceBody,
+  RejectChangeBody,
+  RequestAutomationExecutionBody,
+  RequestRecoveryBody,
+  ResolveAlertBody,
+  RunbookRecord,
+  ServiceCatalogListPage,
+  ServiceRequestRecord,
+  SloDefinitionRecord,
+  SloMeasurementRecord,
+  StatusComponentRecord,
+  StatusPublicationRecord,
+  SubmitChangeBody,
+  TransitionIncidentBody,
+  VerifyRecoveryBody,
+} from "@/types/edge-platform-operations";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -5214,9 +5270,7 @@ export const edgeApi = {
     limit?: number;
     offset?: number;
   }) =>
-    edgeRequest<
-      import("@/types/edge-platform-operations").ServiceCatalogListPage
-    >(
+    edgeRequest<ServiceCatalogListPage>(
       `/api/edge-backend/operations/services${toQuery({
         q: opts?.q,
         category: opts?.category,
@@ -5228,20 +5282,330 @@ export const edgeApi = {
     ),
 
   getPlatformService: (id: string) =>
-    edgeRequest<import("@/types/edge-platform-operations").PlatformServiceDetail>(
-      `/api/edge-backend/operations/services/${id}`,
+    edgeRequest<PlatformServiceDetail>(`/api/edge-backend/operations/services/${id}`),
+
+  registerPlatformService: (body: RegisterPlatformServiceBody) =>
+    edgeRequest<PlatformServiceRecord>(`/api/edge-backend/operations/services`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getOperationsOverview: () =>
+    edgeRequest<OperationsOverview>(`/api/edge-backend/operations/overview`),
+
+  listOperationalAlerts: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<OperationalAlertRecord>>(
+      `/api/edge-backend/operations/alerts${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
     ),
 
-  registerPlatformService: (
-    body: import("@/types/edge-platform-operations").RegisterPlatformServiceBody,
-  ) =>
-    edgeRequest<import("@/types/edge-platform-operations").PlatformServiceRecord>(
-      `/api/edge-backend/operations/services`,
+  ingestOperationalAlert: (body: IngestAlertBody) =>
+    edgeRequest<IngestAlertResult>(`/api/edge-backend/operations/alerts`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  acknowledgeOperationalAlert: (id: string, body?: AckAlertBody) =>
+    edgeRequest<OperationalAlertRecord>(
+      `/api/edge-backend/operations/alerts/${id}/acknowledge`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  resolveOperationalAlert: (id: string, body?: ResolveAlertBody) =>
+    edgeRequest<OperationalAlertRecord>(
+      `/api/edge-backend/operations/alerts/${id}/resolve`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listIncidents: (opts?: OperationsListFilter & { isMajor?: boolean }) =>
+    edgeRequest<OperationsListPage<IncidentRecord>>(
+      `/api/edge-backend/operations/incidents${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+        isMajor: opts?.isMajor === undefined ? undefined : opts.isMajor ? 1 : 0,
+      })}`,
+    ),
+
+  createIncident: (body: CreateIncidentBody) =>
+    edgeRequest<IncidentRecord>(`/api/edge-backend/operations/incidents`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  transitionIncident: (id: string, body: TransitionIncidentBody) =>
+    edgeRequest<IncidentRecord>(`/api/edge-backend/operations/incidents/${id}/transition`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  declareMajorIncident: (id: string, body?: DeclareMajorIncidentBody) =>
+    edgeRequest<IncidentRecord>(`/api/edge-backend/operations/incidents/${id}/major`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  listProblems: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<ProblemRecord>>(
+      `/api/edge-backend/operations/problems${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  createProblem: (body: CreateProblemBody) =>
+    edgeRequest<ProblemRecord>(`/api/edge-backend/operations/problems`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  confirmProblemRootCause: (id: string, body: ConfirmRootCauseBody) =>
+    edgeRequest<ProblemRecord>(
+      `/api/edge-backend/operations/problems/${id}/root-cause`,
       { method: "POST", body: JSON.stringify(body) },
     ),
 
-  getOperationsOverview: () =>
-    edgeRequest<import("@/types/edge-platform-operations").OperationsOverview>(
-      `/api/edge-backend/operations/overview`,
+  linkProblemIncident: (id: string, body: LinkProblemIncidentBody) =>
+    edgeRequest<{ ok: true }>(
+      `/api/edge-backend/operations/problems/${id}/incidents`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
+
+  listChanges: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<ChangeRequestRecord>>(
+      `/api/edge-backend/operations/changes${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  createChange: (body: CreateChangeBody) =>
+    edgeRequest<ChangeRequestRecord>(`/api/edge-backend/operations/changes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  submitChange: (id: string, body?: SubmitChangeBody) =>
+    edgeRequest<ChangeRequestRecord>(`/api/edge-backend/operations/changes/${id}/submit`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  approveChange: (id: string, body?: ApproveChangeBody) =>
+    edgeRequest<ChangeRequestRecord>(`/api/edge-backend/operations/changes/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  rejectChange: (id: string, body: RejectChangeBody) =>
+    edgeRequest<ChangeRequestRecord>(`/api/edge-backend/operations/changes/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listMaintenanceWindows: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<MaintenanceWindowRecord>>(
+      `/api/edge-backend/operations/maintenance${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  createMaintenanceWindow: (body: CreateMaintenanceBody) =>
+    edgeRequest<MaintenanceWindowRecord>(`/api/edge-backend/operations/maintenance`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listServiceRequests: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<ServiceRequestRecord>>(
+      `/api/edge-backend/operations/requests${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  createServiceRequest: (body: CreateServiceRequestBody) =>
+    edgeRequest<ServiceRequestRecord>(`/api/edge-backend/operations/requests`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listOperationalTasks: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<OperationalTaskRecord>>(
+      `/api/edge-backend/operations/tasks${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  createOperationalTask: (body: CreateOperationalTaskBody) =>
+    edgeRequest<OperationalTaskRecord>(`/api/edge-backend/operations/tasks`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listOnCallRotations: (opts?: { teamId?: string; limit?: number; offset?: number }) =>
+    edgeRequest<OperationsListPage<OnCallRotationRecord>>(
+      `/api/edge-backend/operations/on-call/rotations${toQuery({
+        teamId: opts?.teamId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  createOnCallRotation: (body: CreateOnCallRotationBody) =>
+    edgeRequest<OnCallRotationRecord>(`/api/edge-backend/operations/on-call/rotations`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listSloDefinitions: (opts?: { serviceId?: string; limit?: number; offset?: number }) =>
+    edgeRequest<OperationsListPage<SloDefinitionRecord>>(
+      `/api/edge-backend/operations/slo${toQuery({
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  createSloDefinition: (body: CreateSloBody) =>
+    edgeRequest<SloDefinitionRecord>(`/api/edge-backend/operations/slo`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  recordSloMeasurement: (id: string, body: RecordSloMeasurementBody) =>
+    edgeRequest<SloMeasurementRecord>(`/api/edge-backend/operations/slo/measurements`, {
+      method: "POST",
+      body: JSON.stringify({ ...body, sloId: id }),
+    }),
+
+  listCapacityMeasurements: (opts?: {
+    serviceId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<OperationsListPage<CapacityMeasurementRecord>>(
+      `/api/edge-backend/operations/capacity${toQuery({
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  recordCapacityMeasurement: (body: RecordCapacityBody) =>
+    edgeRequest<CapacityMeasurementRecord>(`/api/edge-backend/operations/capacity`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listRecoveryOperations: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<RecoveryOperationRecord>>(
+      `/api/edge-backend/operations/recovery${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  requestRecoveryOperation: (body: RequestRecoveryBody) =>
+    edgeRequest<RecoveryOperationRecord>(`/api/edge-backend/operations/recovery`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  verifyRecoveryOperation: (id: string, body: VerifyRecoveryBody) =>
+    edgeRequest<RecoveryOperationRecord>(
+      `/api/edge-backend/operations/recovery/${id}/verify`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listRunbooks: (opts?: { serviceId?: string; limit?: number; offset?: number }) =>
+    edgeRequest<OperationsListPage<RunbookRecord>>(
+      `/api/edge-backend/operations/runbooks${toQuery({
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  listStatusComponents: (opts?: { limit?: number; offset?: number }) =>
+    edgeRequest<OperationsListPage<StatusComponentRecord>>(
+      `/api/edge-backend/operations/status/components${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  publishStatusUpdate: (body: PublishStatusBody) =>
+    edgeRequest<StatusPublicationRecord>(
+      `/api/edge-backend/operations/status/publications`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  approveStatusPublication: (id: string, body: ApproveStatusPublicationBody) =>
+    edgeRequest<StatusPublicationRecord>(
+      `/api/edge-backend/operations/status/publications/${id}/approve`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listOperationalRisks: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<OperationalRiskRecord>>(
+      `/api/edge-backend/operations/risks${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  listOperationalExceptions: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<OperationalExceptionRecord>>(
+      `/api/edge-backend/operations/exceptions${toQuery({
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  requestAutomationExecution: (body: RequestAutomationExecutionBody) =>
+    edgeRequest<AutomationExecutionRecord>(
+      `/api/edge-backend/operations/automation/executions`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  approveAutomationExecution: (id: string, body: ApproveAutomationExecutionBody) =>
+    edgeRequest<AutomationExecutionRecord>(
+      `/api/edge-backend/operations/automation/executions/${id}/approve`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  executeAutomation: (id: string, body?: ExecuteAutomationBody) =>
+    edgeRequest<AutomationExecutionRecord>(
+      `/api/edge-backend/operations/automation/executions/${id}/execute`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  getOperationsAnalytics: () =>
+    edgeRequest<OperationsAnalytics>(`/api/edge-backend/operations/analytics`),
 };
