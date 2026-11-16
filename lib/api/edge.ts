@@ -104,6 +104,13 @@ import type {
   TenantReadinessEvaluation,
 } from "@/types/edge-activation";
 import type {
+  LifecycleEvidence,
+  LifecycleListPage,
+  LifecycleRecordDetail,
+  LifecycleRun,
+  TenantLifecycleRecord,
+} from "@/types/edge-lifecycle";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -3816,5 +3823,98 @@ export const edgeApi = {
   listActivationEvidence: (recordId: string) =>
     edgeRequest<ActivationListPage<ActivationEvidence>>(
       `/api/edge-backend/activation/records/${recordId}/evidence`,
+    ),
+
+  // --- P7.11 Tenant Technical Lifecycle ---
+  listLifecycleRecords: (opts?: {
+    tenantId?: string;
+    productId?: string;
+    status?: string;
+    activationRecordId?: string;
+    provisioningRequestId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<LifecycleListPage<TenantLifecycleRecord>>(
+      `/api/edge-backend/lifecycle/records${toQuery({
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        status: opts?.status,
+        activationRecordId: opts?.activationRecordId,
+        provisioningRequestId: opts?.provisioningRequestId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getLifecycleRecord: (id: string) =>
+    edgeRequest<LifecycleRecordDetail | null>(
+      `/api/edge-backend/lifecycle/records/${id}`,
+    ),
+
+  createLifecycleRecord: (body: {
+    activationRecordId: string;
+    retentionPolicyRef?: string;
+    exportEvidenceRef?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<TenantLifecycleRecord>(
+      `/api/edge-backend/lifecycle/records`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  suspendLifecycleRecord: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/lifecycle/records/${id}/suspend`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  resumeLifecycleRecord: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/lifecycle/records/${id}/resume`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  deprovisionLifecycleRecord: (
+    id: string,
+    body: {
+      authorized: true;
+      confirmed: true;
+      reason: string;
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      exportEvidenceRef?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/lifecycle/records/${id}/deprovision`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listLifecycleRuns: (recordId: string) =>
+    edgeRequest<LifecycleListPage<LifecycleRun>>(
+      `/api/edge-backend/lifecycle/records/${recordId}/runs`,
+    ),
+
+  listLifecycleEvidence: (recordId: string) =>
+    edgeRequest<LifecycleListPage<LifecycleEvidence>>(
+      `/api/edge-backend/lifecycle/records/${recordId}/evidence`,
     ),
 };
