@@ -231,17 +231,9 @@ export function EdgeRevenueModule() {
     "platform:commission:calculate",
   );
 
+  // F-P11-010: Overview requires platform:revenue:read (aligned with BE) — no business:read bypass.
   const visibleTabs = useMemo(
-    () =>
-      TABS.filter(
-        (t) =>
-          hasEdgePermission(permissions, t.permission) ||
-          (t.id === "overview" &&
-            hasAnyEdgePermission(permissions, [
-              "platform:revenue:read",
-              "platform:business:read",
-            ])),
-      ),
+    () => TABS.filter((t) => hasEdgePermission(permissions, t.permission)),
     [permissions],
   );
 
@@ -475,7 +467,7 @@ export function EdgeRevenueModule() {
 
   if (!canRead) {
     return (
-      <EdgeForbiddenState description="Requires platform:revenue:read or platform:business:read." />
+      <EdgeForbiddenState description="Requires platform:revenue:read (or a scoped revenue/business permission for other tabs)." />
     );
   }
 

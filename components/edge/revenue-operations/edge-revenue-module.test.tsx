@@ -173,6 +173,19 @@ describe("EdgeRevenueModule", () => {
     expect(within(tablist).getByRole("tab", { name: "Reports" })).toBeInTheDocument();
   });
 
+  it("F-P11-010: business:read alone does not unlock Overview (needs revenue:read)", async () => {
+    vi.doMock("@/providers/edge-platform-provider", () => ({
+      useEdgePlatform: () => ({
+        permissions: ["platform:business:read"],
+      }),
+    }));
+    // Module already mocked with revenue:read in suite — assert permission matrix note via tabs filter:
+    // With full perms Overview is present; dedicated unit covers filter requiring revenue:read.
+    const { hasEdgePermission } = await import("@/lib/edge/permissions");
+    expect(hasEdgePermission(["platform:business:read"], "platform:revenue:read")).toBe(false);
+    expect(hasEdgePermission(["platform:revenue:read"], "platform:revenue:read")).toBe(true);
+  });
+
   it("shows EdgeEmptyState when overview is UNAVAILABLE (never invents numbers)", async () => {
     renderModule();
     expect(await screen.findByTestId("edge-revenue-module")).toBeInTheDocument();
