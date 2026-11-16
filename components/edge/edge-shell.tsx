@@ -30,6 +30,7 @@ import {
   Bot,
   Award,
   FileSearch,
+  Activity,
   Users,
   Workflow,
 } from "lucide-react";
@@ -56,6 +57,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/subscriptions",
     label: "Subscriptions",
     icon: RefreshCw,
+  },
+  {
+    href: "/edge/operations",
+    label: "Operations",
+    icon: Activity,
   },
   {
     href: "/edge/tenants",

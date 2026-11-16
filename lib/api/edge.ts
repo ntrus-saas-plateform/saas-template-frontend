@@ -5204,4 +5204,44 @@ export const edgeApi = {
       `/api/edge-backend/tenant-management/legal-hold-requests/${requestId}/approve`,
       { method: "POST", body: JSON.stringify({}) },
     ),
+
+  // --- P9 Platform Operations -------------------------------------------------
+  listPlatformServices: (opts?: {
+    q?: string;
+    category?: string;
+    environment?: string;
+    observationStatus?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<
+      import("@/types/edge-platform-operations").ServiceCatalogListPage
+    >(
+      `/api/edge-backend/operations/services${toQuery({
+        q: opts?.q,
+        category: opts?.category,
+        environment: opts?.environment,
+        observationStatus: opts?.observationStatus,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getPlatformService: (id: string) =>
+    edgeRequest<import("@/types/edge-platform-operations").PlatformServiceDetail>(
+      `/api/edge-backend/operations/services/${id}`,
+    ),
+
+  registerPlatformService: (
+    body: import("@/types/edge-platform-operations").RegisterPlatformServiceBody,
+  ) =>
+    edgeRequest<import("@/types/edge-platform-operations").PlatformServiceRecord>(
+      `/api/edge-backend/operations/services`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  getOperationsOverview: () =>
+    edgeRequest<import("@/types/edge-platform-operations").OperationsOverview>(
+      `/api/edge-backend/operations/overview`,
+    ),
 };
