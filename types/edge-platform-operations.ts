@@ -528,6 +528,13 @@ export type RecordCapacityBody = {
 
 // --- Recovery ---------------------------------------------------------------
 
+export type RecoveryEvidenceKind =
+  | "PROVIDER_TICKET"
+  | "BACKUP_JOB_ID"
+  | "DR_EXERCISE_REF"
+  | "MANUAL_OVERRIDE"
+  | string;
+
 export type RecoveryOperationRecord = {
   id: string;
   operationType: string;
@@ -536,6 +543,8 @@ export type RecoveryOperationRecord = {
   requesterId: string;
   approverId: string | null;
   externalEvidenceRef: string | null;
+  evidenceKind: RecoveryEvidenceKind | null;
+  evidenceJustification: string | null;
   outcome: string | null;
   createdAt: string;
   updatedAt: string;
@@ -549,7 +558,129 @@ export type RequestRecoveryBody = {
 
 export type VerifyRecoveryBody = {
   externalEvidenceRef: string;
+  evidenceKind: RecoveryEvidenceKind;
+  /** Required by BE when evidenceKind is MANUAL_OVERRIDE. */
+  evidenceJustification?: string | null;
   outcome?: string | null;
+};
+
+// --- Releases (real registry; DEPLOYED requires evidence) --------------------
+
+export type ReleaseRecord = {
+  id: string;
+  releaseNumber: string;
+  version: string;
+  buildRef: string | null;
+  artifactDigest: string | null;
+  externalEvidenceRef: string | null;
+  serviceId: string | null;
+  environment: string | null;
+  status: string;
+  changeId: string | null;
+  healthGateStatus: string;
+  deployedAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateReleaseBody = {
+  version: string;
+  buildRef?: string | null;
+  artifactDigest?: string | null;
+  externalEvidenceRef?: string | null;
+  serviceId?: string | null;
+  environment?: string | null;
+  changeId?: string | null;
+  status?: string;
+  correlationId?: string | null;
+};
+
+export type TransitionReleaseBody = {
+  toStatus: string;
+  artifactDigest?: string | null;
+  externalEvidenceRef?: string | null;
+  healthGateStatus?: string | null;
+  correlationId?: string | null;
+};
+
+// --- Notification deliveries (honest status; no QUEUED→DELIVERED skip) ------
+
+export type NotificationDeliveryRecord = {
+  id: string;
+  eventType: string;
+  channel: string;
+  destination: string;
+  status: string;
+  providerRef: string | null;
+  relatedIncidentId: string | null;
+  relatedRotationId: string | null;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RecordNotificationDeliveryBody = {
+  eventType: string;
+  channel: string;
+  destination: string;
+  status?: string;
+  providerRef?: string | null;
+  relatedIncidentId?: string | null;
+  relatedRotationId?: string | null;
+  correlationId?: string | null;
+};
+
+export type UpdateNotificationDeliveryStatusBody = {
+  toStatus: string;
+  providerRef?: string | null;
+  lastError?: string | null;
+  correlationId?: string | null;
+};
+
+// --- Monitoring sources / probes (CONNECTED only after UP probe) ------------
+
+export type MonitoringSourceRecord = {
+  id: string;
+  code: string;
+  displayName: string;
+  providerType: string;
+  endpointRef: string | null;
+  status: string;
+  lastObservedAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConnectMonitoringSourceBody = {
+  code: string;
+  displayName: string;
+  providerType: string;
+  endpointRef?: string | null;
+  metadata?: Record<string, unknown>;
+  correlationId?: string | null;
+};
+
+export type MonitoringProbeRecord = {
+  id: string;
+  sourceId: string;
+  probeType: string;
+  observedAt: string;
+  outcome: string;
+  latencyMs: number | null;
+  evidence: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type RecordMonitoringProbeBody = {
+  sourceId: string;
+  probeType: string;
+  outcome: string;
+  latencyMs?: number | null;
+  evidence?: Record<string, unknown>;
+  correlationId?: string | null;
 };
 
 // --- Runbooks ---------------------------------------------------------------

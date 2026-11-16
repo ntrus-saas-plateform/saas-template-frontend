@@ -25,6 +25,8 @@ import type {
   ChangeRequestRecord,
   IncidentRecord,
   MaintenanceWindowRecord,
+  MonitoringProbeRecord,
+  NotificationDeliveryRecord,
   OnCallRotationRecord,
   OperationalAlertRecord,
   OperationalExceptionRecord,
@@ -34,7 +36,9 @@ import type {
   OperationsOverview,
   PlatformServiceRecord,
   ProblemRecord,
+  RecoveryEvidenceKind,
   RecoveryOperationRecord,
+  ReleaseRecord,
   RunbookRecord,
   ServiceCatalogListPage,
   ServiceRequestRecord,
@@ -49,6 +53,8 @@ type TabId =
   | "incidents"
   | "problems"
   | "changes"
+  | "releases"
+  | "notifications"
   | "maintenance"
   | "requests"
   | "tasks"
@@ -67,6 +73,12 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
   { id: "incidents", label: "Incidents", permission: "platform:operations:incidents:read" },
   { id: "problems", label: "Problems", permission: "platform:operations:problems:read" },
   { id: "changes", label: "Changes", permission: "platform:operations:changes:read" },
+  { id: "releases", label: "Releases", permission: "platform:operations:releases:read" },
+  {
+    id: "notifications",
+    label: "Notifications",
+    permission: "platform:operations:notifications:read",
+  },
   {
     id: "maintenance",
     label: "Maintenance",
@@ -91,6 +103,13 @@ const READ_PERMS = [
   ...TABS.map((t) => t.permission),
   "platform:operations:capacity:read",
   "platform:service_catalog:manage",
+];
+
+const RECOVERY_EVIDENCE_KINDS: RecoveryEvidenceKind[] = [
+  "PROVIDER_TICKET",
+  "BACKUP_JOB_ID",
+  "DR_EXERCISE_REF",
+  "MANUAL_OVERRIDE",
 ];
 
 function unwrapPage<T>(data: unknown): OperationsListPage<T> {
@@ -270,6 +289,16 @@ export function EdgeOperationsModule() {
   const canChangesRead = hasEdgePermission(permissions, "platform:operations:changes:read");
   const canChangesManage = hasEdgePermission(permissions, "platform:operations:changes:manage");
   const canChangesApprove = hasEdgePermission(permissions, "platform:operations:changes:approve");
+  const canReleasesRead = hasEdgePermission(permissions, "platform:operations:releases:read");
+  const canReleasesManage = hasEdgePermission(permissions, "platform:operations:releases:manage");
+  const canNotificationsRead = hasEdgePermission(
+    permissions,
+    "platform:operations:notifications:read",
+  );
+  const canNotificationsManage = hasEdgePermission(
+    permissions,
+    "platform:operations:notifications:manage",
+  );
   const canMaintRead = hasEdgePermission(permissions, "platform:operations:maintenance:read");
   const canMaintManage = hasEdgePermission(permissions, "platform:operations:maintenance:manage");
   const canRequestsRead = hasEdgePermission(permissions, "platform:operations:requests:read");
@@ -374,6 +403,25 @@ export function EdgeOperationsModule() {
     message: "",
   });
   const [recoveryEvidenceRef, setRecoveryEvidenceRef] = useState("");
+  const [recoveryEvidenceKind, setRecoveryEvidenceKind] =
+    useState<RecoveryEvidenceKind>("PROVIDER_TICKET");
+  const [recoveryEvidenceJustification, setRecoveryEvidenceJustification] = useState("");
+  const [releaseForm, setReleaseForm] = useState({
+    version: "",
+    environment: "PRODUCTION",
+    buildRef: "",
+  });
+  const [notificationForm, setNotificationForm] = useState({
+    eventType: "",
+    channel: "EMAIL",
+    destination: "",
+  });
+  const [probeForm, setProbeForm] = useState({
+    sourceId: "",
+    probeType: "HTTP",
+    outcome: "UNKNOWN",
+    latencyMs: "",
+  });
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
 
   function invalidateOps() {
@@ -420,6 +468,24 @@ export function EdgeOperationsModule() {
     queryKey: ["p9", "changes"],
     queryFn: () => edgeApi.listChanges({ limit: 50 }),
     enabled: canChangesRead && tab === "changes",
+  });
+
+  const releasesQ = useQuery({
+    queryKey: ["p9", "releases"],
+    queryFn: () => edgeApi.listReleases({ limit: 50 }),
+    enabled: canReleasesRead && tab === "releases",
+  });
+
+  const notificationsQ = useQuery({
+    queryKey: ["p9", "notifications"],
+    queryFn: () => edgeApi.listNotificationDeliveries({ limit: 50 }),
+    enabled: canNotificationsRead && tab === "notifications",
+  });
+
+  const probesQ = useQuery({
+    queryKey: ["p9", "probes"],
+    queryFn: () => edgeApi.listMonitoringProbes({ limit: 50 }),
+    enabled: canAlertsRead && tab === "alerts",
   });
 
   const maintQ = useQuery({
@@ -550,6 +616,48 @@ export function EdgeOperationsModule() {
       }),
     onSuccess: () => {
       setChangeForm({ title: "", changeType: "NORMAL", riskLevel: "MEDIUM" });
+      invalidateOps();
+    },
+  });
+
+  const createRelease = useMutation({
+    mutationFn: () =>
+      edgeApi.createRelease({
+        version: releaseForm.version.trim(),
+        environment: releaseForm.environment.trim() || undefined,
+        buildRef: releaseForm.buildRef.trim() || undefined,
+      }),
+    onSuccess: () => {
+      setReleaseForm({ version: "", environment: "PRODUCTION", buildRef: "" });
+      invalidateOps();
+    },
+  });
+
+  const recordNotification = useMutation({
+    mutationFn: () =>
+      edgeApi.recordNotificationDelivery({
+        eventType: notificationForm.eventType.trim(),
+        channel: notificationForm.channel.trim(),
+        destination: notificationForm.destination.trim(),
+      }),
+    onSuccess: () => {
+      setNotificationForm({ eventType: "", channel: "EMAIL", destination: "" });
+      invalidateOps();
+    },
+  });
+
+  const recordProbe = useMutation({
+    mutationFn: () =>
+      edgeApi.recordMonitoringProbe({
+        sourceId: probeForm.sourceId.trim(),
+        probeType: probeForm.probeType.trim(),
+        outcome: probeForm.outcome.trim(),
+        latencyMs: probeForm.latencyMs.trim()
+          ? Number(probeForm.latencyMs)
+          : undefined,
+      }),
+    onSuccess: () => {
+      setProbeForm({ sourceId: "", probeType: "HTTP", outcome: "UNKNOWN", latencyMs: "" });
       invalidateOps();
     },
   });
@@ -693,6 +801,9 @@ export function EdgeOperationsModule() {
   const incidents = unwrapPage<IncidentRecord>(incidentsQ.data);
   const problems = unwrapPage<ProblemRecord>(problemsQ.data);
   const changes = unwrapPage<ChangeRequestRecord>(changesQ.data);
+  const releases = unwrapPage<ReleaseRecord>(releasesQ.data);
+  const notifications = unwrapPage<NotificationDeliveryRecord>(notificationsQ.data);
+  const probes = unwrapPage<MonitoringProbeRecord>(probesQ.data);
   const maintenance = unwrapPage<MaintenanceWindowRecord>(maintQ.data);
   const requests = unwrapPage<ServiceRequestRecord>(requestsQ.data);
   const tasks = unwrapPage<OperationalTaskRecord>(tasksQ.data);
@@ -737,6 +848,9 @@ export function EdgeOperationsModule() {
     ingestAlert.error ??
     createIncident.error ??
     createChange.error ??
+    createRelease.error ??
+    recordNotification.error ??
+    recordProbe.error ??
     createMaint.error ??
     createTask.error ??
     createProblem.error ??
@@ -746,6 +860,12 @@ export function EdgeOperationsModule() {
     createException.error ??
     createAutomation.error ??
     publishStatus.error;
+
+  const canVerifyRecovery =
+    recoveryEvidenceRef.trim().length >= 4 &&
+    recoveryEvidenceKind.length > 0 &&
+    (recoveryEvidenceKind !== "MANUAL_OVERRIDE" ||
+      recoveryEvidenceJustification.trim().length >= 2);
 
   return (
     <div className="flex flex-col gap-[var(--space-6)]" data-testid="edge-operations-module">
@@ -1078,6 +1198,89 @@ export function EdgeOperationsModule() {
               </Button>
             </div>
           ) : null}
+
+          <div className="space-y-3 border-t border-[var(--border)] pt-4">
+            <h3 className="type-sm font-medium">Monitoring probes</h3>
+            <p className="type-xs text-[var(--text-muted)]">
+              CONNECTED is never assumed — only recorded after an UP probe against a configured
+              source.
+            </p>
+            <QueryShell
+              loading={probesQ.isLoading}
+              error={probesQ.isError ? probesQ.error : null}
+              empty={!probesQ.isLoading && probes.items.length === 0}
+              emptyTitle="No probe results"
+              emptyDescription="No monitoring probe results recorded yet."
+            >
+              <DenseTable
+                headers={["Source", "Type", "Outcome", "Latency", "Observed"]}
+                testId="ops-probes-table"
+              >
+                {probes.items.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">{p.sourceId}</td>
+                    <td className="px-3 py-2">{p.probeType}</td>
+                    <td className="px-3 py-2">
+                      <Badge tone={statusTone(p.outcome)}>{p.outcome}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">
+                      {p.latencyMs != null ? `${p.latencyMs}ms` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">
+                      {formatWhen(p.observedAt)}
+                    </td>
+                  </tr>
+                ))}
+              </DenseTable>
+            </QueryShell>
+            {canAlertsManage ? (
+              <div className="space-y-3">
+                <h4 className="type-sm font-medium">Record probe</h4>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    className={fieldControlClass}
+                    placeholder="sourceId (UUID)"
+                    aria-label="probe sourceId"
+                    value={probeForm.sourceId}
+                    onChange={(e) => setProbeForm((f) => ({ ...f, sourceId: e.target.value }))}
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="probeType"
+                    aria-label="probeType"
+                    value={probeForm.probeType}
+                    onChange={(e) => setProbeForm((f) => ({ ...f, probeType: e.target.value }))}
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="outcome (UP/DOWN/…)"
+                    aria-label="probe outcome"
+                    value={probeForm.outcome}
+                    onChange={(e) => setProbeForm((f) => ({ ...f, outcome: e.target.value }))}
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="latencyMs (optional)"
+                    aria-label="probe latencyMs"
+                    value={probeForm.latencyMs}
+                    onChange={(e) => setProbeForm((f) => ({ ...f, latencyMs: e.target.value }))}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  disabled={
+                    recordProbe.isPending ||
+                    probeForm.sourceId.trim().length < 2 ||
+                    probeForm.probeType.trim().length < 2 ||
+                    probeForm.outcome.trim().length < 2
+                  }
+                  onClick={() => recordProbe.mutate()}
+                >
+                  Record probe
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </section>
       ) : null}
 
@@ -1367,6 +1570,226 @@ export function EdgeOperationsModule() {
                 onClick={() => createChange.mutate()}
               >
                 Create draft change
+              </Button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {activeTab === "releases" && canReleasesRead ? (
+        <section className="space-y-4" data-testid="ops-releases">
+          <p className="type-xs text-[var(--text-muted)]">
+            Release registry from API only. DEPLOYED is never shown without recorded evidence.
+          </p>
+          <QueryShell
+            loading={releasesQ.isLoading}
+            error={releasesQ.isError ? releasesQ.error : null}
+            empty={!releasesQ.isLoading && releases.items.length === 0}
+            emptyTitle="No releases"
+            emptyDescription="No release registry records. Status stays as returned by the API."
+          >
+            <DenseTable
+              headers={[
+                "Number",
+                "Version",
+                "Status",
+                "Env",
+                "Health gate",
+                "Deployed",
+                "Actions",
+              ]}
+              testId="ops-releases-table"
+            >
+              {releases.items.map((r) => (
+                <tr key={r.id}>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">{r.releaseNumber}</td>
+                  <td className="px-3 py-2 font-medium">{r.version}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">
+                    {r.environment ?? "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <Badge tone={statusTone(r.healthGateStatus)}>{r.healthGateStatus}</Badge>
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">
+                    {formatWhen(r.deployedAt)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {canReleasesManage &&
+                    !["DEPLOYED", "FAILED", "ROLLED_BACK", "CANCELLED"].includes(
+                      r.status.toUpperCase(),
+                    ) ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={rowBusyId === r.id}
+                        onClick={() =>
+                          void runRowAction(r.id, () =>
+                            edgeApi.transitionRelease(r.id, {
+                              toStatus: "SCHEDULED",
+                            }),
+                          )
+                        }
+                      >
+                        Mark scheduled
+                      </Button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </DenseTable>
+          </QueryShell>
+
+          {canReleasesManage ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Create release</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="version"
+                  aria-label="release version"
+                  value={releaseForm.version}
+                  onChange={(e) => setReleaseForm((f) => ({ ...f, version: e.target.value }))}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="environment"
+                  aria-label="release environment"
+                  value={releaseForm.environment}
+                  onChange={(e) =>
+                    setReleaseForm((f) => ({ ...f, environment: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="buildRef (optional)"
+                  aria-label="release buildRef"
+                  value={releaseForm.buildRef}
+                  onChange={(e) => setReleaseForm((f) => ({ ...f, buildRef: e.target.value }))}
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={createRelease.isPending || releaseForm.version.trim().length < 1}
+                onClick={() => createRelease.mutate()}
+              >
+                Create release
+              </Button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {activeTab === "notifications" && canNotificationsRead ? (
+        <section className="space-y-4" data-testid="ops-notifications">
+          <p className="type-xs text-[var(--text-muted)]">
+            Delivery status comes from the API. DELIVERED is never invented from QUEUED.
+          </p>
+          <QueryShell
+            loading={notificationsQ.isLoading}
+            error={notificationsQ.isError ? notificationsQ.error : null}
+            empty={!notificationsQ.isLoading && notifications.items.length === 0}
+            emptyTitle="No notification deliveries"
+            emptyDescription="No queued or delivered notification records."
+          >
+            <DenseTable
+              headers={[
+                "Event",
+                "Channel",
+                "Destination",
+                "Status",
+                "Provider ref",
+                "Attempts",
+                "Actions",
+              ]}
+              testId="ops-notifications-table"
+            >
+              {notifications.items.map((n) => (
+                <tr key={n.id}>
+                  <td className="px-3 py-2 font-medium">{n.eventType}</td>
+                  <td className="px-3 py-2">{n.channel}</td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">{n.destination}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone={statusTone(n.status)}>{n.status}</Badge>
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">
+                    {n.providerRef ?? "—"}
+                  </td>
+                  <td className="px-3 py-2">{n.attempts}</td>
+                  <td className="px-3 py-2">
+                    {canNotificationsManage && n.status.toUpperCase() === "QUEUED" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={rowBusyId === n.id}
+                        onClick={() =>
+                          void runRowAction(n.id, () =>
+                            edgeApi.updateNotificationDeliveryStatus(n.id, {
+                              toStatus: "SUBMITTED",
+                            }),
+                          )
+                        }
+                      >
+                        Mark submitted
+                      </Button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </DenseTable>
+          </QueryShell>
+
+          {canNotificationsManage ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Queue notification</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="eventType"
+                  aria-label="notification eventType"
+                  value={notificationForm.eventType}
+                  onChange={(e) =>
+                    setNotificationForm((f) => ({ ...f, eventType: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="channel"
+                  aria-label="notification channel"
+                  value={notificationForm.channel}
+                  onChange={(e) =>
+                    setNotificationForm((f) => ({ ...f, channel: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="destination"
+                  aria-label="notification destination"
+                  value={notificationForm.destination}
+                  onChange={(e) =>
+                    setNotificationForm((f) => ({ ...f, destination: e.target.value }))
+                  }
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={
+                  recordNotification.isPending ||
+                  notificationForm.eventType.trim().length < 2 ||
+                  notificationForm.channel.trim().length < 2 ||
+                  notificationForm.destination.trim().length < 2
+                }
+                onClick={() => recordNotification.mutate()}
+              >
+                Queue notification
               </Button>
             </div>
           ) : null}
@@ -1690,18 +2113,61 @@ export function EdgeOperationsModule() {
       {activeTab === "recovery" && canRecoveryRead ? (
         <section className="space-y-4" data-testid="ops-recovery">
           {canRecoveryManage ? (
-            <div className="grow max-w-md">
-              <label className="type-xs text-[var(--text-muted)]" htmlFor="p9-recovery-evidence">
-                Evidence ref (required to verify)
-              </label>
-              <input
-                id="p9-recovery-evidence"
-                className={fieldControlClass}
-                value={recoveryEvidenceRef}
-                onChange={(e) => setRecoveryEvidenceRef(e.target.value)}
-                placeholder="external evidence reference"
-                aria-label="recovery evidence ref"
-              />
+            <div className="grid max-w-2xl gap-3 md:grid-cols-2">
+              <div>
+                <label className="type-xs text-[var(--text-muted)]" htmlFor="p9-recovery-evidence">
+                  Evidence ref (required to verify)
+                </label>
+                <input
+                  id="p9-recovery-evidence"
+                  className={fieldControlClass}
+                  value={recoveryEvidenceRef}
+                  onChange={(e) => setRecoveryEvidenceRef(e.target.value)}
+                  placeholder="external evidence reference"
+                  aria-label="recovery evidence ref"
+                />
+              </div>
+              <div>
+                <label
+                  className="type-xs text-[var(--text-muted)]"
+                  htmlFor="p9-recovery-evidence-kind"
+                >
+                  Evidence kind
+                </label>
+                <select
+                  id="p9-recovery-evidence-kind"
+                  className={fieldControlClass}
+                  value={recoveryEvidenceKind}
+                  onChange={(e) =>
+                    setRecoveryEvidenceKind(e.target.value as RecoveryEvidenceKind)
+                  }
+                  aria-label="recovery evidence kind"
+                >
+                  {RECOVERY_EVIDENCE_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {recoveryEvidenceKind === "MANUAL_OVERRIDE" ? (
+                <div className="md:col-span-2">
+                  <label
+                    className="type-xs text-[var(--text-muted)]"
+                    htmlFor="p9-recovery-justification"
+                  >
+                    Justification (required for MANUAL_OVERRIDE)
+                  </label>
+                  <input
+                    id="p9-recovery-justification"
+                    className={fieldControlClass}
+                    value={recoveryEvidenceJustification}
+                    onChange={(e) => setRecoveryEvidenceJustification(e.target.value)}
+                    placeholder="why manual override is warranted"
+                    aria-label="recovery evidence justification"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
           <QueryShell
@@ -1709,10 +2175,18 @@ export function EdgeOperationsModule() {
             error={recoveryQ.isError ? recoveryQ.error : null}
             empty={!recoveryQ.isLoading && recovery.items.length === 0}
             emptyTitle="No recovery operations"
-            emptyDescription="No backup/restore/DR coordination records. VERIFIED requires external evidence."
+            emptyDescription="No backup/restore/DR coordination records. VERIFIED requires evidenceKind + external evidence."
           >
             <DenseTable
-              headers={["Type", "Status", "Requester", "Evidence", "Created", "Actions"]}
+              headers={[
+                "Type",
+                "Status",
+                "Requester",
+                "Evidence",
+                "Kind",
+                "Created",
+                "Actions",
+              ]}
               testId="ops-recovery-table"
             >
               {recovery.items.map((r) => (
@@ -1726,6 +2200,9 @@ export function EdgeOperationsModule() {
                     {r.externalEvidenceRef ?? "—"}
                   </td>
                   <td className="px-3 py-2 text-[var(--text-muted)]">
+                    {r.evidenceKind ?? "—"}
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">
                     {formatWhen(r.createdAt)}
                   </td>
                   <td className="px-3 py-2">
@@ -1734,13 +2211,16 @@ export function EdgeOperationsModule() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        disabled={
-                          rowBusyId === r.id || recoveryEvidenceRef.trim().length < 2
-                        }
+                        disabled={rowBusyId === r.id || !canVerifyRecovery}
                         onClick={() =>
                           void runRowAction(r.id, () =>
                             edgeApi.verifyRecoveryOperation(r.id, {
                               externalEvidenceRef: recoveryEvidenceRef.trim(),
+                              evidenceKind: recoveryEvidenceKind,
+                              evidenceJustification:
+                                recoveryEvidenceKind === "MANUAL_OVERRIDE"
+                                  ? recoveryEvidenceJustification.trim()
+                                  : undefined,
                             }),
                           )
                         }

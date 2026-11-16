@@ -176,6 +176,7 @@ import type {
   ChangeRequestRecord,
   ConfirmRootCauseBody,
   CreateAutomationBody,
+  ConnectMonitoringSourceBody,
   CreateChangeBody,
   CreateIncidentBody,
   CreateMaintenanceBody,
@@ -184,6 +185,7 @@ import type {
   CreateOperationalRiskBody,
   CreateOperationalTaskBody,
   CreateProblemBody,
+  CreateReleaseBody,
   CreateRunbookBody,
   CreateServiceRequestBody,
   CreateSloBody,
@@ -194,6 +196,9 @@ import type {
   IncidentRecord,
   LinkProblemIncidentBody,
   MaintenanceWindowRecord,
+  MonitoringProbeRecord,
+  MonitoringSourceRecord,
+  NotificationDeliveryRecord,
   OnCallRotationRecord,
   OperationalAlertRecord,
   OperationalExceptionRecord,
@@ -209,10 +214,13 @@ import type {
   PublishStatusBody,
   RecordCapacityBody,
   RecordHealthSnapshotBody,
+  RecordMonitoringProbeBody,
+  RecordNotificationDeliveryBody,
   RecordSloMeasurementBody,
   RecoveryOperationRecord,
   RegisterPlatformServiceBody,
   RejectChangeBody,
+  ReleaseRecord,
   RequestAutomationExecutionBody,
   RequestRecoveryBody,
   ResolveAlertBody,
@@ -226,6 +234,8 @@ import type {
   StatusPublicationRecord,
   SubmitChangeBody,
   TransitionIncidentBody,
+  TransitionReleaseBody,
+  UpdateNotificationDeliveryStatusBody,
   UpdatePlatformServiceBody,
   VerifyRecoveryBody,
 } from "@/types/edge-platform-operations";
@@ -5447,9 +5457,9 @@ export const edgeApi = {
       })}`,
     ),
 
-  /** Mandate alias — releases map to change SoD records. */
+  /** Real release registry (not change alias). DEPLOYED requires evidence. */
   listReleases: (opts?: OperationsListFilter) =>
-    edgeRequest<OperationsListPage<ChangeRequestRecord>>(
+    edgeRequest<OperationsListPage<ReleaseRecord>>(
       `/api/edge-backend/operations/releases${toQuery({
         status: opts?.status,
         serviceId: opts?.serviceId,
@@ -5457,6 +5467,18 @@ export const edgeApi = {
         offset: opts?.offset,
       })}`,
     ),
+
+  createRelease: (body: CreateReleaseBody) =>
+    edgeRequest<ReleaseRecord>(`/api/edge-backend/operations/releases`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  transitionRelease: (id: string, body: TransitionReleaseBody) =>
+    edgeRequest<ReleaseRecord>(`/api/edge-backend/operations/releases/${id}/transition`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   createChange: (body: CreateChangeBody) =>
     edgeRequest<ChangeRequestRecord>(`/api/edge-backend/operations/changes`, {
@@ -5605,6 +5627,51 @@ export const edgeApi = {
     edgeRequest<RecoveryOperationRecord>(
       `/api/edge-backend/operations/recovery/${id}/verify`,
       { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listNotificationDeliveries: (opts?: OperationsListFilter) =>
+    edgeRequest<OperationsListPage<NotificationDeliveryRecord>>(
+      `/api/edge-backend/operations/notifications${toQuery({
+        status: opts?.status,
+        serviceId: opts?.serviceId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  recordNotificationDelivery: (body: RecordNotificationDeliveryBody) =>
+    edgeRequest<NotificationDeliveryRecord>(`/api/edge-backend/operations/notifications`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateNotificationDeliveryStatus: (
+    id: string,
+    body: UpdateNotificationDeliveryStatusBody,
+  ) =>
+    edgeRequest<NotificationDeliveryRecord>(
+      `/api/edge-backend/operations/notifications/${id}/status`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  connectMonitoringSource: (body: ConnectMonitoringSourceBody) =>
+    edgeRequest<MonitoringSourceRecord>(`/api/edge-backend/operations/monitoring/sources`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  recordMonitoringProbe: (body: RecordMonitoringProbeBody) =>
+    edgeRequest<MonitoringProbeRecord>(`/api/edge-backend/operations/monitoring/probes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listMonitoringProbes: (opts?: { sourceId?: string; limit?: number }) =>
+    edgeRequest<OperationsListPage<MonitoringProbeRecord> | MonitoringProbeRecord[]>(
+      `/api/edge-backend/operations/monitoring/probes${toQuery({
+        sourceId: opts?.sourceId,
+        limit: opts?.limit,
+      })}`,
     ),
 
   listRunbooks: (opts?: { serviceId?: string; limit?: number; offset?: number }) =>

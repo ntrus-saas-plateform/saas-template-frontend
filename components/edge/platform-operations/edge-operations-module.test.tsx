@@ -24,6 +24,15 @@ const edgeApiMocks = vi.hoisted(() => ({
   submitChange: vi.fn(),
   approveChange: vi.fn(),
   rejectChange: vi.fn(),
+  listReleases: vi.fn(),
+  createRelease: vi.fn(),
+  transitionRelease: vi.fn(),
+  listNotificationDeliveries: vi.fn(),
+  recordNotificationDelivery: vi.fn(),
+  updateNotificationDeliveryStatus: vi.fn(),
+  connectMonitoringSource: vi.fn(),
+  recordMonitoringProbe: vi.fn(),
+  listMonitoringProbes: vi.fn(),
   listMaintenanceWindows: vi.fn(),
   createMaintenanceWindow: vi.fn(),
   listServiceRequests: vi.fn(),
@@ -60,6 +69,10 @@ vi.mock("@/providers/edge-platform-provider", () => ({
       "platform:operations:problems:read",
       "platform:operations:changes:read",
       "platform:operations:changes:manage",
+      "platform:operations:releases:read",
+      "platform:operations:releases:manage",
+      "platform:operations:notifications:read",
+      "platform:operations:notifications:manage",
       "platform:operations:maintenance:read",
       "platform:operations:maintenance:manage",
       "platform:operations:requests:read",
@@ -69,6 +82,7 @@ vi.mock("@/providers/edge-platform-provider", () => ({
       "platform:operations:slo:read",
       "platform:operations:capacity:read",
       "platform:operations:recovery:read",
+      "platform:operations:recovery:manage",
       "platform:operations:runbooks:read",
       "platform:operations:status:read",
       "platform:operations:risks:read",
@@ -142,6 +156,9 @@ describe("EdgeOperationsModule", () => {
     edgeApiMocks.listIncidents.mockResolvedValue({ data: { items: [], total: 0 } });
     edgeApiMocks.listProblems.mockResolvedValue({ data: { items: [], total: 0 } });
     edgeApiMocks.listChanges.mockResolvedValue({ data: { items: [], total: 0 } });
+    edgeApiMocks.listReleases.mockResolvedValue({ data: { items: [], total: 0 } });
+    edgeApiMocks.listNotificationDeliveries.mockResolvedValue({ data: { items: [], total: 0 } });
+    edgeApiMocks.listMonitoringProbes.mockResolvedValue({ data: { items: [], total: 0 } });
     edgeApiMocks.listMaintenanceWindows.mockResolvedValue({ data: { items: [], total: 0 } });
     edgeApiMocks.listServiceRequests.mockResolvedValue({ data: { items: [], total: 0 } });
     edgeApiMocks.listOperationalTasks.mockResolvedValue({ data: { items: [], total: 0 } });
@@ -203,5 +220,31 @@ describe("EdgeOperationsModule", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Automation" }));
     expect(await screen.findByText(/No automations/i)).toBeInTheDocument();
     expect(edgeApiMocks.listAutomations).toHaveBeenCalled();
+  });
+
+  it("switches to Releases tab and loads real release registry", async () => {
+    renderModule();
+    await screen.findByTestId("edge-operations-module");
+    fireEvent.click(screen.getByRole("tab", { name: "Releases" }));
+    expect(await screen.findByText(/No releases/i)).toBeInTheDocument();
+    expect(edgeApiMocks.listReleases).toHaveBeenCalled();
+    expect(edgeApiMocks.listChanges).not.toHaveBeenCalled();
+  });
+
+  it("switches to Notifications tab and loads deliveries", async () => {
+    renderModule();
+    await screen.findByTestId("edge-operations-module");
+    fireEvent.click(screen.getByRole("tab", { name: "Notifications" }));
+    expect(await screen.findByText(/No notification deliveries/i)).toBeInTheDocument();
+    expect(edgeApiMocks.listNotificationDeliveries).toHaveBeenCalled();
+  });
+
+  it("loads monitoring probes under Alerts without inventing CONNECTED status", async () => {
+    renderModule();
+    await screen.findByTestId("edge-operations-module");
+    fireEvent.click(screen.getByRole("tab", { name: "Alerts" }));
+    expect(await screen.findByText(/No probe results/i)).toBeInTheDocument();
+    expect(edgeApiMocks.listMonitoringProbes).toHaveBeenCalled();
+    expect(screen.queryByTestId("ops-probes-table")).not.toBeInTheDocument();
   });
 });

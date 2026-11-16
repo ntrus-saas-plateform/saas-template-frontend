@@ -29,6 +29,16 @@ test.describe("Okapi Edge operations console (P9 smoke)", () => {
     }
   });
 
+  test("unauth GET releases and notifications are rejected", async ({ request }) => {
+    for (const path of [
+      "/api/edge-backend/operations/releases",
+      "/api/edge-backend/operations/notifications",
+    ]) {
+      const res = await request.get(path);
+      expect([401, 403]).toContain(res.status());
+    }
+  });
+
   test("alert ingest without CSRF is rejected", async ({ request }) => {
     const res = await request.post("/api/edge-backend/operations/alerts", {
       data: {
