@@ -119,6 +119,25 @@ import type {
   OnboardingTemplate,
 } from "@/types/edge-onboarding";
 import type {
+  ReconciliationEvidence,
+  ReconciliationFinding,
+  ReconciliationListPage,
+  ReconciliationPolicy,
+  ReconciliationRun,
+  ReconciliationRunDetail,
+  ReconciliationWaiver,
+} from "@/types/edge-reconciliation";
+import type {
+  ActivityEventRecord,
+  ExceptionRecord,
+  LifecycleRequestRecord,
+  ReconciliationFindingRecord,
+  Tenant360Overview,
+  TenantManagementListPage,
+  TenantPortfolioMetrics,
+  TenantRegistryRecord,
+} from "@/types/edge-tenant-management";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -4078,5 +4097,482 @@ export const edgeApi = {
   listOnboardingEvidence: (journeyId: string) =>
     edgeRequest<OnboardingListPage<OnboardingEvidence>>(
       `/api/edge-backend/onboarding/journeys/${journeyId}/evidence`,
+    ),
+
+  // --- P7.13 Reconciliation & Operational Governance ---
+  listReconciliationPolicies: (opts?: {
+    status?: string;
+    scope?: string;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ReconciliationListPage<ReconciliationPolicy>>(
+      `/api/edge-backend/reconciliation/policies${toQuery({
+        status: opts?.status,
+        scope: opts?.scope,
+        q: opts?.q,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getReconciliationPolicy: (id: string) =>
+    edgeRequest<ReconciliationPolicy | null>(
+      `/api/edge-backend/reconciliation/policies/${id}`,
+    ),
+
+  createReconciliationPolicy: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    scope?: string;
+    autoRemediate?: boolean;
+    requireApproval?: boolean;
+    rules?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ReconciliationPolicy>(
+      `/api/edge-backend/reconciliation/policies`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listReconciliationRuns: (opts?: {
+    tenantId?: string;
+    productId?: string;
+    status?: string;
+    policyId?: string;
+    providerCode?: string;
+    provisioningRequestId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ReconciliationListPage<ReconciliationRun>>(
+      `/api/edge-backend/reconciliation/runs${toQuery({
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        status: opts?.status,
+        policyId: opts?.policyId,
+        providerCode: opts?.providerCode,
+        provisioningRequestId: opts?.provisioningRequestId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getReconciliationRun: (id: string) =>
+    edgeRequest<ReconciliationRunDetail | null>(
+      `/api/edge-backend/reconciliation/runs/${id}`,
+    ),
+
+  createReconciliationRun: (body: {
+    tenantId?: string;
+    productId?: string;
+    providerCode?: string;
+    policyId?: string;
+    triggerKind?: string;
+    provisioningRequestId?: string;
+    authorizationRowId?: string;
+    authorizationVersion?: number;
+    desiredSnapshot?: Record<string, unknown>;
+    observedSnapshot?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    correlationId?: string;
+  }) =>
+    edgeRequest<ReconciliationRun>(
+      `/api/edge-backend/reconciliation/runs`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  observeReconciliationRun: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      desired?: Array<Record<string, unknown>>;
+      observed?: Array<Record<string, unknown>>;
+      providerUnreachable?: boolean;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/reconciliation/runs/${id}/observe`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  remediateReconciliationRun: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+      findingId?: string;
+      remediationId?: string;
+      reason?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/reconciliation/runs/${id}/remediate`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  decideReconciliationRemediation: (
+    runId: string,
+    remediationId: string,
+    body: {
+      decision: "APPROVE" | "REJECT";
+      reason?: string;
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/reconciliation/runs/${runId}/remediations/${remediationId}/decide`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listReconciliationFindings: (opts?: {
+    runId?: string;
+    tenantId?: string;
+    status?: string;
+    observationClass?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ReconciliationListPage<ReconciliationFinding>>(
+      `/api/edge-backend/reconciliation/findings${toQuery({
+        runId: opts?.runId,
+        tenantId: opts?.tenantId,
+        status: opts?.status,
+        observationClass: opts?.observationClass,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  quarantineReconciliationFinding: (
+    id: string,
+    body?: { reason?: string; provisioningRequestId?: string },
+  ) =>
+    edgeRequest<ReconciliationFinding>(
+      `/api/edge-backend/reconciliation/findings/${id}/quarantine`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  createReconciliationWaiver: (body: {
+    waiverCode: string;
+    reason: string;
+    expiresAt: string;
+    findingId?: string;
+    tenantId?: string;
+    productId?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ReconciliationWaiver>(
+      `/api/edge-backend/reconciliation/waivers`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listReconciliationWaivers: (opts?: {
+    findingId?: string;
+    tenantId?: string;
+    status?: string;
+    limit?: number;
+  }) =>
+    edgeRequest<ReconciliationWaiver[]>(
+      `/api/edge-backend/reconciliation/waivers${toQuery({
+        findingId: opts?.findingId,
+        tenantId: opts?.tenantId,
+        status: opts?.status,
+        limit: opts?.limit,
+      })}`,
+    ),
+
+  listReconciliationEvidence: (runId: string, opts?: { limit?: number }) =>
+    edgeRequest<ReconciliationEvidence[]>(
+      `/api/edge-backend/reconciliation/runs/${runId}/evidence${toQuery({
+        limit: opts?.limit,
+      })}`,
+    ),
+
+  // --- P8 Tenant Management & Governance ---
+  listTenants: (opts?: {
+    q?: string;
+    productId?: string;
+    accountId?: string;
+    subscriptionId?: string;
+    region?: string;
+    classification?: string;
+    administrativeStatus?: string;
+    technicalStatus?: string;
+    governanceStatus?: string;
+    healthStatus?: string;
+    riskLevel?: string;
+    tagKey?: string;
+    tagValue?: string;
+    sortBy?: string;
+    sortDir?: "asc" | "desc";
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<TenantRegistryRecord>>(
+      `/api/edge-backend/tenants${toQuery({
+        q: opts?.q,
+        productId: opts?.productId,
+        accountId: opts?.accountId,
+        subscriptionId: opts?.subscriptionId,
+        region: opts?.region,
+        classification: opts?.classification,
+        administrativeStatus: opts?.administrativeStatus,
+        technicalStatus: opts?.technicalStatus,
+        governanceStatus: opts?.governanceStatus,
+        healthStatus: opts?.healthStatus,
+        riskLevel: opts?.riskLevel,
+        tagKey: opts?.tagKey,
+        tagValue: opts?.tagValue,
+        sortBy: opts?.sortBy,
+        sortDir: opts?.sortDir,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getTenant: (id: string) =>
+    edgeRequest<TenantRegistryRecord | null>(
+      `/api/edge-backend/tenants/${id}`,
+    ),
+
+  getTenant360: (id: string) =>
+    edgeRequest<Tenant360Overview | null>(
+      `/api/edge-backend/tenants/${id}/360`,
+    ),
+
+  getTenantPortfolioAnalytics: () =>
+    edgeRequest<TenantPortfolioMetrics>(
+      `/api/edge-backend/tenant-management/analytics/portfolio`,
+    ),
+
+  registerTenant: (body: {
+    productTenantId: string;
+    tenantCode: string;
+    displayName: string;
+    productId: string;
+    tenantSlug?: string;
+    productCode?: string;
+    accountId?: string;
+    subscriptionId?: string;
+    classification?: string;
+    region?: string;
+    metadata?: Record<string, unknown>;
+    correlationId?: string;
+  }) =>
+    edgeRequest<TenantRegistryRecord>(`/api/edge-backend/tenants`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  syncTenantsFromP7: () =>
+    edgeRequest<unknown>(`/api/edge-backend/tenants/sync-from-p7`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  updateTenantMetadata: (
+    id: string,
+    body: {
+      expectedVersion: number;
+      displayName?: string;
+      classification?: string;
+      segment?: string | null;
+      region?: string | null;
+      locale?: string | null;
+      timezone?: string | null;
+      defaultLanguage?: string | null;
+      supportClassification?: string | null;
+      deploymentProfile?: string | null;
+      environmentClassification?: string;
+      metadata?: Record<string, unknown>;
+      correlationId?: string;
+    },
+  ) =>
+    edgeRequest<TenantRegistryRecord>(`/api/edge-backend/tenants/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  assignTenantOwner: (
+    id: string,
+    body: {
+      expectedVersion: number;
+      internalOwnerId?: string | null;
+      operationalTeam?: string | null;
+      correlationId?: string;
+    },
+  ) =>
+    edgeRequest<TenantRegistryRecord>(
+      `/api/edge-backend/tenants/${id}/owner`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  addTenantTag: (
+    id: string,
+    body: { tagKey: string; tagValue: string },
+  ) =>
+    edgeRequest<unknown>(`/api/edge-backend/tenants/${id}/tags`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  removeTenantTag: (id: string, tagKey: string, tagValue: string) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/tenants/${id}/tags${toQuery({ tagKey, tagValue })}`,
+      { method: "DELETE" },
+    ),
+
+  addTenantNote: (
+    id: string,
+    body: { body: string; noteType?: string },
+  ) =>
+    edgeRequest<unknown>(`/api/edge-backend/tenants/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listTenantActivity: (
+    id: string,
+    opts?: { limit?: number; offset?: number },
+  ) =>
+    edgeRequest<TenantManagementListPage<ActivityEventRecord>>(
+      `/api/edge-backend/tenants/${id}/activity${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  requestTenantLifecycle: (
+    id: string,
+    body: {
+      requestType: string;
+      justification: string;
+      idempotencyKey: string;
+      riskAssessment?: string;
+      correlationId?: string;
+    },
+  ) =>
+    edgeRequest<LifecycleRequestRecord>(
+      `/api/edge-backend/tenants/${id}/lifecycle-requests`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantLifecycleRequests: (opts?: {
+    tenantRegistryId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<LifecycleRequestRecord>>(
+      `/api/edge-backend/tenant-management/lifecycle-requests${toQuery({
+        tenantRegistryId: opts?.tenantRegistryId,
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  approveTenantLifecycleRequest: (id: string, body?: { correlationId?: string }) =>
+    edgeRequest<LifecycleRequestRecord>(
+      `/api/edge-backend/tenant-management/lifecycle-requests/${id}/approve`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  rejectTenantLifecycleRequest: (
+    id: string,
+    body: { rejectedReason: string; correlationId?: string },
+  ) =>
+    edgeRequest<LifecycleRequestRecord>(
+      `/api/edge-backend/tenant-management/lifecycle-requests/${id}/reject`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantExceptions: (opts?: {
+    tenantRegistryId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<ExceptionRecord>>(
+      `/api/edge-backend/tenant-management/exceptions${toQuery({
+        tenantRegistryId: opts?.tenantRegistryId,
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  requestTenantException: (body: {
+    tenantRegistryId: string;
+    exceptionType?: string;
+    description: string;
+    businessJustification: string;
+    startsAt: string;
+    expiresAt: string;
+    idempotencyKey: string;
+    riskAssessment?: string;
+    scope?: Record<string, unknown>;
+    correlationId?: string;
+  }) =>
+    edgeRequest<ExceptionRecord>(
+      `/api/edge-backend/tenant-management/exceptions`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  approveTenantException: (id: string) =>
+    edgeRequest<ExceptionRecord>(
+      `/api/edge-backend/tenant-management/exceptions/${id}/approve`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  revokeTenantException: (
+    id: string,
+    body: { revokeReason: string; correlationId?: string },
+  ) =>
+    edgeRequest<ExceptionRecord>(
+      `/api/edge-backend/tenant-management/exceptions/${id}/revoke`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  expireTenantExceptions: () =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/tenant-management/exceptions/expire-due`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  runTenantReconciliation: (body?: {
+    mode?: string;
+    dryRun?: boolean;
+    correlationId?: string;
+  }) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/tenant-management/reconciliation/runs`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listTenantReconciliationFindings: (opts?: {
+    tenantRegistryId?: string;
+    status?: string;
+    runId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<ReconciliationFindingRecord>>(
+      `/api/edge-backend/tenant-management/reconciliation/findings${toQuery({
+        tenantRegistryId: opts?.tenantRegistryId,
+        status: opts?.status,
+        runId: opts?.runId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
     ),
 };

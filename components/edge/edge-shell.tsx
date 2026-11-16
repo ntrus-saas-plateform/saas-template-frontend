@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Repeat,
   Rocket,
+  Scale,
   ServerCog,
   SlidersHorizontal,
   Sparkles,
@@ -52,6 +53,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/subscriptions",
     label: "Subscriptions",
     icon: RefreshCw,
+  },
+  {
+    href: "/edge/tenants",
+    label: "Tenant Management",
+    icon: Building2,
   },
   {
     href: "/edge/billing",
@@ -113,18 +119,17 @@ const PLATFORM_NAV: NavItem[] = [
     label: "Onboarding",
     icon: Rocket,
   },
+  {
+    href: "/edge/provisioning/reconciliation",
+    label: "Reconciliation",
+    icon: Scale,
+  },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },
   { href: "/edge/verticals", label: "Verticals", icon: Building2 },
   { href: "/edge/administrators", label: "Administrators", icon: Users },
   { href: "/edge/security", label: "Security", icon: Shield },
   { href: "/edge/audit", label: "Audit", icon: ClipboardList },
-  {
-    href: "/edge/tenants",
-    label: "Tenant Management",
-    icon: Building2,
-    disabled: true,
-  },
 ];
 
 function workspaceNav(activeVerticalId: string | null): NavItem[] {
