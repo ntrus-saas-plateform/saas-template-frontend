@@ -81,6 +81,10 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
     permissions,
     "platform:tenant_management:legal_hold:approve",
   );
+  const canDeprovisionAuthorize = hasEdgePermission(
+    permissions,
+    "platform:tenant_management:deprovision:authorize",
+  );
   const canTags = hasEdgePermission(
     permissions,
     "platform:tenant_management:manage_tags",
@@ -226,6 +230,12 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
   });
   const [legalHoldConfirm, setLegalHoldConfirm] = useState(false);
   const [legalHoldJustification, setLegalHoldJustification] = useState("");
+  const [deprovForm, setDeprovForm] = useState({
+    authorized: false,
+    confirmed: false,
+    liftDeletionProtection: false,
+    justification: "",
+  });
 
   const [lifecycleForm, setLifecycleForm] = useState({
     requestType: "SUSPEND",
@@ -339,12 +349,12 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
           });
           setPoliciesForm((f) => ({ ...f, legalHold: true }));
         } else if (!registry.legalHold && policiesForm.legalHold) {
-          const holdRes = await edgeApi.updateTenantLegalHold(tenantId, {
-            expectedVersion: registry.version,
-            legalHold: true,
+          await edgeApi.requestTenantLegalHoldChange(tenantId, {
+            action: "RAISE",
             justification: legalHoldJustification.trim(),
+            idempotencyKey: newIdempotencyKey(),
           });
-          expectedVersion = holdRes.data?.version ?? expectedVersion;
+          setPoliciesForm((f) => ({ ...f, legalHold: false }));
         }
       }
       return edgeApi.updateTenantPolicies(tenantId, {
@@ -359,6 +369,31 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
       setLegalHoldConfirm(false);
       setLegalHoldJustification("");
       void qc.invalidateQueries({ queryKey: ["tm", "legal-hold", tenantId] });
+      invalidate360();
+    },
+  });
+
+  const authorizeDeprovision = useMutation({
+    mutationFn: async () => {
+      if (!registry) throw new Error("Missing registry");
+      if (deprovForm.justification.trim().length < 8) {
+        throw new Error("Deprovision justification required (min 8 characters)");
+      }
+      return edgeApi.authorizeTenantDeprovision(tenantId, {
+        expectedVersion: registry.version,
+        authorized: deprovForm.authorized,
+        confirmed: deprovForm.confirmed,
+        liftDeletionProtection: deprovForm.liftDeletionProtection,
+        justification: deprovForm.justification.trim(),
+      });
+    },
+    onSuccess: () => {
+      setDeprovForm({
+        authorized: false,
+        confirmed: false,
+        liftDeletionProtection: false,
+        justification: "",
+      });
       invalidate360();
     },
   });
@@ -862,14 +897,20 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                   />
                 ) : null}
                 {policiesForm.legalHold && !registry?.legalHold ? (
-                  <label className="flex items-center gap-2 type-sm text-[var(--text-muted)]">
-                    <input
-                      type="checkbox"
-                      checked={legalHoldConfirm}
-                      onChange={(e) => setLegalHoldConfirm(e.target.checked)}
-                    />
-                    Confirm legal hold activation
-                  </label>
+                  <>
+                    <label className="flex items-center gap-2 type-sm text-[var(--text-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={legalHoldConfirm}
+                        onChange={(e) => setLegalHoldConfirm(e.target.checked)}
+                      />
+                      Confirm legal hold activation request
+                    </label>
+                    <p className="type-xs text-[var(--text-muted)]">
+                      Raising legal hold requires a separate approver (dual approval).
+                      Submit to create a pending RAISE request.
+                    </p>
+                  </>
                 ) : null}
                 {registry?.legalHold && !policiesForm.legalHold ? (
                   <p className="type-xs text-[var(--text-muted)]">
@@ -890,6 +931,69 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                   />
                   Deletion protection
                 </label>
+                {canDeprovisionAuthorize ? (
+                  <div className="space-y-2 border-t border-[var(--border)] pt-3">
+                    <p className="type-xs uppercase text-[var(--text-muted)]">
+                      P7 deprovision authorization
+                    </p>
+                    <label className="flex items-center gap-2 type-sm">
+                      <input
+                        type="checkbox"
+                        checked={deprovForm.authorized}
+                        onChange={(e) =>
+                          setDeprovForm((f) => ({ ...f, authorized: e.target.checked }))
+                        }
+                      />
+                      Authorized
+                    </label>
+                    <label className="flex items-center gap-2 type-sm">
+                      <input
+                        type="checkbox"
+                        checked={deprovForm.confirmed}
+                        onChange={(e) =>
+                          setDeprovForm((f) => ({ ...f, confirmed: e.target.checked }))
+                        }
+                      />
+                      Confirmed
+                    </label>
+                    <label className="flex items-center gap-2 type-sm">
+                      <input
+                        type="checkbox"
+                        checked={deprovForm.liftDeletionProtection}
+                        onChange={(e) =>
+                          setDeprovForm((f) => ({
+                            ...f,
+                            liftDeletionProtection: e.target.checked,
+                          }))
+                        }
+                      />
+                      Also lift deletion protection
+                    </label>
+                    <textarea
+                      className={fieldControlClass}
+                      placeholder="Deprovision authorization justification"
+                      value={deprovForm.justification}
+                      onChange={(e) =>
+                        setDeprovForm((f) => ({ ...f, justification: e.target.value }))
+                      }
+                      aria-label="Deprovision authorization justification"
+                      rows={2}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={
+                        authorizeDeprovision.isPending ||
+                        !deprovForm.authorized ||
+                        !deprovForm.confirmed ||
+                        deprovForm.justification.trim().length < 8
+                      }
+                      onClick={() => authorizeDeprovision.mutate()}
+                    >
+                      Authorize deprovision flags
+                    </Button>
+                  </div>
+                ) : null}
                 <input
                   className={fieldControlClass}
                   placeholder="dataResidencyRef"

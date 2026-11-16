@@ -156,6 +156,7 @@ import type {
   TenantManagementListPage,
   LegalHoldChangeRequestRecord,
   RequestLegalHoldChangeBody,
+  AuthorizeTenantDeprovisionBody,
   TenantLegalHoldUpdate,
   TenantPoliciesPatch,
   TenantPortfolioMetrics,
@@ -5168,6 +5169,12 @@ export const edgeApi = {
   updateTenantLegalHold: (tenantId: string, body: TenantLegalHoldUpdate) =>
     edgeRequest<TenantRegistryRecord>(
       `/api/edge-backend/tenants/${tenantId}/legal-hold`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  authorizeTenantDeprovision: (tenantId: string, body: AuthorizeTenantDeprovisionBody) =>
+    edgeRequest<TenantRegistryRecord>(
+      `/api/edge-backend/tenants/${tenantId}/deprovision-authorization`,
       { method: "POST", body: JSON.stringify(body) },
     ),
 

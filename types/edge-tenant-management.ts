@@ -390,6 +390,15 @@ export type TenantLegalHoldUpdate = {
   correlationId?: string;
 };
 
+export type AuthorizeTenantDeprovisionBody = {
+  expectedVersion: number;
+  authorized: boolean;
+  confirmed: boolean;
+  liftDeletionProtection?: boolean;
+  justification: string;
+  correlationId?: string;
+};
+
 export type LegalHoldChangeRequestRecord = {
   id: string;
   tenantRegistryId: string;
