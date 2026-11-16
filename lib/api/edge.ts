@@ -154,6 +154,7 @@ import type {
   TenantBulkOperationRecord,
   TenantHealthSnapshotRecord,
   TenantManagementListPage,
+  TenantLegalHoldUpdate,
   TenantPoliciesPatch,
   TenantPortfolioMetrics,
   TenantRegistryRecord,
@@ -5088,7 +5089,6 @@ export const edgeApi = {
     id: string,
     body: {
       expectedPreviewCount: number;
-      approverId?: string | null;
       correlationId?: string;
     },
   ) =>
@@ -5161,5 +5161,11 @@ export const edgeApi = {
     edgeRequest<TenantRegistryRecord>(
       `/api/edge-backend/tenants/${tenantId}/policies`,
       { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
+  updateTenantLegalHold: (tenantId: string, body: TenantLegalHoldUpdate) =>
+    edgeRequest<TenantRegistryRecord>(
+      `/api/edge-backend/tenants/${tenantId}/legal-hold`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
 };

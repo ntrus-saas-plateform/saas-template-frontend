@@ -376,11 +376,17 @@ export type TenantBulkOperationRecord = {
 
 export type TenantPoliciesPatch = {
   expectedVersion: number;
-  legalHold?: boolean;
   deletionProtection?: boolean;
   dataResidencyRef?: string | null;
   retentionPolicyRef?: string | null;
   securityPolicyRef?: string | null;
+  correlationId?: string;
+};
+
+export type TenantLegalHoldUpdate = {
+  expectedVersion: number;
+  legalHold: boolean;
+  justification: string;
   correlationId?: string;
 };
 

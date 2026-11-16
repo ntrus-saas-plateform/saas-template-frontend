@@ -200,6 +200,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
     securityPolicyRef: "",
   });
   const [legalHoldConfirm, setLegalHoldConfirm] = useState(false);
+  const [legalHoldJustification, setLegalHoldJustification] = useState("");
 
   const [lifecycleForm, setLifecycleForm] = useState({
     requestType: "SUSPEND",
@@ -288,11 +289,23 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
   });
 
   const updatePolicies = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!registry) throw new Error("Missing registry");
+      const legalHoldChanged = policiesForm.legalHold !== registry.legalHold;
+      let expectedVersion = registry.version;
+      if (legalHoldChanged) {
+        if (legalHoldJustification.trim().length < 8) {
+          throw new Error("Legal hold justification required (min 8 characters)");
+        }
+        const holdRes = await edgeApi.updateTenantLegalHold(tenantId, {
+          expectedVersion: registry.version,
+          legalHold: policiesForm.legalHold,
+          justification: legalHoldJustification.trim(),
+        });
+        expectedVersion = holdRes.data?.version ?? expectedVersion;
+      }
       return edgeApi.updateTenantPolicies(tenantId, {
-        expectedVersion: registry.version,
-        legalHold: policiesForm.legalHold,
+        expectedVersion,
         deletionProtection: policiesForm.deletionProtection,
         dataResidencyRef: policiesForm.dataResidencyRef || null,
         retentionPolicyRef: policiesForm.retentionPolicyRef || null,
@@ -301,6 +314,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
     },
     onSuccess: () => {
       setLegalHoldConfirm(false);
+      setLegalHoldJustification("");
       invalidate360();
     },
   });
@@ -769,7 +783,13 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                 className="grid gap-[var(--space-3)]"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (policiesForm.legalHold && !legalHoldConfirm) return;
+                  if (
+                    policiesForm.legalHold &&
+                    policiesForm.legalHold !== registry?.legalHold &&
+                    !legalHoldConfirm
+                  ) {
+                    return;
+                  }
                   updatePolicies.mutate();
                 }}
               >
@@ -787,6 +807,16 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                   />
                   Legal hold
                 </label>
+                {policiesForm.legalHold !== registry?.legalHold ? (
+                  <textarea
+                    className={fieldControlClass}
+                    placeholder="Legal hold justification (min 8 characters, required)"
+                    value={legalHoldJustification}
+                    onChange={(e) => setLegalHoldJustification(e.target.value)}
+                    aria-label="Legal hold justification"
+                    rows={3}
+                  />
+                ) : null}
                 {policiesForm.legalHold ? (
                   <label className="flex items-center gap-2 type-sm text-[var(--text-muted)]">
                     <input
@@ -850,7 +880,11 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                   type="submit"
                   disabled={
                     updatePolicies.isPending ||
-                    (policiesForm.legalHold && !legalHoldConfirm)
+                    (policiesForm.legalHold &&
+                      policiesForm.legalHold !== registry?.legalHold &&
+                      !legalHoldConfirm) ||
+                    (policiesForm.legalHold !== registry?.legalHold &&
+                      legalHoldJustification.trim().length < 8)
                   }
                 >
                   Save policies
