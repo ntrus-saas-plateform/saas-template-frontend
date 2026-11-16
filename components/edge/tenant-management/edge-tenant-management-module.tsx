@@ -179,6 +179,7 @@ export function EdgeTenantManagementModule() {
     filterProductId: "",
   });
   const [bulkPreviewId, setBulkPreviewId] = useState<string | null>(null);
+  const [bulkPreviewCount, setBulkPreviewCount] = useState(0);
 
   const canSearch = hasEdgePermission(permissions, "platform:tenant_management:search");
   const canAnalytics = hasEdgePermission(permissions, "platform:tenant_management:analytics:read");
@@ -544,14 +545,19 @@ export function EdgeTenantManagementModule() {
     },
     onSuccess: (res) => {
       setBulkPreviewId(res.data?.id ?? null);
+      setBulkPreviewCount(res.data?.previewCount ?? 0);
       invalidateTm();
     },
   });
 
   const executeBulk = useMutation({
-    mutationFn: (id: string) => edgeApi.executeBulkTenantOperation(id),
+    mutationFn: (id: string) =>
+      edgeApi.executeBulkTenantOperation(id, {
+        expectedPreviewCount: bulkPreviewCount,
+      }),
     onSuccess: () => {
       setBulkPreviewId(null);
+      setBulkPreviewCount(0);
       invalidateTm();
     },
   });

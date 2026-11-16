@@ -2175,7 +2175,7 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  listReconciliationRuns: () =>
+  listBillingReconciliationRuns: () =>
     edgeRequest<unknown[]>("/api/edge-backend/billing/reconciliation/runs"),
 
   listReconciliationExceptions: (params?: {
@@ -5086,11 +5086,15 @@ export const edgeApi = {
 
   executeBulkTenantOperation: (
     id: string,
-    body?: { correlationId?: string },
+    body: {
+      expectedPreviewCount: number;
+      approverId?: string | null;
+      correlationId?: string;
+    },
   ) =>
     edgeRequest<TenantBulkOperationRecord>(
-      `/api/edge-backend/tenant-management/bulk/operations/${id}/execute`,
-      { method: "POST", body: JSON.stringify(body ?? {}) },
+      `/api/edge-backend/tenant-management/bulk/${id}/execute`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
 
   listBulkTenantOperations: (opts?: {
@@ -5099,7 +5103,7 @@ export const edgeApi = {
     offset?: number;
   }) =>
     edgeRequest<TenantManagementListPage<TenantBulkOperationRecord>>(
-      `/api/edge-backend/tenant-management/bulk/operations${toQuery({
+      `/api/edge-backend/tenant-management/bulk${toQuery({
         status: opts?.status,
         limit: opts?.limit,
         offset: opts?.offset,
