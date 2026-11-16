@@ -240,6 +240,61 @@ import type {
   VerifyRecoveryBody,
 } from "@/types/edge-platform-operations";
 import type {
+  AcquisitionCommunication,
+  AcquisitionLead,
+  AcquisitionListFilter,
+  AcquisitionListPage,
+  AcquisitionOverview,
+  AdvanceJourneyBody,
+  Application,
+  AttachPaymentBody,
+  AttachQuoteReferenceBody,
+  CaptureLeadBody,
+  CheckoutSession,
+  CompleteHandoffBody,
+  ConversionFunnel,
+  CreateApplicationDraftBody,
+  CreateCheckoutBody,
+  InitiateAcquisitionPaymentBody,
+  CreateFormSchemaBody,
+  CreateFormVersionBody,
+  CreatePlanPresentationBody,
+  CreateProductPresentationBody,
+  CreateProspectBody,
+  CreateQuoteRequestBody,
+  CreateSegmentPresentationBody,
+  CustomerPortalSnapshot,
+  DecideQualificationBody,
+  DocumentReference,
+  DocumentRequirement,
+  FormSchema,
+  FormVersion,
+  JourneyInstance,
+  PlanPresentation,
+  ProductContentVersion,
+  ProductPresentation,
+  PromoteLeadBody,
+  Prospect,
+  PublicFormPayload,
+  PublicProductDiscoveryItem,
+  PublicProductPage,
+  PublishContentBody,
+  QueueCommunicationBody,
+  QuoteReference,
+  QuoteRequest,
+  RecordAnalyticsBody,
+  RecordPaymentResultBody,
+  RegisterDocumentBody,
+  RequestHandoffBody,
+  RequestInformationBody,
+  ReviewDocumentBody,
+  SegmentPresentation,
+  StartQualificationBody,
+  SubscriptionHandoff,
+  TransitionApplicationBody,
+  TransitionProspectBody,
+} from "@/types/edge-acquisition";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -5790,4 +5845,503 @@ export const edgeApi = {
 
   getOperationsAnalytics: () =>
     edgeRequest<OperationsAnalytics>(`/api/edge-backend/operations/analytics`),
+
+  // --- P10 Acquisition --------------------------------------------------------
+
+  getAcquisitionOverview: () =>
+    edgeRequest<AcquisitionOverview>(`/api/edge-backend/acquisition/overview`),
+
+  listAcquisitionProducts: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<ProductPresentation>>(
+      `/api/edge-backend/acquisition/products${toQuery({
+        status: params?.status,
+        productId: params?.productId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  createAcquisitionProduct: (body: CreateProductPresentationBody) =>
+    edgeRequest<ProductPresentation>(`/api/edge-backend/acquisition/products`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createAcquisitionProductContent: (
+    presentationId: string,
+    body: PublishContentBody,
+  ) =>
+    edgeRequest<ProductContentVersion>(
+      `/api/edge-backend/acquisition/products/${presentationId}/content`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  publishAcquisitionProductContent: (
+    presentationId: string,
+    versionId: string,
+    body?: PublishContentBody,
+  ) =>
+    edgeRequest<ProductContentVersion>(
+      `/api/edge-backend/acquisition/products/${presentationId}/content/${versionId}/publish`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listAcquisitionPlans: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<PlanPresentation>>(
+      `/api/edge-backend/acquisition/plans${toQuery({
+        status: params?.status,
+        productPresentationId: params?.productPresentationId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  createAcquisitionPlan: (body: CreatePlanPresentationBody) =>
+    edgeRequest<PlanPresentation>(`/api/edge-backend/acquisition/plans`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listAcquisitionSegments: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<SegmentPresentation>>(
+      `/api/edge-backend/acquisition/segments${toQuery({
+        status: params?.status,
+        productPresentationId: params?.productPresentationId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  createAcquisitionSegment: (body: CreateSegmentPresentationBody) =>
+    edgeRequest<SegmentPresentation>(`/api/edge-backend/acquisition/segments`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listAcquisitionProspects: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<Prospect>>(
+      `/api/edge-backend/acquisition/prospects${toQuery({
+        status: params?.status,
+        productId: params?.productId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  createAcquisitionProspect: (body: CreateProspectBody) =>
+    edgeRequest<Prospect>(`/api/edge-backend/acquisition/prospects`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  transitionAcquisitionProspect: (
+    id: string,
+    body: TransitionProspectBody,
+  ) =>
+    edgeRequest<Prospect>(
+      `/api/edge-backend/acquisition/prospects/${id}/transition`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listAcquisitionLeads: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<AcquisitionLead>>(
+      `/api/edge-backend/acquisition/leads${toQuery({
+        status: params?.status,
+        prospectId: params?.prospectId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  captureAcquisitionLead: (body: CaptureLeadBody) =>
+    edgeRequest<AcquisitionLead>(`/api/edge-backend/acquisition/leads`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  promoteAcquisitionLead: (id: string, body?: PromoteLeadBody) =>
+    edgeRequest<AcquisitionLead>(
+      `/api/edge-backend/acquisition/leads/${id}/promote`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listAcquisitionForms: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<FormSchema>>(
+      `/api/edge-backend/acquisition/forms${toQuery({
+        status: params?.status,
+        productId: params?.productId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  createAcquisitionForm: (body: CreateFormSchemaBody) =>
+    edgeRequest<FormSchema>(`/api/edge-backend/acquisition/forms`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createAcquisitionFormVersion: (
+    formSchemaId: string,
+    body: CreateFormVersionBody,
+  ) =>
+    edgeRequest<FormVersion>(
+      `/api/edge-backend/acquisition/forms/${formSchemaId}/versions`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  publishAcquisitionFormVersion: (
+    versionId: string,
+    body?: {
+      channel?: string;
+      publicSlug?: string | null;
+      expiresAt?: string;
+      metadata?: Record<string, unknown>;
+      correlationId?: string;
+    },
+  ) =>
+    edgeRequest<FormVersion>(
+      `/api/edge-backend/acquisition/forms/versions/${versionId}/publish`,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          body ?? { channel: "PUBLIC_WEB", publicSlug: `form-${versionId.slice(0, 8)}` },
+        ),
+      },
+    ),
+
+  listAcquisitionCheckouts: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<CheckoutSession>>(
+      `/api/edge-backend/acquisition/checkout${toQuery({
+        status: params?.status,
+        prospectId: params?.prospectId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  getAcquisitionCheckout: (id: string) =>
+    edgeRequest<CheckoutSession>(
+      `/api/edge-backend/acquisition/checkout/${encodeURIComponent(id)}`,
+    ),
+
+  listAcquisitionHandoffs: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<SubscriptionHandoff>>(
+      `/api/edge-backend/acquisition/handoffs${toQuery({
+        status: params?.status,
+        prospectId: params?.prospectId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  listAcquisitionApplications: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<Application>>(
+      `/api/edge-backend/acquisition/applications${toQuery({
+        status: params?.status,
+        prospectId: params?.prospectId,
+        productId: params?.productId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  createAcquisitionApplication: (body: CreateApplicationDraftBody) =>
+    edgeRequest<Application>(`/api/edge-backend/acquisition/applications`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  saveAcquisitionApplicationAnswers: (
+    id: string,
+    body: {
+      answers: Record<string, unknown> | Array<{ fieldKey: string; value: unknown }>;
+      expectedVersion?: number;
+      correlationId?: string;
+    },
+  ) =>
+    edgeRequest<Application>(
+      `/api/edge-backend/acquisition/applications/${id}/answers`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  submitAcquisitionApplication: (id: string) =>
+    edgeRequest<Application>(
+      `/api/edge-backend/acquisition/applications/${id}/submit`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  transitionAcquisitionApplication: (
+    id: string,
+    body: TransitionApplicationBody,
+  ) =>
+    edgeRequest<Application>(
+      `/api/edge-backend/acquisition/applications/${id}/transition`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  requestAcquisitionApplicationInformation: (
+    id: string,
+    body: RequestInformationBody,
+  ) =>
+    edgeRequest<Application>(
+      `/api/edge-backend/acquisition/applications/${id}/request-information`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listAcquisitionDocuments: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<DocumentReference>>(
+      `/api/edge-backend/acquisition/documents${toQuery({
+        status: params?.status,
+        applicationId: params?.applicationId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  registerAcquisitionDocument: (body: RegisterDocumentBody) =>
+    edgeRequest<DocumentReference>(`/api/edge-backend/acquisition/documents`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  reviewAcquisitionDocument: (id: string, body: ReviewDocumentBody) =>
+    edgeRequest<DocumentReference>(
+      `/api/edge-backend/acquisition/documents/${id}/review`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  createAcquisitionDocumentRequirement: (body: {
+    code: string;
+    name: string;
+    documentType: string;
+    description?: string | null;
+    formSchemaId?: string | null;
+    required?: boolean;
+    conditionRules?: unknown;
+    metadata?: Record<string, unknown>;
+    correlationId?: string;
+  }) =>
+    edgeRequest<DocumentRequirement>(
+      `/api/edge-backend/acquisition/document-requirements`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  startAcquisitionQualification: (body: StartQualificationBody) =>
+    edgeRequest(`/api/edge-backend/acquisition/qualification/start`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  decideAcquisitionQualification: (
+    applicationId: string,
+    body: DecideQualificationBody,
+  ) =>
+    edgeRequest(`/api/edge-backend/acquisition/qualification/${applicationId}/decide`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listAcquisitionQuotations: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<QuoteRequest>>(
+      `/api/edge-backend/acquisition/quotations${toQuery({
+        status: params?.status,
+        prospectId: params?.prospectId,
+        applicationId: params?.applicationId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  createAcquisitionQuotation: (body: CreateQuoteRequestBody) =>
+    edgeRequest<QuoteRequest>(`/api/edge-backend/acquisition/quotations`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  attachAcquisitionQuoteReference: (
+    quoteRequestId: string,
+    body: AttachQuoteReferenceBody,
+  ) =>
+    edgeRequest<QuoteReference>(
+      `/api/edge-backend/acquisition/quotations/${quoteRequestId}/references`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  acceptAcquisitionQuote: (quoteRequestId: string) =>
+    edgeRequest<QuoteRequest>(
+      `/api/edge-backend/acquisition/quotations/${quoteRequestId}/accept`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  createAcquisitionCheckout: (body: CreateCheckoutBody) =>
+    edgeRequest<CheckoutSession>(`/api/edge-backend/acquisition/checkout`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  attachAcquisitionPaymentReference: (
+    checkoutSessionId: string,
+    body: AttachPaymentBody,
+  ) =>
+    edgeRequest<CheckoutSession>(
+      `/api/edge-backend/acquisition/checkout/${checkoutSessionId}/payment-reference`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  /** P6 orchestration — no card credentials; amount/currency from revalidated terms. */
+  initiateAcquisitionPayment: (
+    checkoutSessionId: string,
+    body: InitiateAcquisitionPaymentBody,
+  ) =>
+    edgeRequest<{
+      checkout?: CheckoutSession;
+      paymentIntent?: { id?: string; providerIntentRef?: string | null };
+      providerResult?: { status?: string };
+      paymentIntentRef?: string;
+    }>(
+      `/api/edge-backend/acquisition/checkout/${encodeURIComponent(checkoutSessionId)}/initiate-payment`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  recordAcquisitionPaymentResult: (
+    checkoutSessionId: string,
+    body: RecordPaymentResultBody,
+  ) =>
+    edgeRequest<CheckoutSession>(
+      `/api/edge-backend/acquisition/checkout/${checkoutSessionId}/payment-result`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  revalidateAcquisitionPlanBeforeCheckout: (body: {
+    commercialPlanId?: string;
+    planPresentationId?: string;
+  }) =>
+    edgeRequest(`/api/edge-backend/acquisition/checkout/revalidate-plan`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  requestAcquisitionHandoff: (body: RequestHandoffBody) =>
+    edgeRequest<SubscriptionHandoff>(`/api/edge-backend/acquisition/handoffs`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  completeAcquisitionHandoff: (id: string, body: CompleteHandoffBody) =>
+    edgeRequest<SubscriptionHandoff>(
+      `/api/edge-backend/acquisition/handoffs/${id}/complete`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  getAcquisitionJourneyByApplication: (applicationId: string) =>
+    edgeRequest<JourneyInstance | null>(
+      `/api/edge-backend/acquisition/journeys/${applicationId}`,
+    ),
+
+  advanceAcquisitionJourney: (id: string, body: AdvanceJourneyBody) =>
+    edgeRequest<JourneyInstance>(
+      `/api/edge-backend/acquisition/journeys/${id}/advance`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  getAcquisitionCustomerPortal: (prospectId: string) =>
+    edgeRequest<CustomerPortalSnapshot>(
+      `/api/edge-backend/acquisition/customer-portal/${prospectId}`,
+    ),
+
+  queueAcquisitionCommunication: (body: QueueCommunicationBody) =>
+    edgeRequest<AcquisitionCommunication>(
+      `/api/edge-backend/acquisition/communications`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  updateAcquisitionCommunicationStatus: (
+    id: string,
+    body: {
+      status: string;
+      providerRef?: string | null;
+      metadata?: Record<string, unknown>;
+      correlationId?: string;
+    },
+  ) =>
+    edgeRequest<AcquisitionCommunication>(
+      `/api/edge-backend/acquisition/communications/${id}/status`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
+  recordAcquisitionAnalyticsEvent: (body: RecordAnalyticsBody) =>
+    edgeRequest(`/api/edge-backend/acquisition/analytics/events`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getAcquisitionConversionFunnel: (params?: {
+    prospectId?: string;
+    limit?: number;
+  }) =>
+    edgeRequest<ConversionFunnel>(
+      `/api/edge-backend/acquisition/analytics/funnel${toQuery({
+        prospectId: params?.prospectId,
+        limit: params?.limit,
+      })}`,
+    ),
+
+  /** Public acquisition — unauthenticated proxy (`/api/acquisition-public`). */
+  getPublicAcquisitionProducts: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<PublicProductDiscoveryItem>>(
+      `/api/acquisition-public/products${toQuery({
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  getPublicAcquisitionProduct: (slug: string) =>
+    edgeRequest<PublicProductPage>(
+      `/api/acquisition-public/products/${encodeURIComponent(slug)}`,
+    ),
+
+  getPublicAcquisitionPlans: (params?: {
+    productPresentationId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<AcquisitionListPage<PlanPresentation>>(
+      `/api/acquisition-public/plans${toQuery({
+        productPresentationId: params?.productPresentationId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  getPublicAcquisitionForm: (publicSlug: string) =>
+    edgeRequest<PublicFormPayload>(
+      `/api/acquisition-public/forms/${encodeURIComponent(publicSlug)}`,
+    ),
+
+  getPublicAcquisitionCheckout: (id: string) =>
+    edgeRequest<{
+      id: string;
+      status: string;
+      applicationId: string | null;
+      prospectId: string;
+      planPresentationId: string | null;
+      commercialPlanId: string | null;
+      quoteReferenceId: string | null;
+      createdAt: string;
+      updatedAt: string;
+      note?: string;
+    }>(`/api/acquisition-public/checkout/${encodeURIComponent(id)}`),
+
+  postPublicAcquisitionLead: (body: CaptureLeadBody) =>
+    edgeRequest<AcquisitionLead>(`/api/acquisition-public/leads`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  postPublicAcquisitionAnalytics: (body: RecordAnalyticsBody) =>
+    edgeRequest(`/api/acquisition-public/analytics/events`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

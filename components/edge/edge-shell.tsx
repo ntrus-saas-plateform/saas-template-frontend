@@ -25,6 +25,7 @@ import {
   Rocket,
   Scale,
   ServerCog,
+  ShoppingBag,
   SlidersHorizontal,
   Sparkles,
   Bot,
@@ -56,6 +57,15 @@ const PLATFORM_NAV: NavItem[] = [
   { href: "/edge/commercial", label: "Commercial", icon: Tags },
   { href: "/edge/marketing", label: "Marketing", icon: Megaphone },
   { href: "/edge/sales", label: "Sales", icon: Handshake },
+  {
+    href: "/edge/acquisition",
+    label: "Acquisition",
+    icon: ShoppingBag,
+    requiredAnyPermissions: [
+      "platform:acquisition:read",
+      "platform:acquisition:manage",
+    ],
+  },
   {
     href: "/edge/subscriptions",
     label: "Subscriptions",
