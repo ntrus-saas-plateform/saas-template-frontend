@@ -5981,6 +5981,24 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
+  /** Instantiate a product-owned acquisition contract template as a draft form (not auto-published). */
+  createAcquisitionFormFromContract: (body: {
+    productId: string;
+    contractCode:
+      | "pharmacy.retail.v1"
+      | "restaurant.hospitality.v1"
+      | "retail.commerce.v1"
+      | "enterprise.deployment.v1"
+      | string;
+    code: string;
+    name: string;
+    correlationId?: string;
+  }) =>
+    edgeRequest<FormSchema>(`/api/edge-backend/acquisition/forms/from-contract`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   createAcquisitionFormVersion: (
     formSchemaId: string,
     body: CreateFormVersionBody,
