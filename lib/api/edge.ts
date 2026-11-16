@@ -85,6 +85,16 @@ import type {
   TenantConfigurationAssignmentRecord,
 } from "@/types/edge-configuration";
 import type {
+  ExperienceApplication,
+  ExperienceDeploymentRun,
+  ExperienceDomainBinding,
+  ExperienceEvidence,
+  ExperienceListPage,
+  ExperienceProfile,
+  TenantExperienceAssignment,
+  TenantExperienceAssignmentDetail,
+} from "@/types/edge-experience";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -3495,5 +3505,181 @@ export const edgeApi = {
     edgeRequest<unknown>(
       `/api/edge-backend/entitlements/assignments/${assignmentId}/reconcile`,
       { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  // --- P7.9 Product Experience Provisioning ---
+  listExperienceProfiles: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    q?: string;
+    productId?: string;
+  }) =>
+    edgeRequest<ExperienceListPage<ExperienceProfile>>(
+      `/api/edge-backend/experience/profiles${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        productId: opts?.productId,
+      })}`,
+    ),
+
+  createExperienceProfile: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    productId?: string;
+    compatibleRuntimeCodes?: string[];
+    compatibleDeploymentProfileCodes?: string[];
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ExperienceProfile>(
+      `/api/edge-backend/experience/profiles`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  publishExperienceProfile: (
+    id: string,
+    body: { expectedVersion: number },
+  ) =>
+    edgeRequest<ExperienceProfile>(
+      `/api/edge-backend/experience/profiles/${id}/publish`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listExperienceApplications: (opts?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    q?: string;
+    productId?: string;
+    experienceProfileId?: string;
+  }) =>
+    edgeRequest<ExperienceListPage<ExperienceApplication>>(
+      `/api/edge-backend/experience/applications${toQuery({
+        limit: opts?.limit,
+        offset: opts?.offset,
+        status: opts?.status,
+        q: opts?.q,
+        productId: opts?.productId,
+        experienceProfileId: opts?.experienceProfileId,
+      })}`,
+    ),
+
+  createExperienceApplication: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    productId?: string;
+    applicationKind: string;
+    experienceProfileId?: string;
+    draftManifest: Record<string, unknown>;
+    productVersion?: string;
+    runtimeVersion?: string;
+    apiCompatibilityVersion?: string;
+    deploymentProfileCode?: string;
+    configurationBundleCode?: string;
+    entitlementSnapshotVersion?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<ExperienceApplication>(
+      `/api/edge-backend/experience/applications`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  publishExperienceApplication: (
+    id: string,
+    body: { expectedVersion: number; versionNumber?: number },
+  ) =>
+    edgeRequest<ExperienceApplication>(
+      `/api/edge-backend/experience/applications/${id}/publish`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantExperienceAssignments: (opts?: {
+    tenantId?: string;
+    productId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ExperienceListPage<TenantExperienceAssignment>>(
+      `/api/edge-backend/experience/assignments${toQuery({
+        tenantId: opts?.tenantId,
+        productId: opts?.productId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  getTenantExperienceAssignment: (id: string) =>
+    edgeRequest<TenantExperienceAssignmentDetail | null>(
+      `/api/edge-backend/experience/assignments/${id}`,
+    ),
+
+  assignTenantExperience: (body: {
+    tenantId: string;
+    productId: string;
+    provisioningRequestId: string;
+    experienceProfileId?: string;
+    desiredManifest: Record<string, unknown>;
+    subscriptionId?: string;
+    accountId?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<TenantExperienceAssignment>(
+      `/api/edge-backend/experience/assignments`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  provisionTenantExperience: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/experience/assignments/${id}/provision`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  deactivateTenantExperience: (
+    id: string,
+    body?: {
+      idempotencyKey?: string;
+      correlationId?: string;
+      provisioningRequestId?: string;
+    },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/experience/assignments/${id}/deactivate`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  listExperienceDeploymentRuns: (assignmentId: string) =>
+    edgeRequest<ExperienceListPage<ExperienceDeploymentRun>>(
+      `/api/edge-backend/experience/assignments/${assignmentId}/runs`,
+    ),
+
+  listExperienceEvidence: (assignmentId: string) =>
+    edgeRequest<ExperienceListPage<ExperienceEvidence>>(
+      `/api/edge-backend/experience/assignments/${assignmentId}/evidence`,
+    ),
+
+  listExperienceDomains: (assignmentId: string) =>
+    edgeRequest<ExperienceListPage<ExperienceDomainBinding>>(
+      `/api/edge-backend/experience/assignments/${assignmentId}/domains`,
+    ),
+
+  createExperienceDomain: (body: {
+    assignmentId: string;
+    hostname: string;
+    domainKind?: "SUBDOMAIN" | "CUSTOM";
+  }) =>
+    edgeRequest<ExperienceDomainBinding>(
+      `/api/edge-backend/experience/domains`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
 };

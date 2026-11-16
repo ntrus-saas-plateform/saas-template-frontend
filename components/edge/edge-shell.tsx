@@ -23,6 +23,7 @@ import {
   RefreshCw,
   ServerCog,
   SlidersHorizontal,
+  Sparkles,
   Users,
   Workflow,
 } from "lucide-react";
@@ -89,6 +90,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/provisioning/configuration",
     label: "Configuration & Entitlements",
     icon: SlidersHorizontal,
+  },
+  {
+    href: "/edge/provisioning/experience",
+    label: "Experience",
+    icon: Sparkles,
   },
   { href: "/edge/markets", label: "Markets", icon: Store },
   { href: "/edge/readiness", label: "Readiness", icon: CheckCircle2 },
