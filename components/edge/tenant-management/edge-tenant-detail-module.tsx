@@ -4,6 +4,7 @@
  * P8 — Tenant workspace (360 overview, profile, lifecycle, governance, activity).
  */
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -705,7 +706,19 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                 </Badge>
               </p>
               <p>Account: {overview.commercial.accountId ?? "—"}</p>
-              <p>Subscription: {overview.commercial.subscriptionId ?? "—"}</p>
+              <p>
+                Subscription:{" "}
+                {overview.commercial.subscriptionId ? (
+                  <Link
+                    href={`/edge/subscriptions/${encodeURIComponent(overview.commercial.subscriptionId)}`}
+                    className="text-[var(--primary)] hover:underline"
+                  >
+                    {overview.commercial.subscriptionId}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </p>
             </CardBody>
           </Card>
           <Card>
@@ -753,7 +766,19 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
             </p>
             <p>Product: {overview.commercial.productId}</p>
             <p>Account: {overview.commercial.accountId ?? "—"}</p>
-            <p>Subscription: {overview.commercial.subscriptionId ?? "—"}</p>
+            <p>
+              Subscription:{" "}
+              {overview.commercial.subscriptionId ? (
+                <Link
+                  href={`/edge/subscriptions/${encodeURIComponent(overview.commercial.subscriptionId)}`}
+                  className="text-[var(--primary)] hover:underline"
+                >
+                  {overview.commercial.subscriptionId}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </p>
             <p>Synced: {formatWhen(overview.commercial.syncedAt)}</p>
             <p className="type-xs text-[var(--text-muted)]">
               Source: {overview.commercial.source}

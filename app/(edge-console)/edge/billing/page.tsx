@@ -245,7 +245,12 @@ export default function EdgeBillingPage() {
     onSuccess: (res) => {
       const inv = unwrap<Record<string, unknown>>(res);
       if (inv) {
-        setRecentInvoices((prev) => [inv, ...prev].slice(0, 20));
+        const withSub = {
+          ...inv,
+          subscriptionId:
+            inv.subscriptionId ?? draftInvoiceForm.subscriptionId ?? null,
+        };
+        setRecentInvoices((prev) => [withSub, ...prev].slice(0, 20));
       }
       setDraftInvoiceForm({ subscriptionId: "", periodId: "" });
       void queryClient.invalidateQueries({
@@ -756,19 +761,38 @@ export default function EdgeBillingPage() {
 
             {recentInvoices.length ? (
               <ul className="divide-y rounded-xl border border-border/70 text-sm">
-                {recentInvoices.map((inv) => (
-                  <li key={String(inv.id)} className="p-3">
-                    <p className="font-medium">
-                      {String(inv.invoiceNumber ?? inv.id)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Status <Badge tone="default">{String(inv.status)}</Badge>
-                      · Total {String(inv.total)} {String(inv.currency)} · Due{" "}
-                      {String(inv.amountDue)} · Paid{" "}
-                      {String(inv.amountPaid ?? "0")}
-                    </p>
-                  </li>
-                ))}
+                {recentInvoices.map((inv) => {
+                  const subId =
+                    inv.subscriptionId != null &&
+                    String(inv.subscriptionId).trim()
+                      ? String(inv.subscriptionId).trim()
+                      : null;
+                  return (
+                    <li key={String(inv.id)} className="p-3">
+                      <p className="font-medium">
+                        {String(inv.invoiceNumber ?? inv.id)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Status <Badge tone="default">{String(inv.status)}</Badge>
+                        · Total {String(inv.total)} {String(inv.currency)} · Due{" "}
+                        {String(inv.amountDue)} · Paid{" "}
+                        {String(inv.amountPaid ?? "0")}
+                        {subId ? (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <Link
+                              href={`/edge/subscriptions/${encodeURIComponent(subId)}`}
+                              className="text-primary underline-offset-2 hover:underline"
+                            >
+                              Subscription
+                            </Link>
+                          </>
+                        ) : null}
+                      </p>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <EdgeEmptyState
