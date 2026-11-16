@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/components/edge/workspace-switcher";
+import { hasAnyEdgePermission } from "@/lib/edge/permissions";
 import { cn } from "@/lib/utils";
 import { useEdgeSession } from "@/providers/edge-session-provider";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -45,6 +46,8 @@ type NavItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   disabled?: boolean;
+  /** When set, item is shown only if the user has any of these permissions. */
+  requiredAnyPermissions?: string[];
 };
 
 const PLATFORM_NAV: NavItem[] = [
@@ -62,6 +65,11 @@ const PLATFORM_NAV: NavItem[] = [
     href: "/edge/operations",
     label: "Operations",
     icon: Activity,
+    requiredAnyPermissions: [
+      "platform:operations:overview:read",
+      "platform:service_catalog:read",
+      "platform:operations:alerts:read",
+    ],
   },
   {
     href: "/edge/tenants",
@@ -251,8 +259,13 @@ function NavSection({
 export function EdgeShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const auth = useEdgeSession();
-  const { activeVerticalId, workspaces } = useEdgePlatform();
+  const { activeVerticalId, workspaces, permissions } = useEdgePlatform();
   const hasWorkspace = Boolean(activeVerticalId) || workspaces.length > 0;
+  const platformNav = PLATFORM_NAV.filter(
+    (item) =>
+      !item.requiredAnyPermissions?.length ||
+      hasAnyEdgePermission(permissions, item.requiredAnyPermissions),
+  );
 
   return (
     <div className="flex min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
@@ -271,7 +284,7 @@ export function EdgeShell({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col gap-[var(--space-6)] overflow-y-auto p-[var(--space-4)]">
           <NavSection
             title="Platform"
-            items={PLATFORM_NAV}
+            items={platformNav}
             pathname={pathname}
           />
           {hasWorkspace ? (

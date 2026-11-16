@@ -18,12 +18,28 @@ import {
 } from "@/components/edge/states";
 import { edgeApi } from "@/lib/api/edge";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
-import { useEdgeSession } from "@/providers/edge-session-provider";
+import { useEdgePlatform } from "@/providers/edge-platform-provider";
 import type {
+  AutomationDefinitionRecord,
+  CapacityMeasurementRecord,
+  ChangeRequestRecord,
+  IncidentRecord,
+  MaintenanceWindowRecord,
+  OnCallRotationRecord,
+  OperationalAlertRecord,
+  OperationalExceptionRecord,
+  OperationalRiskRecord,
+  OperationalTaskRecord,
   OperationsListPage,
   OperationsOverview,
   PlatformServiceRecord,
+  ProblemRecord,
+  RecoveryOperationRecord,
+  RunbookRecord,
   ServiceCatalogListPage,
+  ServiceRequestRecord,
+  SloDefinitionRecord,
+  StatusComponentRecord,
 } from "@/types/edge-platform-operations";
 
 type TabId =
@@ -78,12 +94,21 @@ const READ_PERMS = [
 ];
 
 function unwrapPage<T>(data: unknown): OperationsListPage<T> {
-  const raw = data as { data?: OperationsListPage<T> } | OperationsListPage<T> | undefined;
+  if (Array.isArray(data)) {
+    return { items: data as T[], total: data.length };
+  }
+  const raw = data as
+    | { data?: OperationsListPage<T> | T[] }
+    | OperationsListPage<T>
+    | undefined;
   if (raw && typeof raw === "object" && "items" in raw && Array.isArray(raw.items)) {
     return { items: raw.items, total: raw.total ?? raw.items.length };
   }
   if (raw && typeof raw === "object" && "data" in raw && raw.data) {
     const inner = raw.data;
+    if (Array.isArray(inner)) {
+      return { items: inner, total: inner.length };
+    }
     if (inner && typeof inner === "object" && "items" in inner) {
       return {
         items: inner.items ?? [],
@@ -198,8 +223,32 @@ function QueryShell({
   return <>{children}</>;
 }
 
+function canAckAlert(status: string): boolean {
+  const s = status.toUpperCase();
+  return !["ACKNOWLEDGED", "RESOLVED", "SUPPRESSED", "CLOSED"].includes(s);
+}
+
+function canResolveAlert(status: string): boolean {
+  const s = status.toUpperCase();
+  return !["RESOLVED", "CLOSED"].includes(s);
+}
+
+function canAckIncident(status: string): boolean {
+  const s = status.toUpperCase();
+  return ["OPEN", "DETECTED", "NEW", "TRIGGERED"].includes(s);
+}
+
+function canSubmitChange(status: string): boolean {
+  return status.toUpperCase() === "DRAFT";
+}
+
+function canApproveRejectChange(status: string): boolean {
+  const s = status.toUpperCase();
+  return ["SUBMITTED", "PENDING_APPROVAL", "IN_REVIEW"].includes(s);
+}
+
 export function EdgeOperationsModule() {
-  const { permissions } = useEdgeSession();
+  const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabId>("overview");
 
@@ -210,22 +259,37 @@ export function EdgeOperationsModule() {
   const canAlertsManage = hasEdgePermission(permissions, "platform:operations:alerts:manage");
   const canIncidentsRead = hasEdgePermission(permissions, "platform:operations:incidents:read");
   const canIncidentsManage = hasEdgePermission(permissions, "platform:operations:incidents:manage");
+  const canIncidentsApprove = hasEdgePermission(
+    permissions,
+    "platform:operations:incidents:approve",
+  );
   const canProblemsRead = hasEdgePermission(permissions, "platform:operations:problems:read");
+  const canProblemsManage = hasEdgePermission(permissions, "platform:operations:problems:manage");
   const canChangesRead = hasEdgePermission(permissions, "platform:operations:changes:read");
   const canChangesManage = hasEdgePermission(permissions, "platform:operations:changes:manage");
+  const canChangesApprove = hasEdgePermission(permissions, "platform:operations:changes:approve");
   const canMaintRead = hasEdgePermission(permissions, "platform:operations:maintenance:read");
   const canMaintManage = hasEdgePermission(permissions, "platform:operations:maintenance:manage");
   const canRequestsRead = hasEdgePermission(permissions, "platform:operations:requests:read");
+  const canRequestsManage = hasEdgePermission(permissions, "platform:operations:requests:manage");
   const canTasksRead = hasEdgePermission(permissions, "platform:operations:tasks:read");
   const canTasksManage = hasEdgePermission(permissions, "platform:operations:tasks:manage");
   const canOncallRead = hasEdgePermission(permissions, "platform:operations:oncall:read");
   const canSloRead = hasEdgePermission(permissions, "platform:operations:slo:read");
   const canCapacityRead = hasEdgePermission(permissions, "platform:operations:capacity:read");
   const canRecoveryRead = hasEdgePermission(permissions, "platform:operations:recovery:read");
+  const canRecoveryManage = hasEdgePermission(permissions, "platform:operations:recovery:manage");
   const canRunbooksRead = hasEdgePermission(permissions, "platform:operations:runbooks:read");
+  const canRunbooksManage = hasEdgePermission(permissions, "platform:operations:runbooks:manage");
   const canStatusRead = hasEdgePermission(permissions, "platform:operations:status:read");
+  const canStatusPublish = hasEdgePermission(permissions, "platform:operations:status:publish");
   const canRisksRead = hasEdgePermission(permissions, "platform:operations:risks:read");
+  const canRisksManage = hasEdgePermission(permissions, "platform:operations:risks:manage");
   const canAutomationRead = hasEdgePermission(permissions, "platform:operations:automation:read");
+  const canAutomationManage = hasEdgePermission(
+    permissions,
+    "platform:operations:automation:manage",
+  );
   const canAnalytics = hasEdgePermission(permissions, "platform:operations:analytics:read");
 
   const visibleTabs = useMemo(() => {
@@ -271,6 +335,44 @@ export function EdgeOperationsModule() {
     title: "",
     priority: "P3",
   });
+  const [problemForm, setProblemForm] = useState({
+    title: "",
+    priority: "P3",
+  });
+  const [requestForm, setRequestForm] = useState({
+    category: "ACCESS",
+    title: "",
+    description: "",
+    priority: "P3",
+  });
+  const [runbookForm, setRunbookForm] = useState({
+    code: "",
+    title: "",
+    body: "",
+  });
+  const [riskForm, setRiskForm] = useState({
+    title: "",
+    category: "AVAILABILITY",
+  });
+  const [exceptionForm, setExceptionForm] = useState({
+    title: "",
+    scope: "",
+    justification: "",
+    expiresAt: "",
+  });
+  const [automationForm, setAutomationForm] = useState({
+    code: "",
+    title: "",
+    triggerType: "MANUAL",
+  });
+  const [statusForm, setStatusForm] = useState({
+    componentCode: "",
+    componentDisplayName: "",
+    publicStatus: "UNKNOWN",
+    message: "",
+  });
+  const [recoveryEvidenceRef, setRecoveryEvidenceRef] = useState("");
+  const [rowBusyId, setRowBusyId] = useState<string | null>(null);
 
   function invalidateOps() {
     void qc.invalidateQueries({ queryKey: ["p9"] });
@@ -384,6 +486,12 @@ export function EdgeOperationsModule() {
     enabled: canRisksRead && tab === "risks",
   });
 
+  const automationsQ = useQuery({
+    queryKey: ["p9", "automations"],
+    queryFn: () => edgeApi.listAutomations({ limit: 50 }),
+    enabled: canAutomationRead && tab === "automation",
+  });
+
   const registerService = useMutation({
     mutationFn: () =>
       edgeApi.registerPlatformService({
@@ -470,23 +578,131 @@ export function EdgeOperationsModule() {
     },
   });
 
+  const createProblem = useMutation({
+    mutationFn: () =>
+      edgeApi.createProblem({
+        title: problemForm.title.trim(),
+        priority: problemForm.priority,
+      }),
+    onSuccess: () => {
+      setProblemForm({ title: "", priority: "P3" });
+      invalidateOps();
+    },
+  });
+
+  const createRequest = useMutation({
+    mutationFn: () =>
+      edgeApi.createServiceRequest({
+        category: requestForm.category.trim(),
+        title: requestForm.title.trim(),
+        description: requestForm.description.trim(),
+        priority: requestForm.priority,
+      }),
+    onSuccess: () => {
+      setRequestForm({ category: "ACCESS", title: "", description: "", priority: "P3" });
+      invalidateOps();
+    },
+  });
+
+  const createRunbook = useMutation({
+    mutationFn: () =>
+      edgeApi.createRunbook({
+        code: runbookForm.code.trim(),
+        title: runbookForm.title.trim(),
+        body: runbookForm.body.trim(),
+      }),
+    onSuccess: () => {
+      setRunbookForm({ code: "", title: "", body: "" });
+      invalidateOps();
+    },
+  });
+
+  const createRisk = useMutation({
+    mutationFn: () =>
+      edgeApi.createOperationalRisk({
+        title: riskForm.title.trim(),
+        category: riskForm.category.trim(),
+      }),
+    onSuccess: () => {
+      setRiskForm({ title: "", category: "AVAILABILITY" });
+      invalidateOps();
+    },
+  });
+
+  const createException = useMutation({
+    mutationFn: () =>
+      edgeApi.createOperationalException({
+        title: exceptionForm.title.trim(),
+        scope: exceptionForm.scope.trim(),
+        justification: exceptionForm.justification.trim(),
+        expiresAt: new Date(exceptionForm.expiresAt).toISOString(),
+      }),
+    onSuccess: () => {
+      setExceptionForm({ title: "", scope: "", justification: "", expiresAt: "" });
+      invalidateOps();
+    },
+  });
+
+  const createAutomation = useMutation({
+    mutationFn: () =>
+      edgeApi.createAutomation({
+        code: automationForm.code.trim(),
+        title: automationForm.title.trim(),
+        triggerType: automationForm.triggerType.trim(),
+      }),
+    onSuccess: () => {
+      setAutomationForm({ code: "", title: "", triggerType: "MANUAL" });
+      invalidateOps();
+    },
+  });
+
+  const publishStatus = useMutation({
+    mutationFn: () =>
+      edgeApi.publishStatusUpdate({
+        componentCode: statusForm.componentCode.trim(),
+        componentDisplayName: statusForm.componentDisplayName.trim(),
+        publicStatus: statusForm.publicStatus.trim(),
+        message: statusForm.message.trim(),
+      }),
+    onSuccess: () => {
+      setStatusForm({
+        componentCode: "",
+        componentDisplayName: "",
+        publicStatus: "UNKNOWN",
+        message: "",
+      });
+      invalidateOps();
+    },
+  });
+
+  async function runRowAction(id: string, action: () => Promise<unknown>) {
+    setRowBusyId(id);
+    try {
+      await action();
+      invalidateOps();
+    } finally {
+      setRowBusyId(null);
+    }
+  }
+
   const overview = unwrapOverview(overviewQ.data);
   const servicesPage = unwrapCatalog(servicesQ.data);
-  const alerts = unwrapPage(alertsQ.data);
-  const incidents = unwrapPage(incidentsQ.data);
-  const problems = unwrapPage(problemsQ.data);
-  const changes = unwrapPage(changesQ.data);
-  const maintenance = unwrapPage(maintQ.data);
-  const requests = unwrapPage(requestsQ.data);
-  const tasks = unwrapPage(tasksQ.data);
-  const oncall = unwrapPage(oncallQ.data);
-  const slos = unwrapPage(sloQ.data);
-  const capacity = unwrapPage(capacityQ.data);
-  const recovery = unwrapPage(recoveryQ.data);
-  const runbooks = unwrapPage(runbooksQ.data);
-  const statusComponents = unwrapPage(statusQ.data);
-  const risks = unwrapPage(risksQ.data);
-  const exceptions = unwrapPage(exceptionsQ.data);
+  const alerts = unwrapPage<OperationalAlertRecord>(alertsQ.data);
+  const incidents = unwrapPage<IncidentRecord>(incidentsQ.data);
+  const problems = unwrapPage<ProblemRecord>(problemsQ.data);
+  const changes = unwrapPage<ChangeRequestRecord>(changesQ.data);
+  const maintenance = unwrapPage<MaintenanceWindowRecord>(maintQ.data);
+  const requests = unwrapPage<ServiceRequestRecord>(requestsQ.data);
+  const tasks = unwrapPage<OperationalTaskRecord>(tasksQ.data);
+  const oncall = unwrapPage<OnCallRotationRecord>(oncallQ.data);
+  const slos = unwrapPage<SloDefinitionRecord>(sloQ.data);
+  const capacity = unwrapPage<CapacityMeasurementRecord>(capacityQ.data);
+  const recovery = unwrapPage<RecoveryOperationRecord>(recoveryQ.data);
+  const runbooks = unwrapPage<RunbookRecord>(runbooksQ.data);
+  const statusComponents = unwrapPage<StatusComponentRecord>(statusQ.data);
+  const risks = unwrapPage<OperationalRiskRecord>(risksQ.data);
+  const exceptions = unwrapPage<OperationalExceptionRecord>(exceptionsQ.data);
+  const automations = unwrapPage<AutomationDefinitionRecord>(automationsQ.data);
 
   const analyticsRaw = analyticsQ.data as
     | { data?: Record<string, unknown> }
@@ -520,7 +736,14 @@ export function EdgeOperationsModule() {
     createIncident.error ??
     createChange.error ??
     createMaint.error ??
-    createTask.error;
+    createTask.error ??
+    createProblem.error ??
+    createRequest.error ??
+    createRunbook.error ??
+    createRisk.error ??
+    createException.error ??
+    createAutomation.error ??
+    publishStatus.error;
 
   return (
     <div className="flex flex-col gap-[var(--space-6)]" data-testid="edge-operations-module">
@@ -545,18 +768,41 @@ export function EdgeOperationsModule() {
           ) : null}
           {overview ? (
             <div className="space-y-3 type-sm">
-              <p className="text-[var(--text-muted)]">{overview.note}</p>
+              {overview.note ? (
+                <p className="text-[var(--text-muted)]">{overview.note}</p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Badge>Availability: {overview.availability}</Badge>
                 <Badge>Catalog services: {overview.catalog.totalServices}</Badge>
+                <Badge tone="warning">Alerts active: {overview.alerts.activeCount}</Badge>
                 <Badge tone="warning">
-                  Incidents: {overview.activeIncidents.availability}
+                  Incidents open: {overview.incidents.openCount}
+                  {overview.incidents.majorCount > 0
+                    ? ` · major ${overview.incidents.majorCount}`
+                    : ""}
                 </Badge>
-                <Badge tone="warning">Alerts: {overview.activeAlerts.availability}</Badge>
+                <Badge>Changes open: {overview.changes.openCount}</Badge>
+                <Badge>Maintenance scheduled: {overview.maintenance.scheduledCount}</Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium">Monitoring integrations</p>
+                {overview.monitoringIntegrations.length === 0 ? (
+                  <p className="text-[var(--text-muted)]">None configured</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {overview.monitoringIntegrations.map((m) => (
+                      <Badge
+                        key={m.code}
+                        tone={statusTone(m.availability)}
+                      >
+                        {m.code}: {m.availability}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
               <p className="text-[var(--text-muted)]">
-                Observation: {overview.catalog.observation} · computed{" "}
-                {formatWhen(overview.computedAt)}
+                Computed {formatWhen(overview.computedAt)}
               </p>
             </div>
           ) : null}
@@ -720,7 +966,7 @@ export function EdgeOperationsModule() {
             emptyDescription="No operational alerts ingested yet. Live provider health remains UNAVAILABLE until configured."
           >
             <DenseTable
-              headers={["Title", "Severity", "Status", "Source", "First seen"]}
+              headers={["Title", "Severity", "Status", "Source", "First seen", "Actions"]}
               testId="ops-alerts-table"
             >
               {alerts.items.map((a) => (
@@ -735,6 +981,48 @@ export function EdgeOperationsModule() {
                   <td className="px-3 py-2 text-[var(--text-muted)]">{a.sourceSystem}</td>
                   <td className="px-3 py-2 text-[var(--text-muted)]">
                     {formatWhen(a.firstSeenAt)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {canAlertsManage ? (
+                      <div className="flex flex-wrap gap-1">
+                        {canAckAlert(a.status) ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={rowBusyId === a.id}
+                            onClick={() =>
+                              void runRowAction(a.id, () =>
+                                edgeApi.acknowledgeOperationalAlert(a.id, {
+                                  expectedVersion: a.version,
+                                }),
+                              )
+                            }
+                          >
+                            Acknowledge
+                          </Button>
+                        ) : null}
+                        {canResolveAlert(a.status) ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={rowBusyId === a.id}
+                            onClick={() =>
+                              void runRowAction(a.id, () =>
+                                edgeApi.resolveOperationalAlert(a.id, {
+                                  expectedVersion: a.version,
+                                }),
+                              )
+                            }
+                          >
+                            Resolve
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                 </tr>
               ))}
@@ -801,7 +1089,7 @@ export function EdgeOperationsModule() {
             emptyDescription="No incidents recorded. Counts stay honest — empty is not healthy."
           >
             <DenseTable
-              headers={["Number", "Title", "Severity", "Status", "Major", "Detected"]}
+              headers={["Number", "Title", "Severity", "Status", "Major", "Detected", "Actions"]}
               testId="ops-incidents-table"
             >
               {incidents.items.map((i) => (
@@ -817,6 +1105,46 @@ export function EdgeOperationsModule() {
                   <td className="px-3 py-2">{i.isMajor ? "Yes" : "No"}</td>
                   <td className="px-3 py-2 text-[var(--text-muted)]">
                     {formatWhen(i.detectedAt)}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {canIncidentsManage && canAckIncident(i.status) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={rowBusyId === i.id}
+                          onClick={() =>
+                            void runRowAction(i.id, () =>
+                              edgeApi.transitionIncident(i.id, {
+                                toStatus: "ACKNOWLEDGED",
+                                expectedVersion: i.version,
+                              }),
+                            )
+                          }
+                        >
+                          Acknowledge
+                        </Button>
+                      ) : null}
+                      {canIncidentsApprove && !i.isMajor ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={rowBusyId === i.id}
+                          onClick={() =>
+                            void runRowAction(i.id, () =>
+                              edgeApi.declareMajorIncident(i.id, {
+                                expectedVersion: i.version,
+                              }),
+                            )
+                          }
+                        >
+                          Declare major
+                        </Button>
+                      ) : null}
+                      {!canIncidentsManage && !canIncidentsApprove ? "—" : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -887,6 +1215,35 @@ export function EdgeOperationsModule() {
               ))}
             </DenseTable>
           </QueryShell>
+
+          {canProblemsManage ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Create problem</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="title"
+                  aria-label="problem title"
+                  value={problemForm.title}
+                  onChange={(e) => setProblemForm((f) => ({ ...f, title: e.target.value }))}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="priority"
+                  aria-label="problem priority"
+                  value={problemForm.priority}
+                  onChange={(e) => setProblemForm((f) => ({ ...f, priority: e.target.value }))}
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={createProblem.isPending || problemForm.title.trim().length < 2}
+                onClick={() => createProblem.mutate()}
+              >
+                Create problem
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -900,7 +1257,7 @@ export function EdgeOperationsModule() {
             emptyDescription="No change drafts or approvals on record."
           >
             <DenseTable
-              headers={["Number", "Title", "Type", "Status", "Risk"]}
+              headers={["Number", "Title", "Type", "Status", "Risk", "Actions"]}
               testId="ops-changes-table"
             >
               {changes.items.map((c) => (
@@ -913,6 +1270,63 @@ export function EdgeOperationsModule() {
                   </td>
                   <td className="px-3 py-2">
                     <Badge tone={statusTone(c.riskLevel)}>{c.riskLevel}</Badge>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {canChangesManage && canSubmitChange(c.status) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={rowBusyId === c.id}
+                          onClick={() =>
+                            void runRowAction(c.id, () =>
+                              edgeApi.submitChange(c.id, {
+                                expectedVersion: c.version,
+                              }),
+                            )
+                          }
+                        >
+                          Submit
+                        </Button>
+                      ) : null}
+                      {canChangesApprove && canApproveRejectChange(c.status) ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={rowBusyId === c.id}
+                            onClick={() =>
+                              void runRowAction(c.id, () =>
+                                edgeApi.approveChange(c.id, {
+                                  expectedVersion: c.version,
+                                }),
+                              )
+                            }
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={rowBusyId === c.id}
+                            onClick={() =>
+                              void runRowAction(c.id, () =>
+                                edgeApi.rejectChange(c.id, {
+                                  reason: "Rejected from console",
+                                  expectedVersion: c.version,
+                                }),
+                              )
+                            }
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      ) : null}
+                      {!canChangesManage && !canChangesApprove ? "—" : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1063,6 +1477,56 @@ export function EdgeOperationsModule() {
               ))}
             </DenseTable>
           </QueryShell>
+
+          {canRequestsManage ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Create service request</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="category"
+                  aria-label="request category"
+                  value={requestForm.category}
+                  onChange={(e) => setRequestForm((f) => ({ ...f, category: e.target.value }))}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="title"
+                  aria-label="request title"
+                  value={requestForm.title}
+                  onChange={(e) => setRequestForm((f) => ({ ...f, title: e.target.value }))}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="description"
+                  aria-label="request description"
+                  value={requestForm.description}
+                  onChange={(e) =>
+                    setRequestForm((f) => ({ ...f, description: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="priority"
+                  aria-label="request priority"
+                  value={requestForm.priority}
+                  onChange={(e) => setRequestForm((f) => ({ ...f, priority: e.target.value }))}
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={
+                  createRequest.isPending ||
+                  requestForm.title.trim().length < 2 ||
+                  requestForm.description.trim().length < 2 ||
+                  requestForm.category.trim().length < 2
+                }
+                onClick={() => createRequest.mutate()}
+              >
+                Create request
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -1223,6 +1687,21 @@ export function EdgeOperationsModule() {
 
       {activeTab === "recovery" && canRecoveryRead ? (
         <section className="space-y-4" data-testid="ops-recovery">
+          {canRecoveryManage ? (
+            <div className="grow max-w-md">
+              <label className="type-xs text-[var(--text-muted)]" htmlFor="p9-recovery-evidence">
+                Evidence ref (required to verify)
+              </label>
+              <input
+                id="p9-recovery-evidence"
+                className={fieldControlClass}
+                value={recoveryEvidenceRef}
+                onChange={(e) => setRecoveryEvidenceRef(e.target.value)}
+                placeholder="external evidence reference"
+                aria-label="recovery evidence ref"
+              />
+            </div>
+          ) : null}
           <QueryShell
             loading={recoveryQ.isLoading}
             error={recoveryQ.isError ? recoveryQ.error : null}
@@ -1231,7 +1710,7 @@ export function EdgeOperationsModule() {
             emptyDescription="No backup/restore/DR coordination records. VERIFIED requires external evidence."
           >
             <DenseTable
-              headers={["Type", "Status", "Requester", "Evidence", "Created"]}
+              headers={["Type", "Status", "Requester", "Evidence", "Created", "Actions"]}
               testId="ops-recovery-table"
             >
               {recovery.items.map((r) => (
@@ -1246,6 +1725,29 @@ export function EdgeOperationsModule() {
                   </td>
                   <td className="px-3 py-2 text-[var(--text-muted)]">
                     {formatWhen(r.createdAt)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {canRecoveryManage && r.status.toUpperCase() !== "VERIFIED" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={
+                          rowBusyId === r.id || recoveryEvidenceRef.trim().length < 2
+                        }
+                        onClick={() =>
+                          void runRowAction(r.id, () =>
+                            edgeApi.verifyRecoveryOperation(r.id, {
+                              externalEvidenceRef: recoveryEvidenceRef.trim(),
+                            }),
+                          )
+                        }
+                      >
+                        Verify
+                      </Button>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1277,6 +1779,48 @@ export function EdgeOperationsModule() {
               ))}
             </DenseTable>
           </QueryShell>
+
+          {canRunbooksManage ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Create runbook</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="code"
+                  aria-label="runbook code"
+                  value={runbookForm.code}
+                  onChange={(e) => setRunbookForm((f) => ({ ...f, code: e.target.value }))}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="title"
+                  aria-label="runbook title"
+                  value={runbookForm.title}
+                  onChange={(e) => setRunbookForm((f) => ({ ...f, title: e.target.value }))}
+                />
+                <textarea
+                  className={`${fieldControlClass} md:col-span-2`}
+                  placeholder="body"
+                  aria-label="runbook body"
+                  rows={3}
+                  value={runbookForm.body}
+                  onChange={(e) => setRunbookForm((f) => ({ ...f, body: e.target.value }))}
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={
+                  createRunbook.isPending ||
+                  runbookForm.code.trim().length < 2 ||
+                  runbookForm.title.trim().length < 2 ||
+                  runbookForm.body.trim().length < 2
+                }
+                onClick={() => createRunbook.mutate()}
+              >
+                Create runbook
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -1307,6 +1851,60 @@ export function EdgeOperationsModule() {
               ))}
             </DenseTable>
           </QueryShell>
+
+          {canStatusPublish ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Publish status update</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="componentCode"
+                  aria-label="componentCode"
+                  value={statusForm.componentCode}
+                  onChange={(e) =>
+                    setStatusForm((f) => ({ ...f, componentCode: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="componentDisplayName"
+                  aria-label="componentDisplayName"
+                  value={statusForm.componentDisplayName}
+                  onChange={(e) =>
+                    setStatusForm((f) => ({ ...f, componentDisplayName: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="publicStatus"
+                  aria-label="publicStatus"
+                  value={statusForm.publicStatus}
+                  onChange={(e) =>
+                    setStatusForm((f) => ({ ...f, publicStatus: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="message"
+                  aria-label="status message"
+                  value={statusForm.message}
+                  onChange={(e) => setStatusForm((f) => ({ ...f, message: e.target.value }))}
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={
+                  publishStatus.isPending ||
+                  statusForm.componentCode.trim().length < 2 ||
+                  statusForm.componentDisplayName.trim().length < 2 ||
+                  statusForm.message.trim().length < 2
+                }
+                onClick={() => publishStatus.mutate()}
+              >
+                Publish status
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -1338,6 +1936,38 @@ export function EdgeOperationsModule() {
                 ))}
               </DenseTable>
             </QueryShell>
+            {canRisksManage ? (
+              <div className="space-y-3 border-t border-[var(--border)] pt-4">
+                <h3 className="type-sm font-medium">Create operational risk</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    className={fieldControlClass}
+                    placeholder="title"
+                    aria-label="risk title"
+                    value={riskForm.title}
+                    onChange={(e) => setRiskForm((f) => ({ ...f, title: e.target.value }))}
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="category"
+                    aria-label="risk category"
+                    value={riskForm.category}
+                    onChange={(e) => setRiskForm((f) => ({ ...f, category: e.target.value }))}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  disabled={
+                    createRisk.isPending ||
+                    riskForm.title.trim().length < 2 ||
+                    riskForm.category.trim().length < 2
+                  }
+                  onClick={() => createRisk.mutate()}
+                >
+                  Create risk
+                </Button>
+              </div>
+            ) : null}
           </div>
           <div className="space-y-3">
             <h3 className="type-sm font-medium">Exceptions</h3>
@@ -1366,16 +1996,139 @@ export function EdgeOperationsModule() {
                 ))}
               </DenseTable>
             </QueryShell>
+            {canRisksManage ? (
+              <div className="space-y-3 border-t border-[var(--border)] pt-4">
+                <h3 className="type-sm font-medium">Create exception</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    className={fieldControlClass}
+                    placeholder="title"
+                    aria-label="exception title"
+                    value={exceptionForm.title}
+                    onChange={(e) =>
+                      setExceptionForm((f) => ({ ...f, title: e.target.value }))
+                    }
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="scope"
+                    aria-label="exception scope"
+                    value={exceptionForm.scope}
+                    onChange={(e) =>
+                      setExceptionForm((f) => ({ ...f, scope: e.target.value }))
+                    }
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="justification"
+                    aria-label="exception justification"
+                    value={exceptionForm.justification}
+                    onChange={(e) =>
+                      setExceptionForm((f) => ({ ...f, justification: e.target.value }))
+                    }
+                  />
+                  <input
+                    className={fieldControlClass}
+                    type="datetime-local"
+                    aria-label="exception expiresAt"
+                    value={exceptionForm.expiresAt}
+                    onChange={(e) =>
+                      setExceptionForm((f) => ({ ...f, expiresAt: e.target.value }))
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  disabled={
+                    createException.isPending ||
+                    exceptionForm.title.trim().length < 2 ||
+                    exceptionForm.scope.trim().length < 2 ||
+                    exceptionForm.justification.trim().length < 2 ||
+                    !exceptionForm.expiresAt
+                  }
+                  onClick={() => createException.mutate()}
+                >
+                  Create exception
+                </Button>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
 
       {activeTab === "automation" && canAutomationRead ? (
         <section className="space-y-4" data-testid="ops-automation">
-          <EdgeEmptyState
-            title="Automation console"
-            description="Request / approve / execute flows are available via API (platform:operations:automation:*). Destructive automations require SoD approval before execution — no silent runs."
-          />
+          <QueryShell
+            loading={automationsQ.isLoading}
+            error={automationsQ.isError ? automationsQ.error : null}
+            empty={!automationsQ.isLoading && automations.items.length === 0}
+            emptyTitle="No automations"
+            emptyDescription="No automation definitions. Destructive automations require SoD approval before execution — no silent runs."
+          >
+            <DenseTable
+              headers={["Code", "Title", "Trigger", "Status", "Destructive"]}
+              testId="ops-automations-table"
+            >
+              {automations.items.map((a) => (
+                <tr key={a.id}>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">{a.code}</td>
+                  <td className="px-3 py-2 font-medium">{a.title}</td>
+                  <td className="px-3 py-2">{a.triggerType}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone={statusTone(a.status)}>{a.status}</Badge>
+                  </td>
+                  <td className="px-3 py-2">{a.destructive ? "Yes" : "No"}</td>
+                </tr>
+              ))}
+            </DenseTable>
+          </QueryShell>
+
+          {canAutomationManage ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Create automation</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="code"
+                  aria-label="automation code"
+                  value={automationForm.code}
+                  onChange={(e) =>
+                    setAutomationForm((f) => ({ ...f, code: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="title"
+                  aria-label="automation title"
+                  value={automationForm.title}
+                  onChange={(e) =>
+                    setAutomationForm((f) => ({ ...f, title: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="triggerType"
+                  aria-label="automation triggerType"
+                  value={automationForm.triggerType}
+                  onChange={(e) =>
+                    setAutomationForm((f) => ({ ...f, triggerType: e.target.value }))
+                  }
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={
+                  createAutomation.isPending ||
+                  automationForm.code.trim().length < 2 ||
+                  automationForm.title.trim().length < 2 ||
+                  automationForm.triggerType.trim().length < 2
+                }
+                onClick={() => createAutomation.mutate()}
+              >
+                Create automation
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

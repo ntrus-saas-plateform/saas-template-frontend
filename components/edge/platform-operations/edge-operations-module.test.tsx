@@ -11,28 +11,44 @@ const edgeApiMocks = vi.hoisted(() => ({
   registerPlatformService: vi.fn(),
   listOperationalAlerts: vi.fn(),
   ingestOperationalAlert: vi.fn(),
+  acknowledgeOperationalAlert: vi.fn(),
+  resolveOperationalAlert: vi.fn(),
   listIncidents: vi.fn(),
   createIncident: vi.fn(),
+  transitionIncident: vi.fn(),
+  declareMajorIncident: vi.fn(),
   listProblems: vi.fn(),
+  createProblem: vi.fn(),
   listChanges: vi.fn(),
   createChange: vi.fn(),
+  submitChange: vi.fn(),
+  approveChange: vi.fn(),
+  rejectChange: vi.fn(),
   listMaintenanceWindows: vi.fn(),
   createMaintenanceWindow: vi.fn(),
   listServiceRequests: vi.fn(),
+  createServiceRequest: vi.fn(),
   listOperationalTasks: vi.fn(),
   createOperationalTask: vi.fn(),
   listOnCallRotations: vi.fn(),
   listSloDefinitions: vi.fn(),
   listCapacityMeasurements: vi.fn(),
   listRecoveryOperations: vi.fn(),
+  verifyRecoveryOperation: vi.fn(),
   listRunbooks: vi.fn(),
+  createRunbook: vi.fn(),
   listStatusComponents: vi.fn(),
+  publishStatusUpdate: vi.fn(),
   listOperationalRisks: vi.fn(),
+  createOperationalRisk: vi.fn(),
   listOperationalExceptions: vi.fn(),
+  createOperationalException: vi.fn(),
+  listAutomations: vi.fn(),
+  createAutomation: vi.fn(),
 }));
 
-vi.mock("@/providers/edge-session-provider", () => ({
-  useEdgeSession: () => ({
+vi.mock("@/providers/edge-platform-provider", () => ({
+  useEdgePlatform: () => ({
     permissions: [
       "platform:service_catalog:read",
       "platform:service_catalog:manage",
@@ -84,9 +100,25 @@ describe("EdgeOperationsModule", () => {
       data: {
         availability: "PARTIAL",
         note: "catalog only",
-        catalog: { totalServices: 0, observation: "CONFIGURED_REGISTRY_ONLY" },
-        activeIncidents: { availability: "UNAVAILABLE", integration: "P9_INCIDENT" },
-        activeAlerts: { availability: "UNAVAILABLE", integration: "P9_ALERT" },
+        catalog: { totalServices: 0 },
+        alerts: { activeCount: 0, totalCount: 0 },
+        incidents: { openCount: 0, majorCount: 0, totalCount: 0 },
+        changes: { openCount: 0, totalCount: 0 },
+        maintenance: { scheduledCount: 0, totalCount: 0 },
+        monitoringIntegrations: [
+          {
+            code: "P9_ALERT",
+            providerType: "INTERNAL",
+            status: "UNKNOWN",
+            availability: "UNAVAILABLE",
+          },
+          {
+            code: "P9_INCIDENT",
+            providerType: "INTERNAL",
+            status: "UNKNOWN",
+            availability: "UNAVAILABLE",
+          },
+        ],
         computedAt: new Date().toISOString(),
       },
     });
@@ -121,15 +153,19 @@ describe("EdgeOperationsModule", () => {
     edgeApiMocks.listStatusComponents.mockResolvedValue({ data: { items: [], total: 0 } });
     edgeApiMocks.listOperationalRisks.mockResolvedValue({ data: { items: [], total: 0 } });
     edgeApiMocks.listOperationalExceptions.mockResolvedValue({ data: { items: [], total: 0 } });
+    edgeApiMocks.listAutomations.mockResolvedValue({ data: { items: [], total: 0 } });
   });
 
   it("renders operations overview with honest UNAVAILABLE badges", async () => {
     renderModule();
     expect(await screen.findByTestId("edge-operations-module")).toBeInTheDocument();
-    expect(await screen.findByText(/Operations overview/i)).toBeInTheDocument();
-    expect(await screen.findByText(/catalog only/i)).toBeInTheDocument();
-    expect(screen.getByText(/Incidents: UNAVAILABLE/i)).toBeInTheDocument();
-    expect(screen.getByText(/Alerts: UNAVAILABLE/i)).toBeInTheDocument();
+    const overview = await screen.findByTestId("ops-overview");
+    expect(within(overview).getByText(/Operations overview/i)).toBeInTheDocument();
+    expect(within(overview).getByText(/catalog only/i)).toBeInTheDocument();
+    expect(within(overview).getByText(/Alerts active: 0/i)).toBeInTheDocument();
+    expect(within(overview).getAllByText(/Incidents open: 0/i).length).toBeGreaterThan(0);
+    expect(within(overview).getByText(/P9_ALERT: UNAVAILABLE/i)).toBeInTheDocument();
+    expect(within(overview).getByText(/P9_INCIDENT: UNAVAILABLE/i)).toBeInTheDocument();
   });
 
   it("renders operation center tabs", async () => {
@@ -159,5 +195,13 @@ describe("EdgeOperationsModule", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Alerts" }));
     expect(await screen.findByText(/No alerts/i)).toBeInTheDocument();
     expect(edgeApiMocks.listOperationalAlerts).toHaveBeenCalled();
+  });
+
+  it("switches to Automation tab and loads automations", async () => {
+    renderModule();
+    await screen.findByTestId("edge-operations-module");
+    fireEvent.click(screen.getByRole("tab", { name: "Automation" }));
+    expect(await screen.findByText(/No automations/i)).toBeInTheDocument();
+    expect(edgeApiMocks.listAutomations).toHaveBeenCalled();
   });
 });

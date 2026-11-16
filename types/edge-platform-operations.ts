@@ -47,14 +47,22 @@ export type ServiceCatalogListPage = {
   total: number;
 };
 
-/** P9.1 overview stub — catalog counts only; incidents/alerts may be UNAVAILABLE. */
+/** Mirrors BE OperationsOverviewAggregate — real DB counts; monitoring may be UNAVAILABLE. */
 export type OperationsOverview = {
-  availability: string;
-  note: string;
-  catalog: { totalServices: number; observation: string };
-  activeIncidents: { availability: string; integration: string };
-  activeAlerts: { availability: string; integration: string };
+  availability: "PARTIAL" | "AVAILABLE" | "UNAVAILABLE" | string;
+  catalog: { totalServices: number };
+  alerts: { activeCount: number; totalCount: number };
+  incidents: { openCount: number; majorCount: number; totalCount: number };
+  changes: { openCount: number; totalCount: number };
+  maintenance: { scheduledCount: number; totalCount: number };
+  monitoringIntegrations: Array<{
+    code: string;
+    providerType: string;
+    status: string;
+    availability: "AVAILABLE" | "UNAVAILABLE" | "DEGRADED" | "NOT_CONFIGURED" | string;
+  }>;
   computedAt: string;
+  note?: string;
 };
 
 export type RegisterPlatformServiceBody = {
@@ -296,8 +304,9 @@ export type CreateChangeBody = {
 };
 
 export type RejectChangeBody = {
-  rejectedReason: string;
+  reason: string;
   expectedVersion?: number;
+  correlationId?: string | null;
 };
 
 export type ApproveChangeBody = {
@@ -436,11 +445,14 @@ export type OnCallRotationRecord = {
 };
 
 export type CreateOnCallRotationBody = {
-  teamId: string;
+  teamId?: string;
+  teamCode?: string;
+  teamDisplayName?: string;
   startsAt: string;
   endsAt: string;
   primaryResponderId: string;
   secondaryResponderId?: string | null;
+  correlationId?: string | null;
 };
 
 // --- SLO / capacity (Reliability) -------------------------------------------
@@ -479,11 +491,13 @@ export type CreateSloBody = {
 };
 
 export type RecordSloMeasurementBody = {
+  sloId?: string;
   measuredValue: number;
   errorBudgetRemaining?: number | null;
   windowStart: string;
   windowEnd: string;
   sourceSystem: string;
+  correlationId?: string | null;
 };
 
 export type CapacityMeasurementRecord = {
@@ -507,7 +521,9 @@ export type RecordCapacityBody = {
   thresholdWarning?: number | null;
   thresholdCritical?: number | null;
   sourceSystem: string;
-  observedAt: string;
+  /** Optional — BE derives observedAt when omitted. */
+  observedAt?: string;
+  correlationId?: string | null;
 };
 
 // --- Recovery ---------------------------------------------------------------
@@ -572,13 +588,16 @@ export type StatusPublicationRecord = {
 };
 
 export type PublishStatusBody = {
-  componentId: string;
+  componentCode: string;
+  componentDisplayName: string;
   publicStatus: string;
   message: string;
+  serviceId?: string | null;
+  correlationId?: string | null;
 };
 
 export type ApproveStatusPublicationBody = {
-  approved: boolean;
+  approved?: boolean;
 };
 
 // --- Risks / exceptions -----------------------------------------------------
@@ -638,34 +657,91 @@ export type AutomationExecutionRecord = {
   updatedAt: string;
 };
 
+export type CreateAutomationBody = {
+  code: string;
+  title: string;
+  triggerType: string;
+  definition?: Record<string, unknown>;
+  destructive?: boolean;
+  requiresApproval?: boolean;
+  correlationId?: string | null;
+};
+
 export type RequestAutomationExecutionBody = {
   automationId: string;
   idempotencyKey: string;
+  correlationId?: string | null;
 };
 
 export type ApproveAutomationExecutionBody = {
-  approved: boolean;
+  approved?: boolean;
 };
 
 export type ExecuteAutomationBody = {
   result?: Record<string, unknown>;
 };
 
+export type CreateRunbookBody = {
+  code: string;
+  title: string;
+  body: string;
+  serviceId?: string | null;
+  correlationId?: string | null;
+};
+
+export type CreateOperationalRiskBody = {
+  title: string;
+  category: string;
+  serviceId?: string | null;
+  correlationId?: string | null;
+};
+
+export type CreateOperationalExceptionBody = {
+  title: string;
+  scope: string;
+  justification: string;
+  expiresAt: string;
+  compensatingControls?: string | null;
+  correlationId?: string | null;
+};
+
+export type UpdatePlatformServiceBody = {
+  expectedVersion: number;
+  displayName?: string;
+  description?: string | null;
+  category?: string;
+  lifecycleStatus?: string;
+  observationStatus?: string;
+  businessCriticality?: string;
+  technicalCriticality?: string;
+  environment?: string;
+  region?: string | null;
+  operationalTeam?: string | null;
+  serviceOwnerId?: string | null;
+  technicalOwnerId?: string | null;
+  healthCheckRef?: string | null;
+  metadata?: Record<string, unknown>;
+  correlationId?: string | null;
+};
+
+export type AddServiceDependencyBody = {
+  dependsOnServiceId: string;
+  dependencyType?: string;
+  criticality?: string;
+  description?: string | null;
+  correlationId?: string | null;
+};
+
+export type RecordHealthSnapshotBody = {
+  serviceId: string;
+  overallStatus: string;
+  sourceSystem: string;
+  indicators?: Record<string, unknown>;
+  observedAt?: string;
+  correlationId?: string | null;
+};
+
 // --- Analytics --------------------------------------------------------------
 
-export type OperationsAnalytics = {
-  availability: "PARTIAL" | "AVAILABLE" | "UNAVAILABLE" | string;
-  catalog: { totalServices: number };
-  alerts: { activeCount: number; totalCount: number };
-  incidents: { openCount: number; majorCount: number; totalCount: number };
-  changes: { openCount: number; totalCount: number };
-  maintenance: { scheduledCount: number; totalCount: number };
-  monitoringIntegrations: Array<{
-    code: string;
-    providerType: string;
-    status: string;
-    availability: "AVAILABLE" | "UNAVAILABLE" | "DEGRADED" | "NOT_CONFIGURED" | string;
-  }>;
-  computedAt: string;
-  note?: string;
-};
+/** Same shape as overview aggregate (BE shares GetOperationsOverviewUseCase). */
+export type OperationsAnalytics = OperationsOverview;
