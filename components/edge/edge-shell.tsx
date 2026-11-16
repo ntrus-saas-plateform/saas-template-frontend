@@ -19,6 +19,7 @@ import {
   Megaphone,
   Handshake,
   CreditCard,
+  TrendingUp,
   Gauge,
   RefreshCw,
   Repeat,
@@ -64,6 +65,15 @@ const PLATFORM_NAV: NavItem[] = [
     requiredAnyPermissions: [
       "platform:acquisition:read",
       "platform:acquisition:manage",
+    ],
+  },
+  {
+    href: "/edge/revenue",
+    label: "Revenue",
+    icon: TrendingUp,
+    requiredAnyPermissions: [
+      "platform:revenue:read",
+      "platform:business:read",
     ],
   },
   {

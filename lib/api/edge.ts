@@ -295,6 +295,32 @@ import type {
   TransitionProspectBody,
 } from "@/types/edge-acquisition";
 import type {
+  AppendBusinessAuditBody,
+  BusinessAuditEvent,
+  CalculateCommissionBody,
+  CommissionCalculation,
+  CommissionPlan,
+  CommissionPlansReadPlaceholder,
+  ComputeMrrMovementBody,
+  ComputeMrrMovementResponse,
+  CreateCommissionPlanBody,
+  CreateForecastScenarioBody,
+  CreateLeakageCaseBody,
+  CreateRevenueForecastBody,
+  MetricDefinition,
+  MetricDefinitionVersion,
+  MetricSnapshot,
+  RecordMetricSnapshotBody,
+  RegisterMetricDefinitionBody,
+  RetentionOverview,
+  RevenueForecast,
+  RevenueForecastScenario,
+  RevenueLeakageCase,
+  RevenueListPage,
+  RevenueOverview,
+  TransitionLeakageCaseBody,
+} from "@/types/edge-revenue-operations";
+import type {
   CancelPlacementInput,
   CapacityInventoryQuery,
   CapacityInventoryRecord,
@@ -6359,6 +6385,221 @@ export const edgeApi = {
 
   postPublicAcquisitionAnalytics: (body: RecordAnalyticsBody) =>
     edgeRequest(`/api/acquisition-public/analytics/events`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  // --- P11 Revenue Operations -------------------------------------------------
+
+  getRevenueOverview: (params?: { businessUnitId?: string; asOf?: string }) =>
+    edgeRequest<RevenueOverview>(
+      `/api/edge-backend/revenue/overview${toQuery({
+        businessUnitId: params?.businessUnitId,
+        asOf: params?.asOf,
+      })}`,
+    ),
+
+  getBusinessOverview: (params?: { businessUnitId?: string; asOf?: string }) =>
+    edgeRequest<RevenueOverview>(
+      `/api/edge-backend/business/overview${toQuery({
+        businessUnitId: params?.businessUnitId,
+        asOf: params?.asOf,
+      })}`,
+    ),
+
+  listRevenueMetricDefinitions: (params?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<RevenueListPage<MetricDefinition>>(
+      `/api/edge-backend/revenue/metrics/definitions${toQuery({
+        status: params?.status,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  registerRevenueMetricDefinition: (body: RegisterMetricDefinitionBody) =>
+    edgeRequest<MetricDefinition>(`/api/edge-backend/revenue/metrics/definitions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  publishRevenueMetricDefinition: (definitionId: string) =>
+    edgeRequest<{ definition: MetricDefinition; version: MetricDefinitionVersion }>(
+      `/api/edge-backend/revenue/metrics/definitions/${encodeURIComponent(definitionId)}/publish`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  recordRevenueMetricSnapshot: (body: RecordMetricSnapshotBody) =>
+    edgeRequest<MetricSnapshot>(`/api/edge-backend/revenue/metrics/snapshots`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  computeRevenueMrrMovement: (body: ComputeMrrMovementBody) =>
+    edgeRequest<ComputeMrrMovementResponse>(`/api/edge-backend/revenue/mrr/compute`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** Retention overview — GRR excludes expansion; missing snapshots → UNAVAILABLE. */
+  getRevenueRetentionOverview: (params?: {
+    businessUnitId?: string;
+    cohortId?: string;
+    asOf?: string;
+  }) =>
+    edgeRequest<RetentionOverview>(
+      `/api/edge-backend/revenue/retention${toQuery({
+        businessUnitId: params?.businessUnitId,
+        cohortId: params?.cohortId,
+        asOf: params?.asOf,
+      })}`,
+    ),
+
+  getRenewalIntelligence: (params?: { withinDays?: number; limit?: number }) =>
+    edgeRequest(
+      `/api/edge-backend/revenue/renewals/intelligence${toQuery({
+        withinDays: params?.withinDays,
+        limit: params?.limit,
+      })}`,
+    ),
+
+  listBusinessAlerts: (params?: { status?: string; limit?: number; offset?: number }) =>
+    edgeRequest(
+      `/api/edge-backend/business/alerts${toQuery({
+        status: params?.status,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  acknowledgeBusinessAlert: (alertId: string) =>
+    edgeRequest(`/api/edge-backend/business/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  listBusinessTargets: (params?: { limit?: number; offset?: number }) =>
+    edgeRequest(
+      `/api/edge-backend/business/targets${toQuery({
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  listBusinessReports: (params?: { limit?: number; offset?: number }) =>
+    edgeRequest(
+      `/api/edge-backend/business/reports${toQuery({
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  generateBusinessReport: (body: {
+    code: string;
+    title: string;
+    reportType: string;
+    periodStart: string;
+    periodEnd: string;
+    asOf?: string;
+    currency?: string;
+    businessUnitId?: string;
+  }) =>
+    edgeRequest(`/api/edge-backend/business/reports/generate`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  runRevenueAssuranceScan: (body?: Record<string, unknown>) =>
+    edgeRequest(`/api/edge-backend/revenue/assurance/scan`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  createRevenueForecast: (body: CreateRevenueForecastBody) =>
+    edgeRequest<RevenueForecast>(`/api/edge-backend/revenue/forecasts`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createRevenueForecastScenario: (
+    forecastId: string,
+    body: CreateForecastScenarioBody,
+  ) =>
+    edgeRequest<RevenueForecastScenario>(
+      `/api/edge-backend/revenue/forecasts/${encodeURIComponent(forecastId)}/scenarios`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  createRevenueLeakageCase: (body: CreateLeakageCaseBody) =>
+    edgeRequest<RevenueLeakageCase>(`/api/edge-backend/revenue/leakage-cases`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  transitionRevenueLeakageCase: (
+    caseId: string,
+    body: TransitionLeakageCaseBody,
+  ) =>
+    edgeRequest<RevenueLeakageCase>(
+      `/api/edge-backend/revenue/leakage-cases/${encodeURIComponent(caseId)}/transition`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  createCommissionPlan: (body: CreateCommissionPlanBody) =>
+    edgeRequest<CommissionPlan>(`/api/edge-backend/revenue/commission/plans`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** Alias path when BFF exposes commission under /commission/* */
+  createCommissionPlanAlias: (body: CreateCommissionPlanBody) =>
+    edgeRequest<CommissionPlan>(`/api/edge-backend/commission/plans`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  calculateCommission: (body: CalculateCommissionBody) =>
+    edgeRequest<CommissionCalculation>(
+      `/api/edge-backend/revenue/commission/calculations`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  calculateCommissionAlias: (body: CalculateCommissionBody) =>
+    edgeRequest<CommissionCalculation>(`/api/edge-backend/commission/calculations`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listCommissionPlans: () =>
+    edgeRequest<CommissionPlansReadPlaceholder>(
+      `/api/edge-backend/revenue/commission/plans`,
+    ),
+
+  listCommissionPlansAlias: () =>
+    edgeRequest<CommissionPlansReadPlaceholder>(`/api/edge-backend/commission/plans`),
+
+  listBusinessAudit: (params?: {
+    aggregateType?: string;
+    aggregateId?: string;
+    eventType?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<RevenueListPage<BusinessAuditEvent>>(
+      `/api/edge-backend/business/audit${toQuery({
+        aggregateType: params?.aggregateType,
+        aggregateId: params?.aggregateId,
+        eventType: params?.eventType,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  appendBusinessAudit: (body: AppendBusinessAuditBody) =>
+    edgeRequest<BusinessAuditEvent>(`/api/edge-backend/business/audit`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
