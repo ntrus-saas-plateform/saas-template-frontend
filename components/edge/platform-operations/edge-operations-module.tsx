@@ -102,21 +102,23 @@ function unwrapPage<T>(data: unknown): OperationsListPage<T> {
     | OperationsListPage<T>
     | undefined;
   if (raw && typeof raw === "object" && "items" in raw && Array.isArray(raw.items)) {
-    return { items: raw.items, total: raw.total ?? raw.items.length };
+    const page = raw as OperationsListPage<T>;
+    return { items: page.items, total: page.total ?? page.items.length };
   }
   if (raw && typeof raw === "object" && "data" in raw && raw.data) {
     const inner = raw.data;
     if (Array.isArray(inner)) {
-      return { items: inner, total: inner.length };
+      return { items: inner as T[], total: inner.length };
     }
     if (inner && typeof inner === "object" && "items" in inner) {
+      const page = inner as OperationsListPage<T>;
       return {
-        items: inner.items ?? [],
-        total: inner.total ?? (inner.items?.length ?? 0),
+        items: page.items ?? [],
+        total: page.total ?? (page.items?.length ?? 0),
       };
     }
   }
-  return { items: [], total: 0 };
+  return { items: [] as T[], total: 0 };
 }
 
 function unwrapOverview(data: unknown): OperationsOverview | null {
