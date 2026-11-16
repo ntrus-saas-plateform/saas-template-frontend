@@ -301,6 +301,8 @@ import type {
   CommissionCalculation,
   CommissionPlan,
   CommissionPlansReadPlaceholder,
+  ComputeCashRevenueBody,
+  ComputeCashRevenueResponse,
   ComputeMrrMovementBody,
   ComputeMrrMovementResponse,
   CreateCommissionPlanBody,
@@ -6450,6 +6452,13 @@ export const edgeApi = {
 
   computeRevenueMrrMovement: (body: ComputeMrrMovementBody) =>
     edgeRequest<ComputeMrrMovementResponse>(`/api/edge-backend/revenue/mrr/compute`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** INVOICED/COLLECTED/RECEIVABLES from P6 — unpaid never counts as collected. */
+  computeRevenueCash: (body: ComputeCashRevenueBody) =>
+    edgeRequest<ComputeCashRevenueResponse>(`/api/edge-backend/revenue/cash/compute`, {
       method: "POST",
       body: JSON.stringify(body),
     }),

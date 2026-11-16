@@ -10,6 +10,7 @@ const edgeApiMocks = vi.hoisted(() => ({
   listRevenueMetricDefinitions: vi.fn(),
   publishRevenueMetricDefinition: vi.fn(),
   computeRevenueMrrMovement: vi.fn(),
+  computeRevenueCash: vi.fn(),
   getRevenueRetentionOverview: vi.fn(),
   createRevenueForecast: vi.fn(),
   createRevenueLeakageCase: vi.fn(),
@@ -162,6 +163,7 @@ describe("EdgeRevenueModule", () => {
     expect(within(tablist).getByRole("tab", { name: "Overview" })).toBeInTheDocument();
     expect(within(tablist).getByRole("tab", { name: "Metrics" })).toBeInTheDocument();
     expect(within(tablist).getByRole("tab", { name: "MRR" })).toBeInTheDocument();
+    expect(within(tablist).getByRole("tab", { name: "Cash" })).toBeInTheDocument();
     expect(within(tablist).getByRole("tab", { name: "Retention" })).toBeInTheDocument();
     expect(within(tablist).getByRole("tab", { name: "Renewals" })).toBeInTheDocument();
     expect(within(tablist).getByRole("tab", { name: "Forecasts" })).toBeInTheDocument();

@@ -156,6 +156,38 @@ export type ComputeMrrMovementResponse = {
   snapshots: MetricSnapshot[];
 };
 
+export type CashAmountBucket = {
+  amount: number | null;
+  dataQuality: DataQuality | string;
+};
+
+export type CashRevenueResult = {
+  currency: string;
+  invoiced: CashAmountBucket;
+  collected: CashAmountBucket;
+  receivables: CashAmountBucket;
+  invoicedInvoiceIds: string[];
+  collectedPaymentIds: string[];
+  openReceivableInvoiceIds: string[];
+  skippedInvoiceCount: number;
+  skippedPaymentCount: number;
+  notes: string[];
+};
+
+export type ComputeCashRevenueResponse = {
+  result: CashRevenueResult;
+  snapshots: MetricSnapshot[];
+  provenance: Record<string, unknown>;
+};
+
+export type ComputeCashRevenueBody = {
+  periodStart: string;
+  periodEnd: string;
+  currency?: string;
+  businessUnitId?: string;
+  persistSnapshots?: boolean;
+};
+
 export type NormalizedSubscriptionRevenueLine = {
   subscriptionRefId: string;
   customerRefId?: string;

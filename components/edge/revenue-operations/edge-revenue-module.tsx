@@ -31,6 +31,7 @@ type TabId =
   | "overview"
   | "metrics"
   | "mrr"
+  | "cash"
   | "retention"
   | "renewals"
   | "forecasts"
@@ -43,6 +44,7 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
   { id: "overview", label: "Overview", permission: "platform:revenue:read" },
   { id: "metrics", label: "Metrics", permission: "platform:revenue:read" },
   { id: "mrr", label: "MRR", permission: "platform:revenue:read" },
+  { id: "cash", label: "Cash", permission: "platform:revenue:read" },
   { id: "retention", label: "Retention", permission: "platform:revenue:read" },
   { id: "renewals", label: "Renewals", permission: "platform:revenue:read" },
   { id: "forecasts", label: "Forecasts", permission: "platform:revenue:forecast" },
@@ -371,6 +373,30 @@ export function EdgeRevenueModule() {
     },
   });
 
+  const [cashPeriodStart, setCashPeriodStart] = useState("");
+  const [cashPeriodEnd, setCashPeriodEnd] = useState("");
+  const [cashCurrency, setCashCurrency] = useState("USD");
+  const [cashResult, setCashResult] = useState<unknown>(null);
+  const [cashError, setCashError] = useState<string | null>(null);
+
+  const computeCashMutation = useMutation({
+    mutationFn: () =>
+      edgeApi.computeRevenueCash({
+        periodStart: cashPeriodStart,
+        periodEnd: cashPeriodEnd,
+        currency: cashCurrency || undefined,
+        persistSnapshots: false,
+      }),
+    onSuccess: (res) => {
+      setCashError(null);
+      setCashResult(unwrapData(res) ?? res);
+    },
+    onError: (e) => {
+      setCashResult(null);
+      setCashError(errMsg(e));
+    },
+  });
+
   const [forecastCode, setForecastCode] = useState("");
   const [forecastName, setForecastName] = useState("");
   const [forecastStart, setForecastStart] = useState("");
@@ -642,6 +668,69 @@ export function EdgeRevenueModule() {
             <EdgeEmptyState
               title="No MRR result yet"
               description="Provide a period and compute. Without source lines, buckets stay UNAVAILABLE."
+            />
+          )}
+        </section>
+      ) : null}
+
+      {activeTab === "cash" ? (
+        <section className="space-y-3" data-testid="rev-cash">
+          <h2 className="type-md font-semibold">
+            Invoiced / collected / receivables
+          </h2>
+          <p className="type-sm text-[var(--text-secondary)]">
+            Contracted ≠ invoiced ≠ collected. Engine reads P6 invoice and
+            payment refs only — unpaid never becomes collected. Manual cash
+            snapshots require source=engine.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <input
+              className={fieldControlClass}
+              type="datetime-local"
+              aria-label="Cash period start"
+              value={cashPeriodStart}
+              onChange={(e) => setCashPeriodStart(e.target.value)}
+            />
+            <input
+              className={fieldControlClass}
+              type="datetime-local"
+              aria-label="Cash period end"
+              value={cashPeriodEnd}
+              onChange={(e) => setCashPeriodEnd(e.target.value)}
+            />
+            <input
+              className={fieldControlClass}
+              aria-label="Cash currency"
+              value={cashCurrency}
+              onChange={(e) => setCashCurrency(e.target.value)}
+              maxLength={3}
+            />
+            <Button
+              disabled={
+                !cashPeriodStart ||
+                !cashPeriodEnd ||
+                computeCashMutation.isPending
+              }
+              onClick={() => computeCashMutation.mutate()}
+              data-testid="compute-cash"
+            >
+              Compute cash
+            </Button>
+          </div>
+          {cashError ? (
+            <EdgeErrorState title="Cash compute failed" description={cashError} />
+          ) : null}
+          {cashResult ? (
+            <pre
+              className="overflow-x-auto border border-[var(--border)] bg-[var(--surface-muted)] p-3 type-xs"
+              data-testid="cash-result"
+            >
+              {JSON.stringify(cashResult, null, 2)}
+            </pre>
+          ) : (
+            <EdgeEmptyState
+              title="No cash result yet"
+              description="Provide a period. Empty P6 feeds stay UNAVAILABLE — never silent zero."
             />
           )}
         </section>
