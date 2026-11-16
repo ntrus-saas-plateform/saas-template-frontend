@@ -154,6 +154,8 @@ import type {
   TenantBulkOperationRecord,
   TenantHealthSnapshotRecord,
   TenantManagementListPage,
+  LegalHoldChangeRequestRecord,
+  RequestLegalHoldChangeBody,
   TenantLegalHoldUpdate,
   TenantPoliciesPatch,
   TenantPortfolioMetrics,
@@ -5167,5 +5169,32 @@ export const edgeApi = {
     edgeRequest<TenantRegistryRecord>(
       `/api/edge-backend/tenants/${tenantId}/legal-hold`,
       { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  requestTenantLegalHoldChange: (tenantId: string, body: RequestLegalHoldChangeBody) =>
+    edgeRequest<LegalHoldChangeRequestRecord>(
+      `/api/edge-backend/tenants/${tenantId}/legal-hold-requests`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listTenantLegalHoldChangeRequests: (opts?: {
+    tenantRegistryId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<TenantManagementListPage<LegalHoldChangeRequestRecord>>(
+      `/api/edge-backend/tenant-management/legal-hold-requests${toQuery({
+        tenantRegistryId: opts?.tenantRegistryId,
+        status: opts?.status,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  approveTenantLegalHoldChangeRequest: (requestId: string) =>
+    edgeRequest<{ request: LegalHoldChangeRequestRecord; tenant: TenantRegistryRecord }>(
+      `/api/edge-backend/tenant-management/legal-hold-requests/${requestId}/approve`,
+      { method: "POST", body: JSON.stringify({}) },
     ),
 };

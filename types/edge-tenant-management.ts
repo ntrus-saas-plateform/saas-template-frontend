@@ -390,6 +390,30 @@ export type TenantLegalHoldUpdate = {
   correlationId?: string;
 };
 
+export type LegalHoldChangeRequestRecord = {
+  id: string;
+  tenantRegistryId: string;
+  action: "RAISE" | "LIFT";
+  status: string;
+  justification: string;
+  requestedBy: string;
+  approverId: string | null;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+  correlationId: string | null;
+  idempotencyKey: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RequestLegalHoldChangeBody = {
+  action: "RAISE" | "LIFT";
+  justification: string;
+  idempotencyKey: string;
+  correlationId?: string;
+};
+
 export type TenantManagementListPage<T> = {
   items: T[];
   total: number;

@@ -25,6 +25,7 @@ import { useEdgePlatform } from "@/providers/edge-platform-provider";
 import type {
   ActivityEventRecord,
   ExceptionRecord,
+  LegalHoldChangeRequestRecord,
   LifecycleRequestRecord,
   MigrationRequestRecord,
   ReconciliationFindingRecord,
@@ -71,6 +72,14 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
   const canLifecycle = hasEdgePermission(
     permissions,
     "platform:tenant_management:lifecycle:request",
+  );
+  const canLegalHoldManage = hasEdgePermission(
+    permissions,
+    "platform:tenant_management:legal_hold:manage",
+  );
+  const canLegalHoldApprove = hasEdgePermission(
+    permissions,
+    "platform:tenant_management:legal_hold:approve",
   );
   const canTags = hasEdgePermission(
     permissions,
@@ -128,6 +137,19 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
     enabled: canLifecycle && tab === "lifecycle",
   });
 
+  const legalHoldRequestsQ = useQuery({
+    queryKey: ["tm", "legal-hold", tenantId],
+    queryFn: () =>
+      edgeApi.listTenantLegalHoldChangeRequests({
+        tenantRegistryId: tenantId,
+        limit: 20,
+      }),
+    enabled:
+      (canLegalHoldManage || canLegalHoldApprove) &&
+      tab === "profile" &&
+      Boolean(tenantId),
+  });
+
   const exceptionsQ = useQuery({
     queryKey: ["tm", "exceptions", tenantId],
     queryFn: () =>
@@ -174,6 +196,9 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
 
   const activity = unwrapInfraList<ActivityEventRecord>(activityQ.data?.data);
   const lifecycleItems = unwrapInfraList<LifecycleRequestRecord>(lifecycleListQ.data?.data);
+  const legalHoldRequests = unwrapInfraList<LegalHoldChangeRequestRecord>(
+    legalHoldRequestsQ.data?.data,
+  );
   const exceptions = unwrapInfraList<ExceptionRecord>(exceptionsQ.data?.data);
   const migrations = unwrapInfraList<MigrationRequestRecord>(migrationsQ.data?.data);
   const recoveries = unwrapInfraList<RecoveryRequestRecord>(recoveriesQ.data?.data);
@@ -288,6 +313,15 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
     onSuccess: invalidate360,
   });
 
+  const approveLegalHoldLift = useMutation({
+    mutationFn: (requestId: string) =>
+      edgeApi.approveTenantLegalHoldChangeRequest(requestId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tm", "legal-hold", tenantId] });
+      invalidate360();
+    },
+  });
+
   const updatePolicies = useMutation({
     mutationFn: async () => {
       if (!registry) throw new Error("Missing registry");
@@ -297,12 +331,21 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         if (legalHoldJustification.trim().length < 8) {
           throw new Error("Legal hold justification required (min 8 characters)");
         }
-        const holdRes = await edgeApi.updateTenantLegalHold(tenantId, {
-          expectedVersion: registry.version,
-          legalHold: policiesForm.legalHold,
-          justification: legalHoldJustification.trim(),
-        });
-        expectedVersion = holdRes.data?.version ?? expectedVersion;
+        if (registry.legalHold && !policiesForm.legalHold) {
+          await edgeApi.requestTenantLegalHoldChange(tenantId, {
+            action: "LIFT",
+            justification: legalHoldJustification.trim(),
+            idempotencyKey: newIdempotencyKey(),
+          });
+          setPoliciesForm((f) => ({ ...f, legalHold: true }));
+        } else if (!registry.legalHold && policiesForm.legalHold) {
+          const holdRes = await edgeApi.updateTenantLegalHold(tenantId, {
+            expectedVersion: registry.version,
+            legalHold: true,
+            justification: legalHoldJustification.trim(),
+          });
+          expectedVersion = holdRes.data?.version ?? expectedVersion;
+        }
       }
       return edgeApi.updateTenantPolicies(tenantId, {
         expectedVersion,
@@ -315,6 +358,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
     onSuccess: () => {
       setLegalHoldConfirm(false);
       setLegalHoldJustification("");
+      void qc.invalidateQueries({ queryKey: ["tm", "legal-hold", tenantId] });
       invalidate360();
     },
   });
@@ -817,7 +861,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                     rows={3}
                   />
                 ) : null}
-                {policiesForm.legalHold ? (
+                {policiesForm.legalHold && !registry?.legalHold ? (
                   <label className="flex items-center gap-2 type-sm text-[var(--text-muted)]">
                     <input
                       type="checkbox"
@@ -826,6 +870,12 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                     />
                     Confirm legal hold activation
                   </label>
+                ) : null}
+                {registry?.legalHold && !policiesForm.legalHold ? (
+                  <p className="type-xs text-[var(--text-muted)]">
+                    Lifting legal hold requires a separate approver (dual approval).
+                    Submit to create a pending LIFT request.
+                  </p>
                 ) : null}
                 <label className="flex items-center gap-2 type-sm">
                   <input
@@ -852,6 +902,35 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                   }
                   aria-label="Data residency ref"
                 />
+              {legalHoldRequests.items.length > 0 ? (
+                <ul className="space-y-2 type-sm border-t border-[var(--border)] pt-3">
+                  <li className="type-xs uppercase text-[var(--text-muted)]">
+                    Legal hold change requests
+                  </li>
+                  {legalHoldRequests.items.map((req) => (
+                    <li
+                      key={req.id}
+                      className="flex flex-wrap items-center gap-2 rounded border border-[var(--border)] p-2"
+                    >
+                      <span>{req.action}</span>
+                      <Badge tone={statusTone(req.status)}>{req.status}</Badge>
+                      <span className="type-xs text-[var(--text-muted)]">
+                        {formatWhen(req.createdAt)}
+                      </span>
+                      {req.status === "PENDING" && canLegalHoldApprove ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={approveLegalHoldLift.isPending}
+                          onClick={() => approveLegalHoldLift.mutate(req.id)}
+                        >
+                          Approve
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
                 <input
                   className={fieldControlClass}
                   placeholder="retentionPolicyRef"
@@ -988,13 +1067,33 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
             <EdgeEmptyState title="No lifecycle requests for tenant" />
           ) : (
             <ul className="space-y-2 type-sm" data-testid="tm-lifecycle-list">
-              {lifecycleItems.items.map((r) => (
-                <li key={r.id} className="rounded border border-[var(--border)] p-2">
-                  {r.requestType}{" "}
-                  <Badge tone={statusTone(r.status)}>{r.status}</Badge> ·{" "}
-                  {formatWhen(r.createdAt)}
-                </li>
-              ))}
+              {lifecycleItems.items.map((r) => {
+                const delegation =
+                  typeof r.result?.delegation === "string" ? r.result.delegation : null;
+                const workflowId = r.p7WorkflowId;
+                return (
+                  <li key={r.id} className="rounded border border-[var(--border)] p-2">
+                    {r.requestType}{" "}
+                    <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                    {delegation ? (
+                      <>
+                        {" "}
+                        · <Badge tone="default">{delegation}</Badge>
+                      </>
+                    ) : null}
+                    {workflowId ? (
+                      <span className="type-xs text-[var(--text-muted)]">
+                        {" "}
+                        · P7 workflow {workflowId.slice(0, 8)}…
+                      </span>
+                    ) : null}
+                    <span className="type-xs text-[var(--text-muted)]">
+                      {" "}
+                      · {formatWhen(r.createdAt)}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </EdgePermissionGate>
