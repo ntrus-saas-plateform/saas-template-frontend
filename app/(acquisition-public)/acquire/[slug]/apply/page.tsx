@@ -7,6 +7,14 @@ import type {
   FormFieldDefinition,
   PublicFormPayload,
 } from "@/types/edge-acquisition";
+import {
+  buildPublicFormConsents,
+  pickCompanyName,
+  pickDisplayName,
+  pickLeadEmail,
+  resolvePublicFormSubmitIntent,
+  type PublicFormSubmitIntent,
+} from "@/lib/edge/public-form-intent";
 
 function collectFields(payload: PublicFormPayload | null): FormFieldDefinition[] {
   if (!payload?.formVersion?.schemaDefinition) return [];
@@ -64,6 +72,9 @@ function AcquireApplyInner() {
   const search = useSearchParams();
   const slug = params.slug;
   const formSlug = search.get("form") ?? search.get("publicSlug") ?? "";
+  const planPresentationId =
+    search.get("planPresentationId") ?? search.get("plan") ?? null;
+  const commercialPlanId = search.get("commercialPlanId") ?? null;
 
   const [payload, setPayload] = useState<PublicFormPayload | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -81,6 +92,9 @@ function AcquireApplyInner() {
   const [challengeAnswer, setChallengeAnswer] = useState("");
   const [submitState, setSubmitState] = useState<"idle" | "ok" | "error">("idle");
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitFullApplication, setSubmitFullApplication] = useState(false);
+  const [leadCaptured, setLeadCaptured] = useState(false);
+  const [applicationPending, setApplicationPending] = useState(false);
   const openedAtMs = useRef(Date.now());
 
   useEffect(() => {
@@ -166,6 +180,116 @@ function AcquireApplyInner() {
 
   const fields = useMemo(() => collectFields(payload), [payload]);
 
+  const submitIntent: PublicFormSubmitIntent = useMemo(
+    () => resolvePublicFormSubmitIntent(payload),
+    [payload],
+  );
+
+  const showApplicationToggle = Boolean(payload) && submitIntent === "LEAD";
+
+  async function refreshChallenge(): Promise<boolean> {
+    try {
+      const res = await fetch("/api/acquisition-public/challenge");
+      if (!res.ok) return false;
+      const json = (await res.json()) as {
+        data?: {
+          challengeId: string;
+          challengeToken: string;
+          operandA: number;
+          operandB: number;
+          prompt?: string;
+        };
+        challengeId?: string;
+        challengeToken?: string;
+        operandA?: number;
+        operandB?: number;
+        prompt?: string;
+      };
+      const data = json.data ?? json;
+      if (
+        data.challengeId &&
+        data.challengeToken &&
+        typeof data.operandA === "number" &&
+        typeof data.operandB === "number"
+      ) {
+        setChallenge({
+          challengeId: data.challengeId,
+          challengeToken: data.challengeToken,
+          operandA: data.operandA,
+          operandB: data.operandB,
+          prompt: data.prompt ?? `Combien font ${data.operandA} + ${data.operandB} ?`,
+        });
+        setChallengeAnswer("");
+        openedAtMs.current = Date.now();
+        return true;
+      }
+    } catch {
+      /* surfaced to caller */
+    }
+    return false;
+  }
+
+  async function postPublicApplication(email: string): Promise<void> {
+    if (!formSlug.trim()) {
+      throw new Error("Slug de formulaire public requis pour une candidature.");
+    }
+    const consents = buildPublicFormConsents(payload, values);
+    const res = await fetch("/api/acquisition-public/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        publicFormSlug: formSlug.trim(),
+        email,
+        answers: { ...values, website: website || "" },
+        displayName: pickDisplayName(values),
+        companyName: pickCompanyName(values),
+        productId: payload?.schema?.productId ?? null,
+        commercialPlanId: commercialPlanId ?? payload?.schema?.commercialPlanId ?? null,
+        planPresentationId,
+        consents,
+        honeypot: website || "",
+        submittedAtMs: openedAtMs.current,
+        challengeId: challenge?.challengeId,
+        challengeToken: challenge?.challengeToken,
+        challengeAnswer: challengeAnswer.trim(),
+        metadata: {
+          productSlug: slug,
+          formSlug: formSlug.trim(),
+          source: "public_apply",
+        },
+        submit: true,
+      }),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: { message?: string };
+      message?: string;
+      data?: { status?: string; application?: { id?: string } };
+      status?: string;
+    };
+    if (!res.ok) {
+      throw new Error(json.error?.message ?? json.message ?? `HTTP ${res.status}`);
+    }
+    const status = json.data?.status ?? json.status;
+    setSubmitState("ok");
+    setSubmitMessage(
+      status === "SUBMITTED"
+        ? "Candidature soumise. Le backend a enregistré lead, dossier et réponses."
+        : "Dossier candidature créé (brouillon). Complétez via le portail si nécessaire.",
+    );
+    void fetch("/api/acquisition-public/analytics/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventName: "public.apply.application_submitted",
+        properties: {
+          productSlug: slug,
+          formSlug: formSlug.trim(),
+          status: status ?? "UNKNOWN",
+        },
+      }),
+    }).catch(() => undefined);
+  }
+
   function validate(): boolean {
     const next: Record<string, string> = {};
     for (const field of fields) {
@@ -205,10 +329,7 @@ function AcquireApplyInner() {
     setSubmitMessage(null);
     if (!validate()) return;
 
-    const email =
-      values.email?.trim() ||
-      values.Email?.trim() ||
-      Object.entries(values).find(([k]) => k.toLowerCase().includes("email"))?.[1]?.trim();
+    const email = pickLeadEmail(values);
 
     if (!email) {
       setClientErrors((c) => ({ ...c, email: "Email requis pour la capture lead" }));
@@ -225,7 +346,17 @@ function AcquireApplyInner() {
       return;
     }
 
+    const useApplicationFlow =
+      submitIntent === "APPLICATION" || (showApplicationToggle && submitFullApplication);
+
     try {
+      if (useApplicationFlow) {
+        await postPublicApplication(email);
+        setLeadCaptured(false);
+        return;
+      }
+
+      const consents = buildPublicFormConsents(payload, values);
       const res = await fetch("/api/acquisition-public/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -236,6 +367,7 @@ function AcquireApplyInner() {
           formPublicationId: payload?.publication?.id ?? null,
           payload: { ...values, website: website || "" },
           attribution: { productSlug: slug, formSlug: formSlug || null },
+          consents,
           honeypot: website || "",
           submittedAtMs: openedAtMs.current,
           challengeId: challenge.challengeId,
@@ -250,9 +382,11 @@ function AcquireApplyInner() {
         throw new Error(json.error?.message ?? `HTTP ${res.status}`);
       }
       setSubmitState("ok");
+      setLeadCaptured(true);
       setSubmitMessage(
-        "Lead capturé. Une candidature complète (dossier + documents) nécessite le portail authentifié plateforme.",
+        "Lead capturé. Répondez au nouveau défi anti-bot puis « Soumettre candidature » si besoin.",
       );
+      void refreshChallenge();
       void fetch("/api/acquisition-public/analytics/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -264,6 +398,32 @@ function AcquireApplyInner() {
     } catch (err) {
       setSubmitState("error");
       setSubmitMessage(err instanceof Error ? err.message : "Échec envoi");
+    }
+  }
+
+  async function onSubmitApplicationAfterLead() {
+    setSubmitMessage(null);
+    setSubmitState("idle");
+    const email = pickLeadEmail(values);
+    if (!email) {
+      setSubmitState("error");
+      setSubmitMessage("Email requis pour soumettre la candidature.");
+      return;
+    }
+    if (!challenge?.challengeId || !challengeAnswer.trim()) {
+      setSubmitState("error");
+      setSubmitMessage("Répondez au défi anti-bot avant de soumettre la candidature.");
+      return;
+    }
+    setApplicationPending(true);
+    try {
+      await postPublicApplication(email);
+      setLeadCaptured(false);
+    } catch (err) {
+      setSubmitState("error");
+      setSubmitMessage(err instanceof Error ? err.message : "Échec candidature");
+    } finally {
+      setApplicationPending(false);
     }
   }
 
@@ -432,6 +592,18 @@ function AcquireApplyInner() {
               />
             </div>
 
+            {showApplicationToggle ? (
+              <label className="flex items-start gap-2 type-sm text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={submitFullApplication}
+                  onChange={(e) => setSubmitFullApplication(e.target.checked)}
+                />
+                Soumettre candidature complète (dossier + réponses) via l’API publique
+              </label>
+            ) : null}
+
             {challenge ? (
               <div className="space-y-1">
                 <label className="type-xs text-[var(--text-muted)]" htmlFor="challenge-answer">
@@ -455,7 +627,9 @@ function AcquireApplyInner() {
               type="submit"
               className="inline-flex h-[var(--control-height)] items-center bg-[var(--primary)] px-5 type-sm font-medium text-[var(--on-primary)]"
             >
-              Envoyer
+              {submitIntent === "APPLICATION" || submitFullApplication
+                ? "Soumettre candidature"
+                : "Envoyer"}
             </button>
           </form>
         ) : null}
@@ -473,6 +647,26 @@ function AcquireApplyInner() {
           >
             {submitMessage}
           </p>
+        ) : null}
+
+        {leadCaptured && submitIntent === "LEAD" && formSlug.trim() ? (
+          <div
+            className="mt-4 space-y-3 rounded border border-[var(--border)] bg-[var(--surface-muted)] p-4"
+            data-testid="acquire-apply-followup-application"
+          >
+            <p className="type-sm text-[var(--text-secondary)]">
+              Étape optionnelle — soumettre le dossier candidature avec les mêmes réponses (nouveau
+              challenge requis).
+            </p>
+            <button
+              type="button"
+              disabled={applicationPending}
+              className="inline-flex h-[var(--control-height)] items-center border border-[var(--border)] bg-white px-4 type-sm font-medium"
+              onClick={() => void onSubmitApplicationAfterLead()}
+            >
+              {applicationPending ? "Envoi…" : "Soumettre candidature"}
+            </button>
+          </div>
         ) : null}
 
         <Link
