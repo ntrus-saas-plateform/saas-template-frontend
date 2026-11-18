@@ -257,6 +257,12 @@ export default async function AcquireProductPage({ params }: Props) {
             {plans[0]?.ctaLabel?.trim() || "Postuler"}
           </Link>
           <Link
+            href={`/acquire/${encodeURIComponent(slug)}/configure`}
+            className="inline-flex h-[var(--control-height)] items-center border border-[var(--border)] px-5 type-sm text-[var(--text-secondary)]"
+          >
+            Configurer
+          </Link>
+          <Link
             href="/acquire"
             className="inline-flex h-[var(--control-height)] items-center border border-[var(--border)] px-5 type-sm text-[var(--text-secondary)]"
           >
