@@ -333,6 +333,17 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
     },
   });
 
+  const rejectLegalHoldLift = useMutation({
+    mutationFn: (requestId: string) =>
+      edgeApi.rejectTenantLegalHoldChangeRequest(requestId, {
+        reason: "Rejected from tenant console",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tm", "legal-hold", tenantId] });
+      invalidate360();
+    },
+  });
+
   const updatePolicies = useMutation({
     mutationFn: async () => {
       if (!registry) throw new Error("Missing registry");
@@ -1047,14 +1058,31 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
                         {formatWhen(req.createdAt)}
                       </span>
                       {req.status === "PENDING" && canLegalHoldApprove ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={approveLegalHoldLift.isPending}
-                          onClick={() => approveLegalHoldLift.mutate(req.id)}
-                        >
-                          Approve
-                        </Button>
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={
+                              approveLegalHoldLift.isPending ||
+                              rejectLegalHoldLift.isPending
+                            }
+                            onClick={() => approveLegalHoldLift.mutate(req.id)}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={
+                              approveLegalHoldLift.isPending ||
+                              rejectLegalHoldLift.isPending
+                            }
+                            onClick={() => rejectLegalHoldLift.mutate(req.id)}
+                          >
+                            Reject
+                          </Button>
+                        </>
                       ) : null}
                     </li>
                   ))}
@@ -1799,7 +1827,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
           ) : activity.items.length === 0 ? (
             <EdgeEmptyState title="No activity events" />
           ) : (
-            <motionTable activity={activity.items} />
+            <MotionTable activity={activity.items} />
           )}
         </EdgePermissionGate>
       )}
@@ -1816,7 +1844,7 @@ function GovernanceStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function motionTable({ activity }: { activity: ActivityEventRecord[] }) {
+function MotionTable({ activity }: { activity: ActivityEventRecord[] }) {
   return (
     <div
       className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]"

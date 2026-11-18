@@ -20,10 +20,13 @@ const hits = new Map<string, { count: number; resetAt: number }>();
 const ALLOWED_PREFIXES = [
   "products",
   "plans",
+  "segments",
+  "catalog",
   "forms/",
   "leads",
   "challenge",
   "analytics/events",
+  "applications",
   "checkout/",
   "checkout",
 ];

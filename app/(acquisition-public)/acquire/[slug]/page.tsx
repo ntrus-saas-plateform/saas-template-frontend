@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { edgeApiBase } from "@/lib/edge-bff/keycloak";
+import { AcquirePlanCheckout } from "@/components/acquisition/acquire-plan-checkout";
+import { publicAcquisitionFetch } from "@/lib/edge/public-acquisition-fetch";
 import type {
   PlanPresentation,
   PublicProductPage,
@@ -68,8 +69,8 @@ async function loadProduct(slug: string): Promise<{
   error: string | null;
 }> {
   try {
-    const res = await fetch(
-      `${edgeApiBase()}/api/v1/edge/acquisition/public/products/${encodeURIComponent(slug)}`,
+    const res = await publicAcquisitionFetch(
+      `products/${encodeURIComponent(slug)}`,
       { next: { revalidate: 30 } },
     );
     if (!res.ok) {
@@ -81,8 +82,8 @@ async function loadProduct(slug: string): Promise<{
       return { page: null, plans: [], error: "Payload produit incomplet" };
     }
 
-    const plansRes = await fetch(
-      `${edgeApiBase()}/api/v1/edge/acquisition/public/plans?productPresentationId=${encodeURIComponent(page.presentation.id)}&limit=50`,
+    const plansRes = await publicAcquisitionFetch(
+      `plans?productPresentationId=${encodeURIComponent(page.presentation.id)}&limit=50`,
       { next: { revalidate: 30 } },
     );
     let plans: PlanPresentation[] = [];
@@ -172,6 +173,17 @@ export default async function AcquireProductPage({ params }: Props) {
                     {plan.priceDisplayRef ? ` · ref ${plan.priceDisplayRef}` : ""}
                     {plan.currencyHint ? ` · ${plan.currencyHint}` : ""}
                   </p>
+                  {String(plan.status).toUpperCase() === "PUBLISHED" ? (
+                    <AcquirePlanCheckout
+                      planPresentationId={plan.id}
+                      planTitle={plan.title}
+                      ctaLabel={plan.ctaLabel}
+                    />
+                  ) : (
+                    <p className="mt-2 type-xs text-[var(--text-muted)]">
+                      Checkout après PUBLISH (Legal + price MEASURED).
+                    </p>
+                  )}
                 </div>
               </li>
             ))}
@@ -235,7 +247,11 @@ export default async function AcquireProductPage({ params }: Props) {
 
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href={`/acquire/${encodeURIComponent(slug)}/apply`}
+            href={
+              page.defaultFormSlug
+                ? `/acquire/${encodeURIComponent(slug)}/apply?form=${encodeURIComponent(page.defaultFormSlug)}`
+                : `/acquire/${encodeURIComponent(slug)}/apply`
+            }
             className="inline-flex h-[var(--control-height)] items-center bg-[var(--primary)] px-5 type-sm font-medium text-[var(--on-primary)]"
           >
             {plans[0]?.ctaLabel?.trim() || "Postuler"}

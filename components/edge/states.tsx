@@ -23,7 +23,7 @@ export function EdgeEmptyState({
   onAction,
 }: {
   title: string;
-  description: string;
+  description?: string;
   actionLabel?: string;
   onAction?: () => void;
 }) {
@@ -34,9 +34,11 @@ export function EdgeEmptyState({
         aria-hidden
       />
       <h2 className="type-md text-[var(--text-primary)]">{title}</h2>
-      <p className="max-w-md type-sm text-[var(--text-secondary)]">
-        {description}
-      </p>
+      {description ? (
+        <p className="max-w-md type-sm text-[var(--text-secondary)]">
+          {description}
+        </p>
+      ) : null}
       {actionLabel && onAction ? (
         <Button variant="primary" onClick={onAction}>
           {actionLabel}
@@ -49,12 +51,22 @@ export function EdgeEmptyState({
 export function EdgeErrorState({
   title = "Something went wrong",
   description,
+  error,
   onRetry,
 }: {
   title?: string;
-  description: string;
+  description?: string;
+  /** Alias accepted by console pages — maps to description. */
+  error?: unknown;
   onRetry?: () => void;
 }) {
+  const resolvedDescription =
+    description ??
+    (error instanceof Error
+      ? error.message
+      : error != null
+        ? String(error)
+        : "Something went wrong");
   return (
     <div className="flex flex-col items-start gap-[var(--space-3)] rounded-[var(--radius-md)] bg-[var(--bg-surface)] p-[var(--space-5)] elevation-0">
       <div className="flex items-center gap-[var(--space-2)]">
@@ -65,7 +77,7 @@ export function EdgeErrorState({
         <h2 className="type-md text-[var(--danger)]">{title}</h2>
       </div>
       <p className="max-w-md type-sm text-[var(--text-secondary)]">
-        {description}
+        {resolvedDescription}
       </p>
       {onRetry ? (
         <Button variant="outline" onClick={onRetry}>

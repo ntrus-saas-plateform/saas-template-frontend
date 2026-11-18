@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { LiveCompleteAdapterStatusBadge } from "@/components/edge/live-complete/adapter-status-badge";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
@@ -31,6 +32,15 @@ type Tab =
   | "provisioning"
   | "policies"
   | "analytics";
+
+function asRecordList(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (!data || typeof data !== "object") return [];
+  const obj = data as { data?: unknown; items?: unknown };
+  if (Array.isArray(obj.data)) return obj.data as Record<string, unknown>[];
+  if (Array.isArray(obj.items)) return obj.items as Record<string, unknown>[];
+  return [];
+}
 
 const TABS: { id: Tab; label: string; permission: string }[] = [
   {
@@ -65,8 +75,8 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
   },
   {
     id: "suspension",
-    label: "Suspension",
-    permission: "platform:subscriptions:suspend",
+    label: "Pause / cancel",
+    permission: "platform:subscriptions:read",
   },
   {
     id: "enterprise",
@@ -108,6 +118,15 @@ export default function EdgeSubscriptionsPage() {
   const [suspendForm, setSuspendForm] = useState({
     subscriptionId: "",
     reason: "",
+  });
+  const [resumeForm, setResumeForm] = useState({
+    subscriptionId: "",
+    confirm: false,
+  });
+  const [cancelForm, setCancelForm] = useState({
+    subscriptionId: "",
+    reason: "",
+    confirm: false,
   });
   const [changeSubId, setChangeSubId] = useState("");
   const [renewalSubId, setRenewalSubId] = useState("");
@@ -209,6 +228,36 @@ export default function EdgeSubscriptionsPage() {
       canReadAny,
   });
 
+  const handoffsQuery = useQuery({
+    queryKey: ["edge", "sales", "handoffs", "for-subscription"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listSalesHandoffs({});
+      return data;
+    },
+    enabled: tab === "registry" && canReadAny,
+    retry: false,
+  });
+
+  const productsQuery = useQuery({
+    queryKey: ["edge", "products", "for-subscription-draft"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listProducts({ limit: 100 });
+      return data ?? [];
+    },
+    enabled: (tab === "registry" || tab === "trials") && canReadAny,
+    retry: false,
+  });
+
+  const accountsQuery = useQuery({
+    queryKey: ["edge", "sales", "accounts", "for-subscription-draft"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listSalesAccounts({ limit: 100 });
+      return data;
+    },
+    enabled: (tab === "registry" || tab === "trials") && canReadAny,
+    retry: false,
+  });
+
   const createDraft = useMutation({
     mutationFn: () =>
       edgeApi.createSubscription({
@@ -245,6 +294,30 @@ export default function EdgeSubscriptionsPage() {
       }),
     onSuccess: () => {
       setSuspendForm({ subscriptionId: "", reason: "" });
+      void queryClient.invalidateQueries({
+        queryKey: ["edge", "subscriptions"],
+      });
+    },
+  });
+
+  const resumeSub = useMutation({
+    mutationFn: () =>
+      edgeApi.reactivateSubscription(resumeForm.subscriptionId),
+    onSuccess: () => {
+      setResumeForm({ subscriptionId: "", confirm: false });
+      void queryClient.invalidateQueries({
+        queryKey: ["edge", "subscriptions"],
+      });
+    },
+  });
+
+  const cancelSub = useMutation({
+    mutationFn: () =>
+      edgeApi.cancelSubscription(cancelForm.subscriptionId, {
+        reason: cancelForm.reason,
+      }),
+    onSuccess: () => {
+      setCancelForm({ subscriptionId: "", reason: "", confirm: false });
       void queryClient.invalidateQueries({
         queryKey: ["edge", "subscriptions"],
       });
@@ -331,6 +404,51 @@ export default function EdgeSubscriptionsPage() {
       (data as { items?: Record<string, unknown>[] } | undefined)?.items ?? []
     );
   }, [listQuery.data]);
+
+  const handoffPickOptions = useMemo(() => {
+    const raw = handoffsQuery.data as
+      | { items?: Record<string, unknown>[] }
+      | Record<string, unknown>[]
+      | undefined;
+    const items = Array.isArray(raw) ? raw : (raw?.items ?? []);
+    return items
+      .map((h) => {
+        const id = String(h.id ?? "").trim();
+        if (!id) return null;
+        return {
+          id,
+          label: `${String(h.handoffNumber ?? id).slice(0, 16)} · ${String(h.status ?? "handoff")}`,
+        };
+      })
+      .filter((o): o is { id: string; label: string } => Boolean(o));
+  }, [handoffsQuery.data]);
+
+  const productPickOptions = useMemo(
+    () =>
+      (productsQuery.data ?? []).map((p) => ({
+        id: p.id,
+        label: `${p.code} — ${p.name}`,
+      })),
+    [productsQuery.data],
+  );
+
+  const accountPickOptions = useMemo(() => {
+    const raw = accountsQuery.data as
+      | { items?: Record<string, unknown>[] }
+      | Record<string, unknown>[]
+      | undefined;
+    const items = Array.isArray(raw) ? raw : (raw?.items ?? []);
+    return items
+      .map((a) => {
+        const id = String(a.id ?? "").trim();
+        if (!id) return null;
+        return {
+          id,
+          label: `${String(a.legalName ?? a.tradeName ?? id).slice(0, 40)} · ${id.slice(0, 8)}…`,
+        };
+      })
+      .filter((o): o is { id: string; label: string } => Boolean(o));
+  }, [accountsQuery.data]);
 
   if (platformLoading) {
     return <EdgeLoadingState label="Loading subscriptions…" />;
@@ -446,22 +564,24 @@ export default function EdgeSubscriptionsPage() {
                 <h2 className="sm:col-span-2 text-sm font-medium">
                   Create draft subscription
                 </h2>
-                <input
-                  className={fieldControlClass}
-                  placeholder="Account ID"
+                <ListOrUuidField
                   value={draftForm.accountId}
-                  onChange={(e) =>
-                    setDraftForm((s) => ({ ...s, accountId: e.target.value }))
+                  onChange={(v) =>
+                    setDraftForm((s) => ({ ...s, accountId: v }))
                   }
+                  options={accountPickOptions}
+                  placeholder="Select account"
+                  fallbackPlaceholder="Account ID"
                   required
                 />
-                <input
-                  className={fieldControlClass}
-                  placeholder="Product ID"
+                <ListOrUuidField
                   value={draftForm.productId}
-                  onChange={(e) =>
-                    setDraftForm((s) => ({ ...s, productId: e.target.value }))
+                  onChange={(v) =>
+                    setDraftForm((s) => ({ ...s, productId: v }))
                   }
+                  options={productPickOptions}
+                  placeholder="Select product"
+                  fallbackPlaceholder="Product ID"
                   required
                 />
                 <input
@@ -496,11 +616,12 @@ export default function EdgeSubscriptionsPage() {
                   <label className="text-xs text-muted-foreground">
                     P4 sales handoff ID
                   </label>
-                  <input
-                    className={fieldControlClass}
+                  <ListOrUuidField
                     value={handoffId}
-                    onChange={(e) => setHandoffId(e.target.value)}
-                    placeholder="Handoff UUID"
+                    onChange={setHandoffId}
+                    options={handoffPickOptions}
+                    placeholder="Select sales handoff"
+                    fallbackPlaceholder="Handoff UUID"
                     required
                   />
                 </div>
@@ -613,11 +734,11 @@ export default function EdgeSubscriptionsPage() {
             ) : null}
             {changeSubId && changesQuery.isLoading ? (
               <EdgeLoadingState label="Loading change requests…" />
-            ) : changeSubId && !(changesQuery.data as unknown[] | undefined)?.length ? (
+            ) : changeSubId && !asRecordList(changesQuery.data).length ? (
               <EdgeEmptyState title="No change requests" />
             ) : changeSubId ? (
               <EntityList
-                items={(changesQuery.data as Record<string, unknown>[]) ?? []}
+                items={asRecordList(changesQuery.data)}
                 labelKey="changeType"
               />
             ) : (
@@ -655,11 +776,11 @@ export default function EdgeSubscriptionsPage() {
             {renewalSubId && renewalsQuery.isLoading ? (
               <EdgeLoadingState label="Loading renewals…" />
             ) : renewalSubId &&
-              !(renewalsQuery.data as unknown[] | undefined)?.length ? (
+              !asRecordList(renewalsQuery.data).length ? (
               <EdgeEmptyState title="No renewal events" />
             ) : renewalSubId ? (
               <EntityList
-                items={(renewalsQuery.data as Record<string, unknown>[]) ?? []}
+                items={asRecordList(renewalsQuery.data)}
                 labelKey="status"
               />
             ) : (
@@ -680,22 +801,24 @@ export default function EdgeSubscriptionsPage() {
               }}
             >
               <h2 className="md:col-span-4 text-sm font-medium">Start trial</h2>
-              <input
-                className={fieldControlClass}
-                placeholder="Account ID"
+              <ListOrUuidField
                 value={trialForm.accountId}
-                onChange={(e) =>
-                  setTrialForm((s) => ({ ...s, accountId: e.target.value }))
+                onChange={(v) =>
+                  setTrialForm((s) => ({ ...s, accountId: v }))
                 }
+                options={accountPickOptions}
+                placeholder="Select account"
+                fallbackPlaceholder="Account ID"
                 required
               />
-              <input
-                className={fieldControlClass}
-                placeholder="Product ID"
+              <ListOrUuidField
                 value={trialForm.productId}
-                onChange={(e) =>
-                  setTrialForm((s) => ({ ...s, productId: e.target.value }))
+                onChange={(v) =>
+                  setTrialForm((s) => ({ ...s, productId: v }))
                 }
+                options={productPickOptions}
+                placeholder="Select product"
+                fallbackPlaceholder="Product ID"
                 required
               />
               <input
@@ -723,11 +846,11 @@ export default function EdgeSubscriptionsPage() {
                 error={trialsQuery.error}
                 onRetry={() => void trialsQuery.refetch()}
               />
-            ) : !(trialsQuery.data as unknown[] | undefined)?.length ? (
+            ) : !asRecordList(trialsQuery.data).length ? (
               <EdgeEmptyState title="No trials" />
             ) : (
               <EntityList
-                items={(trialsQuery.data as Record<string, unknown>[]) ?? []}
+                items={asRecordList(trialsQuery.data)}
                 labelKey="status"
               />
             )}
@@ -740,8 +863,12 @@ export default function EdgeSubscriptionsPage() {
           <section className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Snapshots are calculated and published from the workspace; runtime
-              enforcement is downstream.
+              enforcement is downstream. Drift scan compares Edge snapshots to BB
+              ready/state (operator/cron entrypoint).
             </p>
+            <EdgePermissionGate permission="platform:subscriptions:reconcile_entitlements">
+              <DriftScanActions />
+            </EdgePermissionGate>
             <SubscriptionPicker
               subs={subs}
               value={entitlementSubId}
@@ -750,13 +877,11 @@ export default function EdgeSubscriptionsPage() {
             {entitlementSubId && entitlementsQuery.isLoading ? (
               <EdgeLoadingState label="Loading entitlements…" />
             ) : entitlementSubId &&
-              !(entitlementsQuery.data as unknown[] | undefined)?.length ? (
+              !asRecordList(entitlementsQuery.data).length ? (
               <EdgeEmptyState title="No entitlement snapshots" />
             ) : entitlementSubId ? (
               <EntityList
-                items={
-                  (entitlementsQuery.data as Record<string, unknown>[]) ?? []
-                }
+                items={asRecordList(entitlementsQuery.data)}
                 labelKey="version"
               />
             ) : (
@@ -767,15 +892,16 @@ export default function EdgeSubscriptionsPage() {
       ) : null}
 
       {tab === "suspension" ? (
-        <EdgePermissionGate permission="platform:subscriptions:suspend">
-          <section className="space-y-4">
+        <section className="space-y-[var(--space-4)]">
+          <EdgePermissionGate permission="platform:subscriptions:suspend">
             <form
-              className="grid gap-3 rounded-xl border border-border/70 p-4 md:grid-cols-3"
+              className="grid gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--border)] p-[var(--space-4)] md:grid-cols-3"
               onSubmit={(e: FormEvent) => {
                 e.preventDefault();
                 suspendSub.mutate();
               }}
             >
+              <h2 className="md:col-span-3 text-sm font-medium">Pause</h2>
               <input
                 className={fieldControlClass}
                 placeholder="Subscription ID"
@@ -798,17 +924,140 @@ export default function EdgeSubscriptionsPage() {
                 required
               />
               <Button type="submit" disabled={suspendSub.isPending}>
-                Suspend
+                Confirm pause
               </Button>
               {suspendSub.isError ? (
-                <p className="md:col-span-3 text-sm text-destructive">
+                <p className="md:col-span-3 text-sm text-[var(--danger)]">
                   {(suspendSub.error as EdgeApiError)?.message ??
-                    "Suspend failed"}
+                    "Pause failed"}
                 </p>
               ) : null}
             </form>
-          </section>
-        </EdgePermissionGate>
+          </EdgePermissionGate>
+
+          <EdgePermissionGate permission="platform:subscriptions:reactivate">
+            <form
+              className="grid gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--border)] p-[var(--space-4)] md:grid-cols-3"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                if (!resumeForm.confirm) {
+                  setResumeForm((s) => ({ ...s, confirm: true }));
+                  return;
+                }
+                resumeSub.mutate();
+              }}
+            >
+              <h2 className="md:col-span-3 text-sm font-medium">Resume</h2>
+              <input
+                className={fieldControlClass}
+                placeholder="Subscription ID"
+                value={resumeForm.subscriptionId}
+                onChange={(e) =>
+                  setResumeForm((s) => ({
+                    ...s,
+                    subscriptionId: e.target.value,
+                    confirm: false,
+                  }))
+                }
+                required
+              />
+              <Button
+                type="submit"
+                className="md:col-span-2"
+                disabled={resumeSub.isPending}
+              >
+                {resumeForm.confirm ? "Confirm resume" : "Resume…"}
+              </Button>
+              {resumeForm.confirm ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    setResumeForm((s) => ({ ...s, confirm: false }))
+                  }
+                >
+                  Back
+                </Button>
+              ) : null}
+              {resumeSub.isError ? (
+                <p className="md:col-span-3 text-sm text-[var(--danger)]">
+                  {(resumeSub.error as EdgeApiError)?.message ??
+                    "Resume failed"}
+                </p>
+              ) : null}
+            </form>
+          </EdgePermissionGate>
+
+          <EdgePermissionGate permission="platform:subscriptions:cancel">
+            <form
+              className="grid gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--border)] p-[var(--space-4)] md:grid-cols-3"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                if (!cancelForm.confirm) {
+                  setCancelForm((s) => ({ ...s, confirm: true }));
+                  return;
+                }
+                cancelSub.mutate();
+              }}
+            >
+              <h2 className="md:col-span-3 text-sm font-medium">Cancel</h2>
+              <input
+                className={fieldControlClass}
+                placeholder="Subscription ID"
+                value={cancelForm.subscriptionId}
+                onChange={(e) =>
+                  setCancelForm((s) => ({
+                    ...s,
+                    subscriptionId: e.target.value,
+                    confirm: false,
+                  }))
+                }
+                required
+              />
+              <input
+                className={fieldControlClass}
+                placeholder="Reason (required)"
+                value={cancelForm.reason}
+                onChange={(e) =>
+                  setCancelForm((s) => ({
+                    ...s,
+                    reason: e.target.value,
+                    confirm: false,
+                  }))
+                }
+                required
+              />
+              <Button
+                type="submit"
+                variant={cancelForm.confirm ? "danger" : "outline"}
+                disabled={
+                  cancelSub.isPending ||
+                  !cancelForm.subscriptionId.trim() ||
+                  !cancelForm.reason.trim()
+                }
+              >
+                {cancelForm.confirm ? "Confirm cancellation" : "Cancel…"}
+              </Button>
+              {cancelForm.confirm ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    setCancelForm((s) => ({ ...s, confirm: false }))
+                  }
+                >
+                  Back
+                </Button>
+              ) : null}
+              {cancelSub.isError ? (
+                <p className="md:col-span-3 text-sm text-[var(--danger)]">
+                  {(cancelSub.error as EdgeApiError)?.message ??
+                    "Cancel failed"}
+                </p>
+              ) : null}
+            </form>
+          </EdgePermissionGate>
+        </section>
       ) : null}
 
       {tab === "enterprise" ? (
@@ -1132,6 +1381,58 @@ function SubscriptionLinkList({ subs }: { subs: Record<string, unknown>[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function DriftScanActions() {
+  const [report, setReport] = useState<Record<string, unknown> | null>(null);
+  const scan = useMutation({
+    mutationFn: async (remediateBb: boolean) => {
+      const { data } = await edgeApi.scanSubscriptionEntitlementDrift({
+        remediateBb,
+        limit: 50,
+        status: "ACTIVE",
+      });
+      return data as Record<string, unknown>;
+    },
+    onSuccess: (data) => setReport(data),
+  });
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border/70 p-4">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={scan.isPending}
+          onClick={() => scan.mutate(false)}
+        >
+          Scan entitlement drift
+        </Button>
+        <Button
+          size="sm"
+          disabled={scan.isPending}
+          onClick={() => scan.mutate(true)}
+        >
+          Scan + remediate BB
+        </Button>
+      </div>
+      {report ? (
+        <p className="text-xs text-muted-foreground font-mono">
+          scanned={String(report.scanned ?? 0)} drifted=
+          {String(report.driftedCount ?? 0)} remediated=
+          {String(report.remediatedCount ?? 0)}
+          {report.alert
+            ? ` · alert=${JSON.stringify(report.alert)}`
+            : ""}
+        </p>
+      ) : null}
+      {scan.isError ? (
+        <p className="text-xs text-destructive">
+          {(scan.error as Error)?.message ?? "Drift scan failed"}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

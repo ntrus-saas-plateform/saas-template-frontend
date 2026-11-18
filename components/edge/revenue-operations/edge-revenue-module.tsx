@@ -445,6 +445,81 @@ export function EdgeRevenueModule() {
   const [planFrom, setPlanFrom] = useState("");
   const [planMsg, setPlanMsg] = useState<string | null>(null);
 
+  const [churnStart, setChurnStart] = useState("");
+  const [churnEnd, setChurnEnd] = useState("");
+  const [churnResult, setChurnResult] = useState<string | null>(null);
+  const [uePeriodStart, setUePeriodStart] = useState("");
+  const [uePeriodEnd, setUePeriodEnd] = useState("");
+  const [ueCurrency, setUeCurrency] = useState("USD");
+  const [ueSpend, setUeSpend] = useState("");
+  const [ueCustomers, setUeCustomers] = useState("");
+  const [ueMsg, setUeMsg] = useState<string | null>(null);
+  const [ppPeriodStart, setPpPeriodStart] = useState("");
+  const [ppPeriodEnd, setPpPeriodEnd] = useState("");
+  const [ppRevenue, setPpRevenue] = useState("");
+  const [ppCurrency, setPpCurrency] = useState("USD");
+  const [ppMsg, setPpMsg] = useState<string | null>(null);
+  const [decisionCode, setDecisionCode] = useState("");
+  const [decisionTitle, setDecisionTitle] = useState("");
+  const [decisionMsg, setDecisionMsg] = useState<string | null>(null);
+
+  const computeChurnMutation = useMutation({
+    mutationFn: () =>
+      edgeApi.computeRevenueChurnRates({
+        periodStart: churnStart,
+        periodEnd: churnEnd,
+        persistSnapshots: false,
+      }),
+    onSuccess: (res) => {
+      setChurnResult(JSON.stringify(unwrapData(res) ?? res, null, 2));
+    },
+    onError: (e) => setChurnResult(errMsg(e)),
+  });
+
+  const recordUeMutation = useMutation({
+    mutationFn: () =>
+      edgeApi.recordRevenueUnitEconomicsSnapshot({
+        periodStart: uePeriodStart,
+        periodEnd: uePeriodEnd,
+        currency: ueCurrency,
+        acquisitionSpend: ueSpend ? Number(ueSpend) : null,
+        newCustomers: ueCustomers ? Number(ueCustomers) : null,
+      }),
+    onSuccess: () => {
+      setUeMsg("Unit-economics snapshot recorded (costs absent → UNAVAILABLE).");
+    },
+    onError: (e) => setUeMsg(errMsg(e)),
+  });
+
+  const recordPpMutation = useMutation({
+    mutationFn: () =>
+      edgeApi.recordRevenueProductProfitabilitySnapshot({
+        periodStart: ppPeriodStart,
+        periodEnd: ppPeriodEnd,
+        revenueAmount: Number(ppRevenue),
+        currency: ppCurrency,
+        revenueDataQuality: "MEASURED",
+      }),
+    onSuccess: () => {
+      setPpMsg("Product profitability snapshot recorded.");
+    },
+    onError: (e) => setPpMsg(errMsg(e)),
+  });
+
+  const createDecisionMutation = useMutation({
+    mutationFn: () =>
+      edgeApi.createBusinessDecision({
+        code: decisionCode.trim(),
+        title: decisionTitle.trim(),
+      }),
+    onSuccess: () => {
+      setDecisionMsg("Business decision recorded.");
+      setDecisionCode("");
+      setDecisionTitle("");
+    },
+    onError: (e) => setDecisionMsg(errMsg(e)),
+  });
+
   const createPlanMutation = useMutation({
     mutationFn: () =>
       edgeApi.createCommissionPlan({
@@ -604,6 +679,104 @@ export function EdgeRevenueModule() {
               </DenseTable>
             </div>
           ) : null}
+          {hasEdgePermission(permissions, "platform:business:metrics:manage") ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-[var(--space-4)]">
+              <h3 className="type-sm font-semibold">Unit economics & profitability</h3>
+              <p className="type-xs text-[var(--text-muted)]">
+                CAC/LTV and margin stay UNAVAILABLE when costs are not supplied.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  aria-label="UE period start"
+                  value={uePeriodStart}
+                  onChange={(e) => setUePeriodStart(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  aria-label="UE period end"
+                  value={uePeriodEnd}
+                  onChange={(e) => setUePeriodEnd(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  maxLength={3}
+                  aria-label="UE currency"
+                  value={ueCurrency}
+                  onChange={(e) => setUeCurrency(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Acquisition spend"
+                  value={ueSpend}
+                  onChange={(e) => setUeSpend(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="New customers"
+                  value={ueCustomers}
+                  onChange={(e) => setUeCustomers(e.target.value)}
+                />
+                <Button
+                  disabled={
+                    !uePeriodStart ||
+                    !uePeriodEnd ||
+                    recordUeMutation.isPending
+                  }
+                  onClick={() => recordUeMutation.mutate()}
+                >
+                  Record unit economics
+                </Button>
+              </div>
+              {ueMsg ? (
+                <p className="type-xs text-[var(--text-secondary)]">{ueMsg}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  aria-label="PP period start"
+                  value={ppPeriodStart}
+                  onChange={(e) => setPpPeriodStart(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  aria-label="PP period end"
+                  value={ppPeriodEnd}
+                  onChange={(e) => setPpPeriodEnd(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Revenue amount"
+                  value={ppRevenue}
+                  onChange={(e) => setPpRevenue(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  maxLength={3}
+                  value={ppCurrency}
+                  onChange={(e) => setPpCurrency(e.target.value)}
+                />
+                <Button
+                  disabled={
+                    !ppPeriodStart ||
+                    !ppPeriodEnd ||
+                    !ppRevenue ||
+                    recordPpMutation.isPending
+                  }
+                  onClick={() => recordPpMutation.mutate()}
+                >
+                  Record product profitability
+                </Button>
+              </div>
+              {ppMsg ? (
+                <p className="type-xs text-[var(--text-secondary)]">{ppMsg}</p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -735,6 +908,39 @@ export function EdgeRevenueModule() {
             GRR excludes expansion and reactivation. Missing snapshots →
             UNAVAILABLE — never invent 100%.
           </p>
+          <div className="space-y-2 border-b border-[var(--border)] pb-[var(--space-4)]">
+            <h3 className="type-sm font-semibold">Churn compute</h3>
+            <p className="type-xs text-[var(--text-muted)]">
+              Denominators must be supplied — never invented.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                className={fieldControlClass}
+                type="date"
+                value={churnStart}
+                onChange={(e) => setChurnStart(e.target.value)}
+              />
+              <input
+                className={fieldControlClass}
+                type="date"
+                value={churnEnd}
+                onChange={(e) => setChurnEnd(e.target.value)}
+              />
+              <Button
+                disabled={
+                  !churnStart || !churnEnd || computeChurnMutation.isPending
+                }
+                onClick={() => computeChurnMutation.mutate()}
+              >
+                Compute churn
+              </Button>
+            </div>
+            {churnResult ? (
+              <pre className="type-xs overflow-auto rounded border border-[var(--border)] p-2">
+                {churnResult}
+              </pre>
+            ) : null}
+          </div>
           <QueryShell
             loading={retentionQuery.isLoading}
             error={null}
@@ -1085,6 +1291,38 @@ export function EdgeRevenueModule() {
       {activeTab === "reports" ? (
         <section className="space-y-3" data-testid="rev-reports">
           <h2 className="type-md font-semibold">Business reports &amp; audit</h2>
+          {hasEdgePermission(permissions, "platform:business:manage") ? (
+            <form
+              className="flex flex-wrap gap-2 rounded border border-[var(--border)] p-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                createDecisionMutation.mutate();
+              }}
+            >
+              <input
+                className={fieldControlClass}
+                placeholder="Decision code"
+                value={decisionCode}
+                onChange={(e) => setDecisionCode(e.target.value)}
+                required
+              />
+              <input
+                className={fieldControlClass}
+                placeholder="Title"
+                value={decisionTitle}
+                onChange={(e) => setDecisionTitle(e.target.value)}
+                required
+              />
+              <Button type="submit" disabled={createDecisionMutation.isPending}>
+                Record decision
+              </Button>
+              {decisionMsg ? (
+                <p className="w-full type-xs text-[var(--text-secondary)]">
+                  {decisionMsg}
+                </p>
+              ) : null}
+            </form>
+          ) : null}
           <QueryShell
             loading={reportsQuery.isLoading}
             error={reportsQuery.error}

@@ -4,12 +4,14 @@
  * P9 — Edge Admin Console: Platform Operations Center.
  * Tabbed control plane — API state only; never invent live health metrics.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Tabs } from "@/components/ui/tabs";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import {
   EdgeEmptyState,
   EdgeErrorState,
@@ -44,6 +46,7 @@ import type {
   ServiceRequestRecord,
   SloDefinitionRecord,
   StatusComponentRecord,
+  StatusPublicationRecord,
 } from "@/types/edge-platform-operations";
 
 type TabId =
@@ -271,7 +274,12 @@ function canApproveRejectChange(status: string): boolean {
 export function EdgeOperationsModule() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>("overview");
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
+    null,
+  );
 
   const canOverview = hasEdgePermission(permissions, "platform:operations:overview:read");
   const canReadServices = hasEdgePermission(permissions, "platform:service_catalog:read");
@@ -402,6 +410,8 @@ export function EdgeOperationsModule() {
     publicStatus: "UNKNOWN",
     message: "",
   });
+  const [approvePublicationId, setApprovePublicationId] = useState("");
+  const [recentPublicationIds, setRecentPublicationIds] = useState<string[]>([]);
   const [recoveryEvidenceRef, setRecoveryEvidenceRef] = useState("");
   const [recoveryEvidenceKind, setRecoveryEvidenceKind] =
     useState<RecoveryEvidenceKind>("PROVIDER_TICKET");
@@ -443,7 +453,8 @@ export function EdgeOperationsModule() {
   const servicesQ = useQuery({
     queryKey: ["p9", "services", serviceQ],
     queryFn: () => edgeApi.listPlatformServices({ q: serviceQ || undefined, limit: 50 }),
-    enabled: canReadServices && tab === "services",
+    enabled:
+      canReadServices && (tab === "services" || tab === "alerts"),
   });
 
   const alertsQ = useQuery({
@@ -457,6 +468,44 @@ export function EdgeOperationsModule() {
     queryFn: () => edgeApi.listIncidents({ limit: 50 }),
     enabled: canIncidentsRead && tab === "incidents",
   });
+
+  const majorIncidentsQ = useQuery({
+    queryKey: ["p9", "major-incidents"],
+    queryFn: () => edgeApi.listMajorIncidents({ limit: 50 }),
+    enabled: canIncidentsRead && tab === "incidents",
+  });
+
+  const incidentDetailQ = useQuery({
+    queryKey: ["p9", "incident", selectedIncidentId],
+    queryFn: async () => {
+      const { data } = await edgeApi.getIncident(selectedIncidentId!);
+      return data;
+    },
+    enabled: canIncidentsRead && tab === "incidents" && Boolean(selectedIncidentId),
+  });
+
+  useEffect(() => {
+    const fromUrl = searchParams.get("incident")?.trim() || null;
+    if (!fromUrl) return;
+    setTab("incidents");
+    setSelectedIncidentId(fromUrl);
+  }, [searchParams]);
+
+  function openIncident(id: string) {
+    setSelectedIncidentId(id);
+    setTab("incidents");
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("incident", id);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }
+
+  function clearIncident() {
+    setSelectedIncidentId(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("incident");
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  }
 
   const problemsQ = useQuery({
     queryKey: ["p9", "problems"],
@@ -539,6 +588,12 @@ export function EdgeOperationsModule() {
   const statusQ = useQuery({
     queryKey: ["p9", "status"],
     queryFn: () => edgeApi.listStatusComponents({ limit: 50 }),
+    enabled: canStatusRead && tab === "status",
+  });
+
+  const statusPagesQ = useQuery({
+    queryKey: ["p9", "status-pages"],
+    queryFn: () => edgeApi.listStatusPages({ limit: 50 }),
     enabled: canStatusRead && tab === "status",
   });
 
@@ -774,13 +829,32 @@ export function EdgeOperationsModule() {
         publicStatus: statusForm.publicStatus.trim(),
         message: statusForm.message.trim(),
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const pub = res.data as StatusPublicationRecord | undefined;
+      const pubId = pub?.id?.trim() ?? "";
+      if (pubId) {
+        setApprovePublicationId(pubId);
+        setRecentPublicationIds((prev) =>
+          [pubId, ...prev.filter((x) => x !== pubId)].slice(0, 10),
+        );
+      }
       setStatusForm({
         componentCode: "",
         componentDisplayName: "",
         publicStatus: "UNKNOWN",
         message: "",
       });
+      invalidateOps();
+    },
+  });
+
+  const approveStatus = useMutation({
+    mutationFn: () =>
+      edgeApi.approveStatusPublication(approvePublicationId.trim(), {
+        approved: true,
+      }),
+    onSuccess: () => {
+      setApprovePublicationId("");
       invalidateOps();
     },
   });
@@ -799,6 +873,7 @@ export function EdgeOperationsModule() {
   const servicesPage = unwrapCatalog(servicesQ.data);
   const alerts = unwrapPage<OperationalAlertRecord>(alertsQ.data);
   const incidents = unwrapPage<IncidentRecord>(incidentsQ.data);
+  const majorIncidents = unwrapPage<IncidentRecord>(majorIncidentsQ.data);
   const problems = unwrapPage<ProblemRecord>(problemsQ.data);
   const changes = unwrapPage<ChangeRequestRecord>(changesQ.data);
   const releases = unwrapPage<ReleaseRecord>(releasesQ.data);
@@ -813,6 +888,7 @@ export function EdgeOperationsModule() {
   const recovery = unwrapPage<RecoveryOperationRecord>(recoveryQ.data);
   const runbooks = unwrapPage<RunbookRecord>(runbooksQ.data);
   const statusComponents = unwrapPage<StatusComponentRecord>(statusQ.data);
+  const statusPages = unwrapPage<StatusComponentRecord>(statusPagesQ.data);
   const risks = unwrapPage<OperationalRiskRecord>(risksQ.data);
   const exceptions = unwrapPage<OperationalExceptionRecord>(exceptionsQ.data);
   const automations = unwrapPage<AutomationDefinitionRecord>(automationsQ.data);
@@ -859,7 +935,8 @@ export function EdgeOperationsModule() {
     createRisk.error ??
     createException.error ??
     createAutomation.error ??
-    publishStatus.error;
+    publishStatus.error ??
+    approveStatus.error;
 
   const canVerifyRecovery =
     recoveryEvidenceRef.trim().length >= 4 &&
@@ -1237,12 +1314,18 @@ export function EdgeOperationsModule() {
               <div className="space-y-3">
                 <h4 className="type-sm font-medium">Record probe</h4>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <input
-                    className={fieldControlClass}
-                    placeholder="sourceId (UUID)"
+                  <ListOrUuidField
                     aria-label="probe sourceId"
                     value={probeForm.sourceId}
-                    onChange={(e) => setProbeForm((f) => ({ ...f, sourceId: e.target.value }))}
+                    onChange={(v) =>
+                      setProbeForm((f) => ({ ...f, sourceId: v }))
+                    }
+                    options={servicesPage.items.map((s) => ({
+                      id: s.id,
+                      label: `${s.serviceCode} — ${s.displayName}`,
+                    }))}
+                    placeholder="Select service (source)"
+                    fallbackPlaceholder="sourceId (UUID)"
                   />
                   <input
                     className={fieldControlClass}
@@ -1313,6 +1396,14 @@ export function EdgeOperationsModule() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openIncident(i.id)}
+                      >
+                        Open
+                      </Button>
                       {canIncidentsManage && canAckIncident(i.status) ? (
                         <Button
                           type="button"
@@ -1348,13 +1439,138 @@ export function EdgeOperationsModule() {
                           Declare major
                         </Button>
                       ) : null}
-                      {!canIncidentsManage && !canIncidentsApprove ? "—" : null}
                     </div>
                   </td>
                 </tr>
               ))}
             </DenseTable>
           </QueryShell>
+
+          {selectedIncidentId ? (
+            <div
+              className="space-y-3 rounded-[var(--radius-md)] border border-[var(--border)] p-4"
+              data-testid="ops-incident-detail"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="type-sm font-medium">
+                  Incident detail{" "}
+                  <span className="font-mono text-[var(--text-muted)]">
+                    {selectedIncidentId.slice(0, 8)}…
+                  </span>
+                </h3>
+                <Button type="button" size="sm" variant="ghost" onClick={clearIncident}>
+                  Close
+                </Button>
+              </div>
+              {incidentDetailQ.isLoading ? (
+                <EdgeLoadingState label="Loading incident…" />
+              ) : incidentDetailQ.isError ? (
+                <EdgeErrorState
+                  error={incidentDetailQ.error}
+                  onRetry={() => void incidentDetailQ.refetch()}
+                />
+              ) : incidentDetailQ.data ? (
+                <dl className="grid gap-2 type-sm md:grid-cols-2">
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Number</dt>
+                    <dd>{incidentDetailQ.data.incidentNumber}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Title</dt>
+                    <dd className="font-medium">{incidentDetailQ.data.title}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Severity</dt>
+                    <dd>
+                      <Badge tone={statusTone(incidentDetailQ.data.severity)}>
+                        {incidentDetailQ.data.severity}
+                      </Badge>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Status</dt>
+                    <dd>
+                      <Badge tone={statusTone(incidentDetailQ.data.status)}>
+                        {incidentDetailQ.data.status}
+                      </Badge>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Major</dt>
+                    <dd>{incidentDetailQ.data.isMajor ? "Yes" : "No"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Detected</dt>
+                    <dd>{formatWhen(incidentDetailQ.data.detectedAt)}</dd>
+                  </div>
+                  <div className="md:col-span-2">
+                    <dt className="text-[var(--text-muted)]">Description</dt>
+                    <dd className="whitespace-pre-wrap">
+                      {incidentDetailQ.data.description?.trim() || "—"}
+                    </dd>
+                  </div>
+                  <div className="md:col-span-2">
+                    <dt className="text-[var(--text-muted)]">Resolution</dt>
+                    <dd className="whitespace-pre-wrap">
+                      {incidentDetailQ.data.resolutionSummary?.trim() || "—"}
+                    </dd>
+                  </div>
+                </dl>
+              ) : (
+                <EdgeEmptyState title="Incident not found" />
+              )}
+            </div>
+          ) : null}
+
+          <div className="space-y-2" data-testid="ops-major-incidents">
+            <h3 className="type-sm font-medium">Major incidents</h3>
+            <p className="type-xs text-[var(--text-muted)]">
+              Dedicated list from <code>GET /operations/major-incidents</code> — not a
+              client-side filter of the table above.
+            </p>
+            <QueryShell
+              loading={majorIncidentsQ.isLoading}
+              error={majorIncidentsQ.isError ? majorIncidentsQ.error : null}
+              empty={
+                !majorIncidentsQ.isLoading && majorIncidents.items.length === 0
+              }
+              emptyTitle="No major incidents"
+              emptyDescription="No declared major incidents. Empty here is good."
+            >
+              <DenseTable
+                headers={["Number", "Title", "Severity", "Status", "Detected", "Actions"]}
+                testId="ops-major-incidents-table"
+              >
+                {majorIncidents.items.map((i) => (
+                  <tr key={i.id}>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">
+                      {i.incidentNumber}
+                    </td>
+                    <td className="px-3 py-2 font-medium">{i.title}</td>
+                    <td className="px-3 py-2">
+                      <Badge tone={statusTone(i.severity)}>{i.severity}</Badge>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge tone={statusTone(i.status)}>{i.status}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">
+                      {formatWhen(i.detectedAt)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openIncident(i.id)}
+                      >
+                        Open
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </DenseTable>
+            </QueryShell>
+          </div>
 
           {canIncidentsManage ? (
             <div className="space-y-3 border-t border-[var(--border)] pt-4">
@@ -2334,6 +2550,40 @@ export function EdgeOperationsModule() {
             </DenseTable>
           </QueryShell>
 
+          <div className="space-y-2" data-testid="ops-status-pages">
+            <h3 className="type-sm font-medium">Status pages</h3>
+            <p className="type-xs text-[var(--text-muted)]">
+              Dedicated <code>GET /operations/status-pages</code> (alias surface).
+            </p>
+            <QueryShell
+              loading={statusPagesQ.isLoading}
+              error={statusPagesQ.isError ? statusPagesQ.error : null}
+              empty={!statusPagesQ.isLoading && statusPages.items.length === 0}
+              emptyTitle="No status pages"
+              emptyDescription="No public status pages registered yet."
+            >
+              <DenseTable
+                headers={["Code", "Name", "Public status", "Updated"]}
+                testId="ops-status-pages-table"
+              >
+                {statusPages.items.map((c) => (
+                  <tr key={c.id}>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">{c.code}</td>
+                    <td className="px-3 py-2 font-medium">{c.displayName}</td>
+                    <td className="px-3 py-2">
+                      <Badge tone={statusTone(c.publicStatus)}>
+                        {c.publicStatus}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">
+                      {formatWhen(c.updatedAt)}
+                    </td>
+                  </tr>
+                ))}
+              </DenseTable>
+            </QueryShell>
+          </div>
+
           {canStatusPublish ? (
             <div className="space-y-3 border-t border-[var(--border)] pt-4">
               <h3 className="type-sm font-medium">Publish status update</h3>
@@ -2385,6 +2635,36 @@ export function EdgeOperationsModule() {
               >
                 Publish status
               </Button>
+              <h3 className="type-sm font-medium pt-2">Approve publication (SoD)</h3>
+              <p className="type-xs text-[var(--text-muted)]">
+                {recentPublicationIds.length
+                  ? "Select a recent publication from this session, or paste an id."
+                  : "Publish status above to capture an id here, or paste a publication UUID."}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {/* no list API for status publications — session-captured ids + UUID fallback */}
+                <ListOrUuidField
+                  aria-label="status publication id"
+                  value={approvePublicationId}
+                  onChange={setApprovePublicationId}
+                  options={recentPublicationIds.map((pid) => ({
+                    id: pid,
+                    label: pid,
+                  }))}
+                  placeholder="Select recent publication…"
+                  fallbackPlaceholder="publication id (UUID)"
+                />
+                <Button
+                  type="button"
+                  disabled={
+                    approveStatus.isPending ||
+                    approvePublicationId.trim().length < 8
+                  }
+                  onClick={() => approveStatus.mutate()}
+                >
+                  Approve publication
+                </Button>
+              </div>
             </div>
           ) : null}
         </section>

@@ -56,6 +56,8 @@ import type {
 
 type TabId = "overview" | "endpoints" | "exchanges" | "credentials";
 
+/** Product Control is the Edge hub for Business Backend control-plane ops. */
+
 const TABS: { id: TabId; label: string; permissions: string[] }[] = [
   {
     id: "overview",
@@ -315,8 +317,28 @@ export default function ProductControlPage() {
     <div className="space-y-[var(--space-6)]">
       <div>
         <h1 className="type-lg font-semibold text-[var(--text-primary)]">
-          Product Control
+          BB · Product Control
         </h1>
+        <p className="mt-1 max-w-3xl type-sm text-[var(--text-secondary)]">
+          Hub Edge pour piloter le Business Backend via{" "}
+          <code className="type-xs">/control/v1</code> — endpoints, handshake,
+          exchanges et credentials. Le registre des backends et les bindings
+          produit sont dans{" "}
+          <Link
+            href="/edge/backends"
+            className="font-semibold text-[var(--primary)]"
+          >
+            Business Backends
+          </Link>{" "}
+          et le{" "}
+          <Link
+            href="/edge/catalog"
+            className="font-semibold text-[var(--primary)]"
+          >
+            Catalog
+          </Link>
+          .
+        </p>
         <p className="mt-1 type-sm text-[var(--text-secondary)]">
           Endpoint registry, exchanges, health and credential bindings — secrets
           never displayed.

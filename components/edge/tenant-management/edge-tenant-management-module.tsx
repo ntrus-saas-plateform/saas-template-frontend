@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Tabs } from "@/components/ui/tabs";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -257,6 +258,25 @@ export function EdgeTenantManagementModule() {
       }),
     enabled: canSearch && tab === "registry",
   });
+
+  const productsPickQ = useQuery({
+    queryKey: ["tm", "products-pick"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listProducts({ limit: 100 });
+      return data ?? [];
+    },
+    enabled: canSearch && (tab === "registry" || tab === "bulk"),
+    retry: false,
+  });
+
+  const productPickOptions = useMemo(
+    () =>
+      (productsPickQ.data ?? []).map((p) => ({
+        id: p.id,
+        label: `${p.code} — ${p.name}`,
+      })),
+    [productsPickQ.data],
+  );
 
   const lifecycleQ = useQuery({
     queryKey: ["tm", "lifecycle-requests"],
@@ -807,10 +827,11 @@ export function EdgeTenantManagementModule() {
                       registerTenant.mutate();
                     }}
                   >
+                    {/* no list API — UUID fallback for external product-tenant id being registered */}
                     <input
                       className={fieldControlClass}
                       required
-                      placeholder="productTenantId (UUID)"
+                      placeholder="External productTenantId (UUID)"
                       value={registerForm.productTenantId}
                       onChange={(e) =>
                         setRegisterForm((f) => ({
@@ -820,15 +841,16 @@ export function EdgeTenantManagementModule() {
                       }
                       aria-label="Product tenant id"
                     />
-                    <input
-                      className={fieldControlClass}
+                    <ListOrUuidField
                       required
-                      placeholder="productId (UUID)"
-                      value={registerForm.productId}
-                      onChange={(e) =>
-                        setRegisterForm((f) => ({ ...f, productId: e.target.value }))
-                      }
                       aria-label="Product id"
+                      value={registerForm.productId}
+                      onChange={(v) =>
+                        setRegisterForm((f) => ({ ...f, productId: v }))
+                      }
+                      options={productPickOptions}
+                      placeholder="Select product"
+                      fallbackPlaceholder="productId (UUID)"
                     />
                     <input
                       className={fieldControlClass}
@@ -1589,14 +1611,15 @@ export function EdgeTenantManagementModule() {
                 <option value="ASSIGN">ASSIGN</option>
                 <option value="CLASSIFY">CLASSIFY</option>
               </select>
-              <input
-                className={fieldControlClass}
-                placeholder="Filter productId (optional)"
-                value={bulkForm.filterProductId}
-                onChange={(e) =>
-                  setBulkForm((f) => ({ ...f, filterProductId: e.target.value }))
-                }
+              <ListOrUuidField
                 aria-label="Filter product id"
+                value={bulkForm.filterProductId}
+                onChange={(v) =>
+                  setBulkForm((f) => ({ ...f, filterProductId: v }))
+                }
+                options={productPickOptions}
+                placeholder="Filter product (optional)"
+                fallbackPlaceholder="Filter productId (optional)"
               />
               {bulkForm.operationType === "TAG" ? (
                 <>

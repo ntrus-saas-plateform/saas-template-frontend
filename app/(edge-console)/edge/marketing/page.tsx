@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -27,9 +28,11 @@ type Tab =
   | "audiences"
   | "campaigns"
   | "content"
+  | "templates"
   | "landing"
   | "forms"
   | "leads"
+  | "suppressions"
   | "channels"
   | "journeys"
   | "attribution"
@@ -62,6 +65,11 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
     permission: "platform:marketing:content:read",
   },
   {
+    id: "templates",
+    label: "Templates",
+    permission: "platform:marketing:content:read",
+  },
+  {
     id: "landing",
     label: "Landing",
     permission: "platform:marketing:landing_page:manage",
@@ -72,6 +80,11 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
     permission: "platform:marketing:form:manage",
   },
   { id: "leads", label: "Leads", permission: "platform:marketing:lead:read" },
+  {
+    id: "suppressions",
+    label: "Suppressions",
+    permission: "platform:marketing:lead:read",
+  },
   {
     id: "channels",
     label: "Channels",
@@ -103,6 +116,7 @@ type Row = {
   formType?: string;
   scopeType?: string;
   emailNormalized?: string | null;
+  email?: string | null;
   plannedAmount?: string;
   currency?: string;
 };
@@ -144,6 +158,35 @@ export default function EdgeMarketingPage() {
   const [channelName, setChannelName] = useState("");
   const [journeyCode, setJourneyCode] = useState("");
   const [journeyName, setJourneyName] = useState("");
+  const [templateCode, setTemplateCode] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateChannelType, setTemplateChannelType] = useState("EMAIL");
+  const [templateSubject, setTemplateSubject] = useState("");
+  const [templateLocale, setTemplateLocale] = useState("en");
+  const [suppressionEmail, setSuppressionEmail] = useState("");
+  const [suppressionLeadId, setSuppressionLeadId] = useState("");
+  const [suppressionChannel, setSuppressionChannel] = useState("EMAIL");
+  const [suppressionReason, setSuppressionReason] = useState("MANUAL");
+  const [suppressionsActiveOnly, setSuppressionsActiveOnly] = useState(true);
+  const [attrLeadId, setAttrLeadId] = useState("");
+  const [attrModelCode, setAttrModelCode] = useState("");
+  const [attrConversionKey, setAttrConversionKey] = useState("");
+  const [attrCalcResult, setAttrCalcResult] = useState<string | null>(null);
+  const [receiptAttemptId, setReceiptAttemptId] = useState("");
+  const [receiptEventId, setReceiptEventId] = useState("");
+  const [receiptStatus, setReceiptStatus] = useState("DELIVERED");
+  const [campaignInspectId, setCampaignInspectId] = useState("");
+  const [leadInspectId, setLeadInspectId] = useState("");
+  const [consentPurpose, setConsentPurpose] = useState("MARKETING");
+  const [consentChannel, setConsentChannel] = useState("EMAIL");
+  const [consentWithdrawResult, setConsentWithdrawResult] = useState<
+    string | null
+  >(null);
+  const [journeyExecJourneyId, setJourneyExecJourneyId] = useState("");
+  const [journeyExecLeadId, setJourneyExecLeadId] = useState("");
+  const [journeyExecResult, setJourneyExecResult] = useState<string | null>(
+    null,
+  );
 
   const productsQuery = useQuery({
     queryKey: ["edge", "products", "marketing"],
@@ -198,7 +241,13 @@ export default function EdgeMarketingPage() {
 
   const leadsQuery = useQuery({
     queryKey: ["edge", "marketing", "leads", productId || "all"],
-    enabled: anyAllowed && (tab === "leads" || tab === "overview" || tab === "attribution"),
+    enabled:
+      anyAllowed &&
+      (tab === "leads" ||
+        tab === "overview" ||
+        tab === "attribution" ||
+        tab === "suppressions" ||
+        tab === "journeys"),
     queryFn: async () => {
       const { data } = await edgeApi.listMarketingLeads({
         productId: productId || undefined,
@@ -206,6 +255,42 @@ export default function EdgeMarketingPage() {
       return (data as Row[]) ?? [];
     },
   });
+
+  const leadPickOptions = useMemo(
+    () =>
+      (leadsQuery.data ?? [])
+        .map((row) => {
+          const id = String(row.id ?? "").trim();
+          if (!id) return null;
+          const email = String(row.emailNormalized ?? row.email ?? "").trim();
+          return {
+            id,
+            label: email
+              ? `${email} · ${id.slice(0, 8)}…`
+              : `${id.slice(0, 8)}… · lead`,
+          };
+        })
+        .filter((o): o is { id: string; label: string } => Boolean(o)),
+    [leadsQuery.data],
+  );
+
+  const campaignPickOptions = useMemo(
+    () =>
+      (campaignsQuery.data ?? [])
+        .map((row) => {
+          const id = String(row.id ?? "").trim();
+          if (!id) return null;
+          const name = String(row.name ?? row.code ?? "").trim();
+          return {
+            id,
+            label: name
+              ? `${name} · ${id.slice(0, 8)}…`
+              : `${id.slice(0, 8)}… · campaign`,
+          };
+        })
+        .filter((o): o is { id: string; label: string } => Boolean(o)),
+    [campaignsQuery.data],
+  );
 
   const budgetsQuery = useQuery({
     queryKey: ["edge", "marketing", "budgets"],
@@ -252,6 +337,48 @@ export default function EdgeMarketingPage() {
     },
   });
 
+  const templatesQuery = useQuery({
+    queryKey: ["edge", "marketing", "templates"],
+    enabled: anyAllowed && tab === "templates",
+    queryFn: async () => {
+      const { data } = await edgeApi.listMarketingTemplates();
+      return (
+        (data as (Row & {
+          channelType?: string;
+          locale?: string;
+          subject?: string | null;
+          version?: number;
+        })[]) ?? []
+      );
+    },
+  });
+
+  const suppressionsQuery = useQuery({
+    queryKey: [
+      "edge",
+      "marketing",
+      "suppressions",
+      suppressionsActiveOnly ? "active" : "all",
+    ],
+    enabled: anyAllowed && tab === "suppressions",
+    queryFn: async () => {
+      const { data } = await edgeApi.listMarketingSuppressions({
+        activeOnly: suppressionsActiveOnly,
+      });
+      return (
+        (data as {
+          id: string;
+          emailNormalized: string | null;
+          leadId: string | null;
+          channel: string;
+          reason: string;
+          active: boolean;
+          createdAt?: string;
+        }[]) ?? []
+      );
+    },
+  });
+
   const journeysQuery = useQuery({
     queryKey: ["edge", "marketing", "journeys"],
     enabled: anyAllowed && tab === "journeys",
@@ -259,6 +386,37 @@ export default function EdgeMarketingPage() {
       const { data } = await edgeApi.listMarketingJourneys();
       return (data as (Row & { triggerType?: string })[]) ?? [];
     },
+  });
+
+  const journeyPickOptions = useMemo(
+    () =>
+      (journeysQuery.data ?? [])
+        .map((row) => {
+          const id = String(row.id ?? "").trim();
+          if (!id) return null;
+          const name = String(row.name ?? row.code ?? "").trim();
+          return {
+            id,
+            label: name
+              ? `${name} · ${id.slice(0, 8)}…`
+              : `${id.slice(0, 8)}… · journey`,
+          };
+        })
+        .filter((o): o is { id: string; label: string } => Boolean(o)),
+    [journeysQuery.data],
+  );
+
+  const campaignDetailQuery = useQuery({
+    queryKey: ["edge", "marketing", "campaign", campaignInspectId],
+    queryFn: () => edgeApi.getMarketingCampaign(campaignInspectId.trim()),
+    enabled:
+      anyAllowed && tab === "campaigns" && Boolean(campaignInspectId.trim()),
+  });
+
+  const leadDetailQuery = useQuery({
+    queryKey: ["edge", "marketing", "lead", leadInspectId],
+    queryFn: () => edgeApi.getMarketingLead(leadInspectId.trim()),
+    enabled: anyAllowed && tab === "leads" && Boolean(leadInspectId.trim()),
   });
 
   const attributionQuery = useQuery({
@@ -473,6 +631,87 @@ export default function EdgeMarketingPage() {
       setFormError(err instanceof EdgeApiError ? err.message : "Create failed"),
   });
 
+  const calculateAttribution = useMutation({
+    mutationFn: async () =>
+      edgeApi.calculateMarketingAttribution({
+        leadId: attrLeadId.trim(),
+        modelCode: attrModelCode.trim(),
+        conversionKey: attrConversionKey.trim(),
+      }),
+    onSuccess: (res) => {
+      setAttrCalcResult(JSON.stringify(res ?? {}, null, 2));
+      setFormError(null);
+    },
+    onError: (err) => {
+      setAttrCalcResult(null);
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Attribution failed",
+      );
+    },
+  });
+
+  const ingestDeliveryReceipt = useMutation({
+    mutationFn: async () =>
+      edgeApi.ingestMarketingDeliveryReceipt({
+        deliveryAttemptId: receiptAttemptId.trim(),
+        providerEventId: receiptEventId.trim(),
+        receiptStatus: receiptStatus as
+          | "DELIVERED"
+          | "FAILED"
+          | "BOUNCED"
+          | "OPENED"
+          | "CLICKED"
+          | "UNKNOWN",
+      }),
+    onSuccess: async () => {
+      setReceiptAttemptId("");
+      setReceiptEventId("");
+      setFormError(null);
+      await invalidate("channels");
+    },
+    onError: (err) =>
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Receipt ingest failed",
+      ),
+  });
+
+  const createTemplate = useMutation({
+    mutationFn: async () =>
+      edgeApi.createMarketingTemplate({
+        code: templateCode.trim(),
+        name: templateName.trim(),
+        channelType: templateChannelType,
+        locale: templateLocale.trim() || "en",
+        subject: templateSubject.trim() || null,
+        body: { draft: true },
+      }),
+    onSuccess: async () => {
+      setTemplateCode("");
+      setTemplateName("");
+      setTemplateSubject("");
+      await invalidate("templates");
+    },
+    onError: (err) =>
+      setFormError(err instanceof EdgeApiError ? err.message : "Create failed"),
+  });
+
+  const createSuppression = useMutation({
+    mutationFn: async () =>
+      edgeApi.createMarketingSuppression({
+        emailNormalized: suppressionEmail.trim().toLowerCase() || null,
+        leadId: suppressionLeadId.trim() || null,
+        channel: suppressionChannel,
+        reason: suppressionReason,
+      }),
+    onSuccess: async () => {
+      setSuppressionEmail("");
+      setSuppressionLeadId("");
+      await invalidate("suppressions");
+    },
+    onError: (err) =>
+      setFormError(err instanceof EdgeApiError ? err.message : "Create failed"),
+  });
+
   const createJourney = useMutation({
     mutationFn: async () =>
       edgeApi.createMarketingJourney({
@@ -500,6 +739,46 @@ export default function EdgeMarketingPage() {
     },
     onError: (err) =>
       setFormError(err instanceof EdgeApiError ? err.message : "Create failed"),
+  });
+
+  const withdrawLeadConsent = useMutation({
+    mutationFn: async () =>
+      edgeApi.withdrawMarketingLeadConsent(leadInspectId.trim(), {
+        purpose: consentPurpose,
+        channel: consentChannel,
+      }),
+    onSuccess: (res) => {
+      setConsentWithdrawResult(JSON.stringify(res ?? {}, null, 2));
+      setFormError(null);
+      void leadDetailQuery.refetch();
+      void invalidate("leads");
+    },
+    onError: (err) => {
+      setConsentWithdrawResult(null);
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Consent withdraw failed",
+      );
+    },
+  });
+
+  const startJourneyExecution = useMutation({
+    mutationFn: async () =>
+      edgeApi.startMarketingJourneyExecution(journeyExecJourneyId.trim(), {
+        leadId: journeyExecLeadId.trim(),
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: (res) => {
+      setJourneyExecResult(JSON.stringify(res ?? {}, null, 2));
+      setFormError(null);
+    },
+    onError: (err) => {
+      setJourneyExecResult(null);
+      setFormError(
+        err instanceof EdgeApiError
+          ? err.message
+          : "Journey execution failed",
+      );
+    },
   });
 
   const visibleTabs = useMemo(
@@ -785,11 +1064,42 @@ export default function EdgeMarketingPage() {
                       {row.code} · {row.campaignType}
                     </p>
                   </div>
-                  <Badge>{row.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge>{row.status}</Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setCampaignInspectId(row.id)}
+                    >
+                      Detail
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
+          <div className="space-y-[var(--space-3)] border-t border-[var(--border)] pt-[var(--space-4)]">
+            <h2 className="type-md font-semibold">Inspect campaign</h2>
+            <ListOrUuidField
+              value={campaignInspectId}
+              onChange={setCampaignInspectId}
+              options={campaignPickOptions}
+              placeholder="Select campaign"
+              fallbackPlaceholder="Campaign id"
+            />
+            {campaignInspectId ? (
+              campaignDetailQuery.isLoading ? (
+                <EdgeLoadingState />
+              ) : campaignDetailQuery.isError ? (
+                <EdgeErrorState description="Unable to load campaign detail." />
+              ) : (
+                <pre className="type-xs max-h-48 overflow-auto rounded border border-[var(--border)] p-2">
+                  {JSON.stringify(campaignDetailQuery.data, null, 2)}
+                </pre>
+              )
+            ) : null}
+          </div>
         </section>
       ) : null}
 
@@ -920,7 +1230,189 @@ export default function EdgeMarketingPage() {
                     </p>
                     <p className="type-xs text-[var(--text-muted)]">{row.id}</p>
                   </div>
-                  <Badge>{row.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge>{row.status}</Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setLeadInspectId(row.id)}
+                    >
+                      Detail
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="space-y-[var(--space-3)] border-t border-[var(--border)] pt-[var(--space-4)]">
+            <h2 className="type-md font-semibold">Inspect lead</h2>
+            <ListOrUuidField
+              value={leadInspectId}
+              onChange={(id) => {
+                setLeadInspectId(id);
+                setConsentWithdrawResult(null);
+              }}
+              options={leadPickOptions}
+              placeholder="Select lead"
+              fallbackPlaceholder="Lead id"
+            />
+            {leadInspectId ? (
+              leadDetailQuery.isLoading ? (
+                <EdgeLoadingState />
+              ) : leadDetailQuery.isError ? (
+                <EdgeErrorState description="Unable to load lead detail." />
+              ) : (
+                <pre className="type-xs max-h-48 overflow-auto rounded border border-[var(--border)] p-2">
+                  {JSON.stringify(leadDetailQuery.data, null, 2)}
+                </pre>
+              )
+            ) : null}
+            <EdgePermissionGate permission="platform:marketing:lead:manage">
+              <form
+                className="grid max-w-xl gap-[var(--space-3)]"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  if (!leadInspectId.trim()) {
+                    setFormError("Select a lead before withdrawing consent.");
+                    return;
+                  }
+                  withdrawLeadConsent.mutate();
+                }}
+              >
+                <h3 className="type-sm font-semibold">Withdraw consent</h3>
+                <select
+                  className={fieldControlClass}
+                  value={consentPurpose}
+                  onChange={(e) => setConsentPurpose(e.target.value)}
+                >
+                  <option value="MARKETING">Marketing</option>
+                  <option value="PRODUCT_UPDATES">Product updates</option>
+                  <option value="SALES_OUTREACH">Sales outreach</option>
+                </select>
+                <select
+                  className={fieldControlClass}
+                  value={consentChannel}
+                  onChange={(e) => setConsentChannel(e.target.value)}
+                >
+                  <option value="EMAIL">Email</option>
+                  <option value="SMS">SMS</option>
+                  <option value="WHATSAPP">WhatsApp</option>
+                  <option value="PUSH">Push</option>
+                </select>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={
+                    withdrawLeadConsent.isPending || !leadInspectId.trim()
+                  }
+                >
+                  Withdraw consent
+                </Button>
+                {consentWithdrawResult ? (
+                  <pre className="type-xs overflow-auto rounded border border-[var(--border)] p-2">
+                    {consentWithdrawResult}
+                  </pre>
+                ) : null}
+              </form>
+            </EdgePermissionGate>
+          </div>
+        </section>
+      ) : null}
+
+      {tab === "suppressions" ? (
+        <section className="space-y-[var(--space-4)]">
+          <EdgePermissionGate permission="platform:marketing:lead:manage">
+            <form
+              className="grid max-w-xl gap-[var(--space-3)]"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                if (!suppressionEmail.trim() && !suppressionLeadId.trim()) {
+                  setFormError("Provide an email or lead id for suppression.");
+                  return;
+                }
+                createSuppression.mutate();
+              }}
+            >
+              <h2 className="type-md font-semibold">Add suppression</h2>
+              <p className="type-xs text-[var(--text-muted)]">
+                Suppressions block channel sends — consent and bounce hygiene.
+              </p>
+              <input
+                className={fieldControlClass}
+                placeholder="Email (normalized)"
+                value={suppressionEmail}
+                onChange={(e) => setSuppressionEmail(e.target.value)}
+              />
+              <ListOrUuidField
+                value={suppressionLeadId}
+                onChange={setSuppressionLeadId}
+                options={leadPickOptions}
+                placeholder="Select lead (optional)"
+                fallbackPlaceholder="Lead id (optional)"
+              />
+              <select
+                className={fieldControlClass}
+                value={suppressionChannel}
+                onChange={(e) => setSuppressionChannel(e.target.value)}
+              >
+                <option value="EMAIL">Email</option>
+                <option value="SMS">SMS</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="PUSH">Push</option>
+              </select>
+              <select
+                className={fieldControlClass}
+                value={suppressionReason}
+                onChange={(e) => setSuppressionReason(e.target.value)}
+              >
+                <option value="MANUAL">Manual</option>
+                <option value="UNSUBSCRIBE">Unsubscribe</option>
+                <option value="CONSENT_WITHDRAWN">Consent withdrawn</option>
+                <option value="BOUNCE">Bounce</option>
+                <option value="COMPLAINT">Complaint</option>
+              </select>
+              <Button type="submit" disabled={createSuppression.isPending}>
+                Add suppression
+              </Button>
+            </form>
+          </EdgePermissionGate>
+          <label className="flex items-center gap-2 type-sm text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={suppressionsActiveOnly}
+              onChange={(e) => setSuppressionsActiveOnly(e.target.checked)}
+            />
+            Active only
+          </label>
+          {suppressionsQuery.isLoading ? (
+            <EdgeLoadingState />
+          ) : suppressionsQuery.isError ? (
+            <EdgeErrorState description="Unable to load suppressions." />
+          ) : (suppressionsQuery.data?.length ?? 0) === 0 ? (
+            <EdgeEmptyState
+              title="No suppressions"
+              description="No active suppressions for the current filter."
+            />
+          ) : (
+            <ul className="divide-y divide-[var(--border)]">
+              {suppressionsQuery.data?.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex justify-between gap-2 py-[var(--space-3)]"
+                >
+                  <div>
+                    <p className="type-sm font-medium">
+                      {row.emailNormalized ?? row.leadId ?? row.id}
+                    </p>
+                    <p className="type-xs text-[var(--text-muted)]">
+                      {row.channel} · {row.reason}
+                      {row.leadId ? ` · lead ${row.leadId}` : ""}
+                    </p>
+                  </div>
+                  <Badge tone={row.active ? "success" : "info"}>
+                    {row.active ? "ACTIVE" : "INACTIVE"}
+                  </Badge>
                 </li>
               ))}
             </ul>
@@ -1038,6 +1530,99 @@ export default function EdgeMarketingPage() {
                       }}
                     />
                   ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {tab === "templates" ? (
+        <section className="space-y-[var(--space-4)]">
+          <EdgePermissionGate permission="platform:marketing:content:manage">
+            <form
+              className="grid max-w-xl gap-[var(--space-3)]"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                createTemplate.mutate();
+              }}
+            >
+              <h2 className="type-md font-semibold">Create message template</h2>
+              <p className="type-xs text-[var(--text-muted)]">
+                Channel templates for governed deliveries — not a general CMS.
+              </p>
+              <input
+                className={fieldControlClass}
+                placeholder="Code"
+                value={templateCode}
+                onChange={(e) => setTemplateCode(e.target.value)}
+                required
+              />
+              <input
+                className={fieldControlClass}
+                placeholder="Name"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                required
+              />
+              <select
+                className={fieldControlClass}
+                value={templateChannelType}
+                onChange={(e) => setTemplateChannelType(e.target.value)}
+              >
+                <option value="EMAIL">Email</option>
+                <option value="SMS">SMS</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="PUSH">Push</option>
+              </select>
+              <input
+                className={fieldControlClass}
+                placeholder="Locale"
+                value={templateLocale}
+                onChange={(e) => setTemplateLocale(e.target.value)}
+              />
+              <input
+                className={fieldControlClass}
+                placeholder="Subject (email)"
+                value={templateSubject}
+                onChange={(e) => setTemplateSubject(e.target.value)}
+              />
+              <Button type="submit" disabled={createTemplate.isPending}>
+                Create template
+              </Button>
+            </form>
+          </EdgePermissionGate>
+          {templatesQuery.isLoading ? (
+            <EdgeLoadingState />
+          ) : templatesQuery.isError ? (
+            <EdgeErrorState description="Unable to load templates." />
+          ) : (templatesQuery.data?.length ?? 0) === 0 ? (
+            <EdgeEmptyState
+              title="No templates"
+              description="Create a message template before requesting deliveries."
+            />
+          ) : (
+            <ul className="divide-y divide-[var(--border)]">
+              {templatesQuery.data?.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex justify-between gap-2 py-[var(--space-3)]"
+                >
+                  <div>
+                    <p className="type-sm font-medium">{row.name}</p>
+                    <p className="type-xs text-[var(--text-muted)]">
+                      {row.code} · {row.channelType} · {row.locale}
+                      {row.subject ? ` · ${row.subject}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {row.version != null ? (
+                      <span className="type-xs text-[var(--text-muted)]">
+                        v{row.version}
+                      </span>
+                    ) : null}
+                    <Badge>{row.status}</Badge>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1212,6 +1797,56 @@ export default function EdgeMarketingPage() {
               ))}
             </ul>
           )}
+          <EdgePermissionGate permission="platform:marketing:integrations:manage">
+            <form
+              className="grid max-w-xl gap-[var(--space-3)] border-t border-[var(--border)] pt-[var(--space-4)]"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                ingestDeliveryReceipt.mutate();
+              }}
+            >
+              <h2 className="type-md font-semibold">Manual delivery receipt</h2>
+              <p className="type-xs text-[var(--text-muted)]">
+                Operator ingest only — production DELIVERED uses signed Resend
+                webhooks.
+              </p>
+              <input
+                className={fieldControlClass}
+                placeholder="Delivery attempt ID"
+                value={receiptAttemptId}
+                onChange={(e) => setReceiptAttemptId(e.target.value)}
+                required
+              />
+              <input
+                className={fieldControlClass}
+                placeholder="Provider event ID"
+                value={receiptEventId}
+                onChange={(e) => setReceiptEventId(e.target.value)}
+                required
+              />
+              <select
+                className={fieldControlClass}
+                value={receiptStatus}
+                onChange={(e) => setReceiptStatus(e.target.value)}
+              >
+                {[
+                  "DELIVERED",
+                  "FAILED",
+                  "BOUNCED",
+                  "OPENED",
+                  "CLICKED",
+                  "UNKNOWN",
+                ].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <Button type="submit" disabled={ingestDeliveryReceipt.isPending}>
+                Ingest receipt
+              </Button>
+            </form>
+          </EdgePermissionGate>
         </section>
       ) : null}
 
@@ -1298,6 +1933,46 @@ export default function EdgeMarketingPage() {
             </ul>
           )}
           <EdgePermissionGate permission="platform:marketing:automation:manage">
+            <form
+              className="grid max-w-xl gap-[var(--space-3)] border-t border-[var(--border)] pt-[var(--space-4)]"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                if (!journeyExecJourneyId.trim() || !journeyExecLeadId.trim()) {
+                  setFormError("Select a journey and a lead for execution.");
+                  return;
+                }
+                startJourneyExecution.mutate();
+              }}
+            >
+              <h2 className="type-md font-semibold">Start journey execution</h2>
+              <ListOrUuidField
+                value={journeyExecJourneyId}
+                onChange={setJourneyExecJourneyId}
+                options={journeyPickOptions}
+                placeholder="Select journey"
+                fallbackPlaceholder="Journey id"
+                required
+              />
+              <ListOrUuidField
+                value={journeyExecLeadId}
+                onChange={setJourneyExecLeadId}
+                options={leadPickOptions}
+                placeholder="Select lead"
+                fallbackPlaceholder="Lead id"
+                required
+              />
+              <Button
+                type="submit"
+                disabled={startJourneyExecution.isPending}
+              >
+                Start execution
+              </Button>
+              {journeyExecResult ? (
+                <pre className="type-xs overflow-auto rounded border border-[var(--border)] p-2">
+                  {journeyExecResult}
+                </pre>
+              ) : null}
+            </form>
             <Button
               type="button"
               variant="outline"
@@ -1442,6 +2117,47 @@ export default function EdgeMarketingPage() {
                 Record CAC unavailable
               </Button>
             </div>
+          </EdgePermissionGate>
+          <EdgePermissionGate permission="platform:marketing:analytics:read">
+            <form
+              className="grid max-w-xl gap-[var(--space-3)]"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                calculateAttribution.mutate();
+              }}
+            >
+              <h2 className="type-md font-semibold">Calculate attribution</h2>
+              <ListOrUuidField
+                value={attrLeadId}
+                onChange={setAttrLeadId}
+                options={leadPickOptions}
+                placeholder="Select lead"
+                fallbackPlaceholder="Lead ID"
+                required
+              />
+              <input
+                className={fieldControlClass}
+                placeholder="Model code"
+                value={attrModelCode}
+                onChange={(e) => setAttrModelCode(e.target.value)}
+                required
+              />
+              <input
+                className={fieldControlClass}
+                placeholder="Conversion key"
+                value={attrConversionKey}
+                onChange={(e) => setAttrConversionKey(e.target.value)}
+                required
+              />
+              <Button type="submit" disabled={calculateAttribution.isPending}>
+                Calculate
+              </Button>
+              {attrCalcResult ? (
+                <pre className="type-xs overflow-auto rounded border border-[var(--border)] p-2">
+                  {attrCalcResult}
+                </pre>
+              ) : null}
+            </form>
           </EdgePermissionGate>
           {attributionQuery.isLoading ? (
             <EdgeLoadingState />

@@ -12,17 +12,29 @@ const tones = {
 export function Badge({
   children,
   tone = "default",
+  variant,
   className,
+  title,
 }: {
   children: React.ReactNode;
   tone?: keyof typeof tones;
+  /** Legacy alias used by some console pages (`outline` → default). */
+  variant?: keyof typeof tones | "outline";
   className?: string;
+  title?: string;
 }) {
+  const resolvedTone: keyof typeof tones =
+    tone !== "default"
+      ? tone
+      : variant && variant !== "outline"
+        ? variant
+        : "default";
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center rounded-[var(--radius-full)] px-[var(--space-2)] py-[var(--space-1)] type-xs font-medium",
-        tones[tone],
+        tones[resolvedTone],
         className,
       )}
     >

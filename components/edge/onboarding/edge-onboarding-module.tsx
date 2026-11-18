@@ -16,6 +16,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -34,7 +35,7 @@ import type {
   OnboardingTemplate,
 } from "@/types/edge-onboarding";
 
-type TabId = "journeys" | "templates" | "history";
+type TabId = "journeys" | "templates" | "history" | "cs";
 
 const TABS: { id: TabId; label: string; permission: string }[] = [
   { id: "journeys", label: "Journeys", permission: "platform:onboarding:read" },
@@ -44,6 +45,7 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "History",
     permission: "platform:onboarding:history:read",
   },
+  { id: "cs", label: "CS / Aha", permission: "platform:onboarding:read" },
 ];
 
 function statusTone(
@@ -100,7 +102,29 @@ export function EdgeOnboardingModule() {
     description: "",
   });
 
+  const [csSegment, setCsSegment] = useState<
+    "RETAIL_PHARMACY" | "WHOLESALE" | "RESTAURANT"
+  >("RETAIL_PHARMACY");
+  const [csSubscriptionId, setCsSubscriptionId] = useState("");
+  const [csIngestCode, setCsIngestCode] = useState("pharmacy.first_sale");
+  const [csHealthResult, setCsHealthResult] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [csChurnResult, setCsChurnResult] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [csExpansionResult, setCsExpansionResult] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+
   const canRead = hasEdgePermission(permissions, "platform:onboarding:read");
+  const canAnalytics = hasEdgePermission(
+    permissions,
+    "platform:subscriptions:read_analytics",
+  );
   const canStart = hasEdgePermission(permissions, "platform:onboarding:start");
   const canAdvance = hasEdgePermission(
     permissions,
@@ -140,6 +164,46 @@ export function EdgeOnboardingModule() {
     queryKey: ["ob", "evidence", historyJourneyId],
     queryFn: () => edgeApi.listOnboardingEvidence(historyJourneyId),
     enabled: canHistory && Boolean(historyJourneyId) && tab === "history",
+  });
+  const ahaQ = useQuery({
+    queryKey: ["ob", "cs", "aha", csSegment],
+    queryFn: () => edgeApi.listAhaMoments(csSegment),
+    enabled: canRead && tab === "cs",
+  });
+  const subscriptionsPickQ = useQuery({
+    queryKey: ["ob", "subscriptions-pick"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listSubscriptions({ limit: 100 });
+      return data;
+    },
+    enabled: canRead && tab === "cs",
+    retry: false,
+  });
+  const subscriptionPickOptions = useMemo(() => {
+    const raw = subscriptionsPickQ.data as
+      | { items?: Record<string, unknown>[] }
+      | Record<string, unknown>[]
+      | undefined;
+    const items = Array.isArray(raw) ? raw : (raw?.items ?? []);
+    return items
+      .map((s) => {
+        const id = String(s.id ?? "").trim();
+        if (!id) return null;
+        return {
+          id,
+          label: `${String(s.subscriptionNumber ?? id).slice(0, 20)} · ${String(s.status ?? "")}`,
+        };
+      })
+      .filter((o): o is { id: string; label: string } => Boolean(o));
+  }, [subscriptionsPickQ.data]);
+  const adoptionQ = useQuery({
+    queryKey: ["ob", "cs", "adoption", csSubscriptionId, csSegment],
+    queryFn: () =>
+      edgeApi.listAdoptionEvents({
+        subscriptionId: csSubscriptionId,
+        segment: csSegment,
+      }),
+    enabled: canRead && tab === "cs" && Boolean(csSubscriptionId),
   });
 
   const journeys = unwrapInfraList<OnboardingJourney>(journeysQ.data?.data);
@@ -215,6 +279,69 @@ export function EdgeOnboardingModule() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["ob"] }),
   });
 
+  const ingestAdoption = useMutation({
+    mutationFn: () =>
+      edgeApi.ingestAdoptionEvent({
+        subscriptionId: csSubscriptionId,
+        eventCode: csIngestCode,
+        source: "EDGE_OPS",
+      }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ["ob", "cs", "adoption"] }),
+  });
+
+  const runHealth = useMutation({
+    mutationFn: async () => {
+      const ahaPct = Number(
+        (adoptionQ.data?.data?.ahaCompletion as { completionPct?: number } | undefined)
+          ?.completionPct ?? null,
+      );
+      const res = await edgeApi.computeCustomerHealthScore({
+        ahaCompletionPct: Number.isFinite(ahaPct) ? ahaPct : null,
+        adoptionScore: Number.isFinite(ahaPct) ? ahaPct : null,
+        paymentHealthScore: 100,
+        supportLoadInverseScore: 80,
+      });
+      setCsHealthResult(res.data ?? null);
+      return res;
+    },
+  });
+
+  const runChurn = useMutation({
+    mutationFn: async () => {
+      const health = csHealthResult as {
+        band?: "HIGH" | "MID" | "LOW" | "UNKNOWN";
+        score?: number | null;
+      } | null;
+      const ahaPct = Number(
+        (adoptionQ.data?.data?.ahaCompletion as { completionPct?: number } | undefined)
+          ?.completionPct ?? null,
+      );
+      const res = await edgeApi.computeChurnRisk({
+        healthBand: health?.band ?? "UNKNOWN",
+        healthScore: health?.score ?? null,
+        ahaCompletionPct: Number.isFinite(ahaPct) ? ahaPct : null,
+        daysToRenewal: 30,
+      });
+      setCsChurnResult(res.data ?? null);
+      return res;
+    },
+  });
+
+  const runExpansion = useMutation({
+    mutationFn: async () => {
+      const res = await edgeApi.evaluateExpansionSignals({
+        signals: [
+          { kind: "USERS", observed: 48, granted: 50 },
+          { kind: "MODULES", observed: 3, granted: 3 },
+          { kind: "SITES", observed: 2, granted: 2 },
+        ],
+      });
+      setCsExpansionResult(res.data ?? null);
+      return res;
+    },
+  });
+
   const visibleTabs = useMemo(
     () => TABS.filter((t) => hasEdgePermission(permissions, t.permission)),
     [permissions],
@@ -275,7 +402,11 @@ export function EdgeOnboardingModule() {
     startJourney.error ??
     advanceJourney.error ??
     closeJourney.error ??
-    decideTask.error;
+    decideTask.error ??
+    ingestAdoption.error ??
+    runHealth.error ??
+    runChurn.error ??
+    runExpansion.error;
 
   return (
     <div className="flex flex-col gap-[var(--space-6)]" data-testid="ob-module">
@@ -771,6 +902,171 @@ export function EdgeOnboardingModule() {
                 </Card>
               </>
             )}
+          </div>
+        </EdgePermissionGate>
+      )}
+
+      {tab === "cs" && (
+        <EdgePermissionGate permission="platform:onboarding:read">
+          <div
+            className="flex flex-col gap-[var(--space-4)]"
+            data-testid="ob-cs-panel"
+          >
+            <div className="flex flex-wrap items-end gap-[var(--space-3)]">
+              <label className="flex flex-col gap-1 type-sm">
+                Segment
+                <Select
+                  value={csSegment}
+                  onChange={(e) =>
+                    setCsSegment(
+                      e.target.value as
+                        | "RETAIL_PHARMACY"
+                        | "WHOLESALE"
+                        | "RESTAURANT",
+                    )
+                  }
+                >
+                  <option value="RETAIL_PHARMACY">Retail Pharmacy</option>
+                  <option value="WHOLESALE">Wholesale</option>
+                  <option value="RESTAURANT">Restaurant</option>
+                </Select>
+              </label>
+              <label className="flex flex-col gap-1 type-sm min-w-[16rem]">
+                Subscription ID
+                <ListOrUuidField
+                  value={csSubscriptionId}
+                  onChange={setCsSubscriptionId}
+                  options={subscriptionPickOptions}
+                  placeholder="Select subscription"
+                  fallbackPlaceholder="UUID subscription"
+                />
+              </label>
+            </div>
+
+            <Card>
+              <CardHeader title="Aha moments (registry)" />
+              <CardBody>
+                {ahaQ.isLoading ? (
+                  <EdgeLoadingState label="Chargement Aha..." />
+                ) : ahaQ.isError ? (
+                  <EdgeErrorState description={(ahaQ.error as Error).message} />
+                ) : (
+                  <ul className="flex flex-col gap-[var(--space-2)] type-sm">
+                    {(
+                      (
+                        ahaQ.data?.data?.moments as
+                          | Array<{
+                              code: string;
+                              title: string;
+                              targetDay: number;
+                            }>
+                          | undefined
+                      ) ?? []
+                    ).map((m) => (
+                      <li key={m.code}>
+                        <Badge tone="info">J{m.targetDay}</Badge> {m.code} —{" "}
+                        {m.title}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardHeader title="Ingestion adoption (BB → Edge)" />
+              <CardBody>
+                <div className="flex flex-wrap items-end gap-[var(--space-3)]">
+                  <label className="flex flex-col gap-1 type-sm min-w-[14rem]">
+                    Event code
+                    <input
+                      className={fieldControlClass}
+                      value={csIngestCode}
+                      onChange={(e) => setCsIngestCode(e.target.value)}
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    disabled={
+                      !canAdvance ||
+                      !csSubscriptionId ||
+                      ingestAdoption.isPending
+                    }
+                    onClick={() => ingestAdoption.mutate()}
+                  >
+                    Ingest event
+                  </Button>
+                </div>
+                {adoptionQ.data?.data?.ahaCompletion ? (
+                  <p className="type-sm text-[var(--text-muted)] mt-[var(--space-3)]">
+                    Aha completion:{" "}
+                    {String(
+                      (
+                        adoptionQ.data.data.ahaCompletion as {
+                          completionPct?: number;
+                        }
+                      ).completionPct ?? "—",
+                    )}
+                    %
+                  </p>
+                ) : null}
+              </CardBody>
+            </Card>
+
+            <div className="flex flex-wrap gap-[var(--space-3)]">
+              <Button
+                type="button"
+                disabled={!canAnalytics || runHealth.isPending}
+                onClick={() => runHealth.mutate()}
+              >
+                Health score
+              </Button>
+              <Button
+                type="button"
+                disabled={!canAnalytics || runChurn.isPending}
+                onClick={() => runChurn.mutate()}
+              >
+                Churn risk
+              </Button>
+              <Button
+                type="button"
+                disabled={!canAnalytics || runExpansion.isPending}
+                onClick={() => runExpansion.mutate()}
+              >
+                Expansion signals
+              </Button>
+            </div>
+
+            {csHealthResult ? (
+              <Card>
+                <CardHeader title="Health" />
+                <CardBody>
+                  <pre className="type-xs overflow-auto">
+                    {JSON.stringify(csHealthResult, null, 2)}
+                  </pre>
+                </CardBody>
+              </Card>
+            ) : null}
+            {csChurnResult ? (
+              <Card>
+                <CardHeader title="Churn risk" />
+                <CardBody>
+                  <pre className="type-xs overflow-auto">
+                    {JSON.stringify(csChurnResult, null, 2)}
+                  </pre>
+                </CardBody>
+              </Card>
+            ) : null}
+            {csExpansionResult ? (
+              <Card>
+                <CardHeader title="Expansion (quote path only)" />
+                <CardBody>
+                  <pre className="type-xs overflow-auto">
+                    {JSON.stringify(csExpansionResult, null, 2)}
+                  </pre>
+                </CardBody>
+              </Card>
+            ) : null}
           </div>
         </EdgePermissionGate>
       )}

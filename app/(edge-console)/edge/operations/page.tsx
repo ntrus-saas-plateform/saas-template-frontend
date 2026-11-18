@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { EdgeOperationsModule } from "@/components/edge/platform-operations/edge-operations-module";
+import { EdgeLoadingState } from "@/components/edge/states";
 
 export const metadata: Metadata = {
   title: "Operations | Edge Console",
@@ -21,7 +23,9 @@ export default function EdgeOperationsPage() {
           never fabricated.
         </p>
       </div>
-      <EdgeOperationsModule />
+      <Suspense fallback={<EdgeLoadingState label="Loading operations…" />}>
+        <EdgeOperationsModule />
+      </Suspense>
     </div>
   );
 }

@@ -43,11 +43,19 @@ export default function EdgePortfolioPage() {
     },
   });
 
-  const activeName =
-    activeWorkspace?.vertical?.name ??
+  const activeVertical =
+    activeWorkspace?.vertical ??
     workspaces.find(
-      (w) => w.vertical.id === activeWorkspace?.session?.verticalId,
-    )?.vertical.name;
+      (w) =>
+        w.vertical.id ===
+        (activeWorkspace?.session?.verticalId ??
+          activeWorkspace?.vertical?.id),
+    )?.vertical ??
+    workspaces[0]?.vertical;
+  const activeName =
+    activeVertical?.displayName ??
+    activeVertical?.name ??
+    activeVertical?.code;
 
   const loading =
     (canReadProducts && productsQuery.isLoading) ||

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   InfraCountCard,
@@ -42,6 +43,7 @@ import type {
   InfrastructureResourceRecord,
   ResourcePlanRecord,
 } from "@/types/edge-infrastructure";
+import type { ProductRegistryRecord } from "@/types/edge-registry";
 
 type TabId =
   | "overview"
@@ -111,11 +113,31 @@ export default function InfrastructurePage() {
     queryFn: () => edgeApi.listRegistryProducts({ limit: 100 }),
     enabled: canManage,
   });
+  const tenantsPickQ = useQuery({
+    queryKey: ["infra", "tenants-pick"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listTenants({ limit: 100 });
+      return data;
+    },
+    enabled: canManage && tab === "plans",
+    retry: false,
+  });
+  const tenantPickOptions = useMemo(() => {
+    const page = tenantsPickQ.data as
+      | { items?: Array<{ id: string; displayName?: string; tenantCode?: string }> }
+      | Array<{ id: string; displayName?: string; tenantCode?: string }>
+      | undefined;
+    const items = Array.isArray(page) ? page : (page?.items ?? []);
+    return items.map((t) => ({
+      id: t.id,
+      label: `${t.displayName ?? t.tenantCode ?? t.id} · ${t.id.slice(0, 8)}…`,
+    }));
+  }, [tenantsPickQ.data]);
   const providersList = unwrapInfraList<InfrastructureProviderRecord>(providersQ.data);
   const plans = unwrapInfraList<ResourcePlanRecord>(plansQ.data);
   const resources = unwrapInfraList<InfrastructureResourceRecord>(resourcesQ.data);
   const databases = unwrapInfraList<DatabaseResourceRecord>(databasesQ.data);
-  const products = unwrapRegistryList(productsQ.data);
+  const products = unwrapRegistryList<ProductRegistryRecord>(productsQ.data);
 
   const counts = useMemo(() => {
     if (!canRead) return emptyInfraOverviewCounts();
@@ -291,11 +313,12 @@ export default function InfrastructurePage() {
               onSubmit={onCreatePlan}
               className="grid gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--border)] p-[var(--space-4)] lg:grid-cols-3"
             >
-              <input
-                className={fieldControlClass}
-                placeholder="Tenant ID (UUID)"
+              <ListOrUuidField
                 value={planForm.tenantId}
-                onChange={(e) => setPlanForm((s) => ({ ...s, tenantId: e.target.value }))}
+                onChange={(v) => setPlanForm((s) => ({ ...s, tenantId: v }))}
+                options={tenantPickOptions}
+                placeholder="Select tenant"
+                fallbackPlaceholder="Tenant ID (UUID)"
                 required
               />
               <select

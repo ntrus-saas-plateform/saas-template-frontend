@@ -13,8 +13,10 @@ import {
   EdgeLoadingState,
 } from "@/components/edge/states";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
+import { G11ProductBadge } from "@/components/edge/g11-product-badge";
 import { edgeApi } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
+import { isCommerciallyPresentable } from "@/lib/edge/public-acquisition";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
 import type { EdgeProductLifecycleStatus } from "@/types/edge";
@@ -59,6 +61,7 @@ export default function EdgeCatalogPage() {
     hasEdgePermission(permissions, "platform:products:read");
   const canCreate = hasEdgePermission(permissions, "platform:products:create");
   const [status, setStatus] = useState<EdgeProductLifecycleStatus | "">("");
+  const [availableOnly, setAvailableOnly] = useState(false);
 
   const query = useQuery({
     queryKey: ["edge", "products", status || "all"],
@@ -72,7 +75,11 @@ export default function EdgeCatalogPage() {
     },
   });
 
-  const rows = useMemo(() => query.data ?? [], [query.data]);
+  const rows = useMemo(() => {
+    const data = query.data ?? [];
+    if (!availableOnly) return data;
+    return data.filter((p) => isCommerciallyPresentable(p.commercialAvailability));
+  }, [availableOnly, query.data]);
 
   if (!allowed) {
     return (
@@ -118,6 +125,15 @@ export default function EdgeCatalogPage() {
             ))}
           </select>
         </label>
+        <label className="flex cursor-pointer items-center gap-2 type-sm text-[var(--text-secondary)]">
+          <input
+            type="checkbox"
+            className="size-4 accent-[var(--primary)]"
+            checked={availableOnly}
+            onChange={(e) => setAvailableOnly(e.target.checked)}
+          />
+          Available only (public discovery)
+        </label>
       </div>
 
       {query.isLoading ? <EdgeLoadingState /> : null}
@@ -156,6 +172,9 @@ export default function EdgeCatalogPage() {
                   Status
                 </th>
                 <th className="px-[var(--space-4)] py-[var(--space-3)] font-medium">
+                  G11
+                </th>
+                <th className="px-[var(--space-4)] py-[var(--space-3)] font-medium">
                   Vertical
                 </th>
                 <th className="px-[var(--space-4)] py-[var(--space-3)] font-medium">
@@ -176,6 +195,9 @@ export default function EdgeCatalogPage() {
                     <Badge tone={statusTone(product.lifecycleStatus)}>
                       {product.lifecycleStatus}
                     </Badge>
+                  </td>
+                  <td className="px-[var(--space-4)] py-[var(--space-3)]">
+                    <G11ProductBadge product={product} compact />
                   </td>
                   <td className="px-[var(--space-4)] py-[var(--space-3)] type-xs text-[var(--text-muted)]">
                     {product.verticalId}

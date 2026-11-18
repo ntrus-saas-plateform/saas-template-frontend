@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { fieldControlClass } from "@/components/ui/field-control";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -54,6 +54,15 @@ export default function EdgeBillingPortalPage() {
     enabled: Boolean(accountId) && canRead,
   });
 
+  const billingAccountPickOptions = useMemo(
+    () =>
+      asRows(accountsQuery.data).map((a) => ({
+        id: String(a.id),
+        label: `${String(a.accountNumber ?? a.id)} · ${String(a.currency ?? "")}`,
+      })),
+    [accountsQuery.data],
+  );
+
   if (isLoading) return <EdgeLoadingState label="Loading portal…" />;
   if (!canRead) return <EdgeForbiddenState />;
 
@@ -88,18 +97,13 @@ export default function EdgeBillingPortalPage() {
       <EdgePermissionGate permission="platform:billing:portal:read">
         <label className="grid max-w-md gap-1 text-sm">
           Billing account
-          <select
-            className={fieldControlClass}
+          <ListOrUuidField
             value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-          >
-            <option value="">Select account…</option>
-            {accounts.map((a) => (
-              <option key={String(a.id)} value={String(a.id)}>
-                {String(a.accountNumber ?? a.id)} · {String(a.currency)}
-              </option>
-            ))}
-          </select>
+            onChange={setAccountId}
+            options={billingAccountPickOptions}
+            placeholder="Select account…"
+            fallbackPlaceholder="Billing account ID"
+          />
         </label>
 
         {!accountId ? (

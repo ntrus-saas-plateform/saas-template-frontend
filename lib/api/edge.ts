@@ -18,6 +18,7 @@ import type {
   EdgeCommercialReadinessEvaluation,
   EdgeIcpDefinition,
   EdgeMarketSegment,
+  EdgeMembership,
   EdgeOperatingModel,
   EdgePriceBook,
   EdgePricingUnit,
@@ -552,16 +553,129 @@ export const edgeApi = {
       },
     ),
 
+  bootstrapWorkspace: (verticalId: string) =>
+    edgeRequest<EdgeActiveWorkspace>("/api/edge-backend/workspaces/bootstrap", {
+      method: "POST",
+      body: JSON.stringify({ verticalId }),
+    }),
+
   activeWorkspace: () =>
     edgeRequest<EdgeActiveWorkspace>("/api/edge-backend/workspaces/active"),
 
+  renewWorkspaceSession: () =>
+    edgeRequest<EdgeActiveWorkspace>("/api/edge-backend/workspaces/renew", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  revokeWorkspaceSession: () =>
+    edgeRequest<{ ok?: boolean }>("/api/edge-backend/workspaces/revoke", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  revokeAllWorkspaceSessions: () =>
+    edgeRequest<{ revoked?: number }>(
+      "/api/edge-backend/workspaces/revoke-all",
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
   listVerticals: (query = "") =>
     edgeRequest<EdgeVertical[]>(
-      `/api/edge-backend/verticals${query ? `?${query}` : ""}`,
+      `/api/edge-backend/verticals${query ? "?" + query : ""}`,
     ),
 
   getVertical: (id: string) =>
     edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}`),
+
+  createVertical: (body: {
+    code: string;
+    slug: string;
+    displayName: string;
+    description?: string | null;
+    iconRef?: string | null;
+    visualIdentityRef?: string | null;
+    keycloakOrganizationId?: string | null;
+  }) =>
+    edgeRequest<EdgeVertical>("/api/edge-backend/verticals", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateVertical: (
+    id: string,
+    body: {
+      displayName?: string;
+      description?: string | null;
+      iconRef?: string | null;
+      visualIdentityRef?: string | null;
+      keycloakOrganizationId?: string | null;
+    },
+  ) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  getVerticalReadiness: (id: string) =>
+    edgeRequest<{ ready?: boolean; checks?: unknown[]; blockers?: string[] }>(
+      `/api/edge-backend/verticals/${id}/readiness`,
+    ),
+
+  activateVertical: (id: string) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}/activate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  suspendVertical: (id: string, reason?: string) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}/suspend`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  reinstateVertical: (id: string) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}/reinstate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  deactivateVertical: (id: string, reason?: string) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}/deactivate`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  deprecateVertical: (id: string, reason?: string) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}/deprecate`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  retireVertical: (id: string, reason?: string) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}/retire`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  archiveVertical: (id: string, reason?: string) =>
+    edgeRequest<EdgeVertical>(`/api/edge-backend/verticals/${id}/archive`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  listVerticalLifecycleEvents: (id: string, query = "page=1&limit=50") =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/verticals/${id}/lifecycle-events?${query}`,
+    ),
+
+  listVerticalHistory: (id: string, query = "page=1&limit=50") =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/verticals/${id}/history?${query}`,
+    ),
 
   listAdministrators: (query = "page=1&limit=50") =>
     edgeRequest<EdgeAdministrator[]>(
@@ -571,8 +685,217 @@ export const edgeApi = {
   getAdministrator: (id: string) =>
     edgeRequest<EdgeAdministrator>(`/api/edge-backend/administrators/${id}`),
 
-  listSecuritySessions: () =>
-    edgeRequest<unknown[]>("/api/edge-backend/security/sessions"),
+  inviteAdministrator: (body: {
+    email: string;
+    displayName: string;
+    verticalIds?: string[];
+    roleCodes?: string[];
+  }) =>
+    edgeRequest<{
+      administrator?: EdgeAdministrator;
+      invitationId?: string;
+      token?: string;
+    }>("/api/edge-backend/administrators/invite", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateAdministrator: (
+    id: string,
+    body: {
+      displayName?: string;
+      preferredLanguage?: string;
+      timezone?: string;
+      profilePictureRef?: string | null;
+    },
+  ) =>
+    edgeRequest<EdgeAdministrator>(`/api/edge-backend/administrators/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  suspendAdministrator: (id: string, reason?: string) =>
+    edgeRequest<EdgeAdministrator>(
+      `/api/edge-backend/administrators/${id}/suspend`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      },
+    ),
+
+  reinstateAdministrator: (id: string) =>
+    edgeRequest<EdgeAdministrator>(
+      `/api/edge-backend/administrators/${id}/reinstate`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  deactivateAdministrator: (id: string, reason?: string) =>
+    edgeRequest<EdgeAdministrator>(
+      `/api/edge-backend/administrators/${id}/deactivate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      },
+    ),
+
+  listAdministratorMemberships: (id: string) =>
+    edgeRequest<EdgeMembership[]>(
+      `/api/edge-backend/administrators/${id}/memberships`,
+    ),
+
+  getAdministratorEffectivePermissions: (
+    id: string,
+    verticalId?: string,
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/administrators/${id}/effective-permissions${toQuery({
+        verticalId,
+      })}`,
+    ),
+
+  acceptInvitation: (body: {
+    token: string;
+    externalIdentityId: string;
+    displayName?: string;
+  }) =>
+    edgeRequest<unknown>("/api/edge-backend/invitations/accept", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listEdgeRoles: (scope?: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/roles${toQuery({ scope })}`,
+    ),
+
+  createEdgeRole: (body: {
+    code: string;
+    name: string;
+    description?: string | null;
+    scope: string;
+    permissionCodes: string[];
+  }) =>
+    edgeRequest<unknown>("/api/edge-backend/roles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateEdgeRole: (
+    id: string,
+    body: {
+      name?: string;
+      description?: string | null;
+      isActive?: boolean;
+      permissionCodes?: string[];
+    },
+  ) =>
+    edgeRequest<unknown>(`/api/edge-backend/roles/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  listEdgePermissionsCatalog: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/permissions"),
+
+  assignEdgeRole: (body: {
+    administratorId: string;
+    roleId: string;
+    membershipId?: string | null;
+    scopeVerticalId?: string | null;
+    expiresAt?: string | null;
+  }) =>
+    edgeRequest<unknown>("/api/edge-backend/role-assignments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  revokeEdgeRoleAssignment: (id: string) =>
+    edgeRequest<unknown>(`/api/edge-backend/role-assignments/${id}`, {
+      method: "DELETE",
+    }),
+
+  listSecuritySessions: (administratorId?: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/security/sessions${toQuery({ administratorId })}`,
+    ),
+
+  revokeSecuritySession: (sessionId: string, reason?: string) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/security/sessions/${sessionId}/revoke`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      },
+    ),
+
+  revokeAllSecuritySessions: (body?: {
+    administratorId?: string;
+    reason?: string;
+  }) =>
+    edgeRequest<{ revoked?: number }>(
+      "/api/edge-backend/security/sessions/revoke-all",
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  getSecurityMfaState: () =>
+    edgeRequest<unknown>("/api/edge-backend/security/mfa"),
+
+  requestEmergencyAccess: (body: {
+    justification: string;
+    scope?: Record<string, unknown>;
+  }) =>
+    edgeRequest<unknown>("/api/edge-backend/security/emergency-access", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  approveEmergencyAccess: (id: string, ttlMinutes?: number) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/security/emergency-access/${id}/approve`,
+      {
+        method: "POST",
+        body: JSON.stringify({ ttlMinutes }),
+      },
+    ),
+
+  revokeEmergencyAccess: (id: string) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/security/emergency-access/${id}/revoke`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  listSecurityDelegations: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/security/delegations"),
+
+  createSecurityDelegation: (body: {
+    granteeId: string;
+    scope: Record<string, unknown>;
+    permittedOperations: string[];
+    expiresAt: string;
+    justification?: string;
+  }) =>
+    edgeRequest<unknown>("/api/edge-backend/security/delegations", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  revokeSecurityDelegation: (id: string) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/security/delegations/${id}/revoke`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
 
   listAuditEvents: (query = "page=1&limit=50") =>
     edgeRequest<unknown[]>(`/api/edge-backend/security/events?${query}`),
@@ -582,9 +905,92 @@ export const edgeApi = {
       `/api/edge-backend/verticals/${verticalId}/configuration`,
     ),
 
-  listVerticalMemberships: (verticalId: string) =>
+  updateWorkspaceConfigurationDraft: (
+    verticalId: string,
+    body: { config: Record<string, unknown>; changeReason?: string },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/verticals/${verticalId}/configuration/draft`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  validateWorkspaceConfiguration: (verticalId: string) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/verticals/${verticalId}/configuration/validate`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  activateWorkspaceConfiguration: (verticalId: string) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/verticals/${verticalId}/configuration/activate`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  listWorkspaceConfigurationHistory: (verticalId: string) =>
     edgeRequest<unknown[]>(
+      `/api/edge-backend/verticals/${verticalId}/configuration/history`,
+    ),
+
+  listVerticalMemberships: (verticalId: string) =>
+    edgeRequest<EdgeMembership[]>(
       `/api/edge-backend/verticals/${verticalId}/memberships`,
+    ),
+
+  inviteVerticalMembership: (
+    verticalId: string,
+    body: { administratorId: string },
+  ) =>
+    edgeRequest<EdgeMembership>(
+      `/api/edge-backend/verticals/${verticalId}/memberships/invite`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  activateMembership: (membershipId: string) =>
+    edgeRequest<EdgeMembership>(
+      `/api/edge-backend/memberships/${membershipId}/activate`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  suspendMembership: (membershipId: string, reason?: string) =>
+    edgeRequest<EdgeMembership>(
+      `/api/edge-backend/memberships/${membershipId}/suspend`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      },
+    ),
+
+  reinstateMembership: (membershipId: string) =>
+    edgeRequest<EdgeMembership>(
+      `/api/edge-backend/memberships/${membershipId}/reinstate`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  revokeMembership: (membershipId: string, reason?: string) =>
+    edgeRequest<EdgeMembership>(
+      `/api/edge-backend/memberships/${membershipId}/revoke`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      },
     ),
 
   listProducts: (opts?: {
@@ -649,9 +1055,56 @@ export const edgeApi = {
       },
     ),
 
+  getProductVersion: (productId: string, versionId: string) =>
+    edgeRequest<EdgeProductVersion>(
+      `/api/edge-backend/products/${productId}/versions/${versionId}`,
+    ),
+
+  updateProductVersion: (
+    productId: string,
+    versionId: string,
+    body: Record<string, unknown>,
+  ) =>
+    edgeRequest<EdgeProductVersion>(
+      `/api/edge-backend/products/${productId}/versions/${versionId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  publishProductVersion: (productId: string, versionId: string) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/products/${productId}/versions/${versionId}/publish`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
   listCompatibilities: (productId: string) =>
     edgeRequest<EdgeProductCompatibility[]>(
       `/api/edge-backend/products/${productId}/compatibilities`,
+    ),
+
+  upsertCompatibility: (
+    productId: string,
+    body: {
+      productVersionId?: string | null;
+      targetType: string;
+      targetId: string;
+      status: string;
+      justification?: string | null;
+      restrictions?: Record<string, unknown>;
+      evidence?: Record<string, unknown>;
+    },
+  ) =>
+    edgeRequest<EdgeProductCompatibility>(
+      `/api/edge-backend/products/${productId}/compatibilities`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
     ),
 
   listProductCapabilityMappings: (productId: string) =>
@@ -659,9 +1112,48 @@ export const edgeApi = {
       `/api/edge-backend/products/${productId}/capabilities`,
     ),
 
+  upsertProductCapabilityMapping: (
+    productId: string,
+    body: {
+      productVersionId?: string | null;
+      capabilityId: string;
+      classification: string;
+      technicalStatus?: string | null;
+      commercialAvailability?: string | null;
+      restrictions?: Record<string, unknown>;
+    },
+  ) =>
+    edgeRequest<EdgeProductCapabilityMapping>(
+      `/api/edge-backend/products/${productId}/capabilities`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
+    ),
+
   listProductBackendBindings: (productId: string) =>
     edgeRequest<EdgeProductBackendBinding[]>(
       `/api/edge-backend/products/${productId}/bindings`,
+    ),
+
+  createProductBackendBinding: (
+    productId: string,
+    body: {
+      productVersionId?: string | null;
+      backendId: string;
+      bindingType: string;
+      deploymentMode?: string | null;
+      compatibilityStatus?: string | null;
+      effectiveFrom?: string | null;
+      metadata?: Record<string, unknown>;
+    },
+  ) =>
+    edgeRequest<EdgeProductBackendBinding>(
+      `/api/edge-backend/products/${productId}/bindings`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
     ),
 
   listMarketSegments: (verticalId: string) =>
@@ -675,21 +1167,111 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
+  getMarketSegment: (id: string) =>
+    edgeRequest<EdgeMarketSegment>(
+      `/api/edge-backend/market-segments/${id}`,
+    ),
+
+  updateMarketSegment: (id: string, body: Record<string, unknown>) =>
+    edgeRequest<EdgeMarketSegment>(
+      `/api/edge-backend/market-segments/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
+
   listBusinessProfiles: (verticalId?: string) =>
     edgeRequest<EdgeBusinessProfile[]>(
       `/api/edge-backend/business-profiles${toQuery({ verticalId })}`,
     ),
+
+  getBusinessProfile: (id: string) =>
+    edgeRequest<EdgeBusinessProfile>(
+      `/api/edge-backend/business-profiles/${id}`,
+    ),
+
+  createBusinessProfile: (body: Record<string, unknown>) =>
+    edgeRequest<EdgeBusinessProfile>("/api/edge-backend/business-profiles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   listOperatingModels: (verticalId?: string) =>
     edgeRequest<EdgeOperatingModel[]>(
       `/api/edge-backend/operating-models${toQuery({ verticalId })}`,
     ),
 
+  getOperatingModel: (id: string) =>
+    edgeRequest<EdgeOperatingModel>(
+      `/api/edge-backend/operating-models/${id}`,
+    ),
+
+  createOperatingModel: (body: Record<string, unknown>) =>
+    edgeRequest<EdgeOperatingModel>("/api/edge-backend/operating-models", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listCapabilities: () =>
     edgeRequest<EdgeCapability[]>("/api/edge-backend/capabilities"),
 
+  getCapability: (id: string) =>
+    edgeRequest<EdgeCapability>(`/api/edge-backend/capabilities/${id}`),
+
+  createCapability: (body: Record<string, unknown>) =>
+    edgeRequest<EdgeCapability>("/api/edge-backend/capabilities", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  addCapabilityDependency: (
+    id: string,
+    body: { dependsOnCapabilityId: string; dependencyType?: string },
+  ) =>
+    edgeRequest<unknown>(
+      `/api/edge-backend/capabilities/${id}/dependencies`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  listIntegrationContracts: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/integration-contracts"),
+
+  getIntegrationContract: (id: string) =>
+    edgeRequest<unknown>(`/api/edge-backend/integration-contracts/${id}`),
+
+  createIntegrationContract: (body: Record<string, unknown>) =>
+    edgeRequest<unknown>("/api/edge-backend/integration-contracts", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listBackends: () =>
     edgeRequest<EdgeBackend[]>("/api/edge-backend/backends"),
+
+  getBackend: (id: string) =>
+    edgeRequest<EdgeBackend>(`/api/edge-backend/backends/${id}`),
+
+  createBackend: (body: {
+    code: string;
+    name: string;
+    description?: string | null;
+    backendType?: string | null;
+    lifecycleStatus?: string;
+    deploymentModes?: readonly unknown[];
+    supportedProtocols?: readonly unknown[];
+    supportedApiVersions?: readonly unknown[];
+    supportedEventVersions?: readonly unknown[];
+    securityProfile?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<EdgeBackend>("/api/edge-backend/backends", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   evaluateReadiness: (productId: string, body: EvaluateEdgeReadinessInput) =>
     edgeRequest<EdgeReadinessEvaluation>(
@@ -889,6 +1471,63 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
+  runCommercialOfferWizard: (body: {
+    productCode: "SYNTIX_PHARMA" | "OKAPI_RESTAURANT";
+    activityCodes?: string[];
+    profileCode?: string | null;
+    operatingModelCodes?: string[];
+    sites?: number | null;
+    users?: number | null;
+    needs?: string[];
+    mode?: "MANUAL" | "RULE_BASED" | "GUIDED";
+    correctedProfileCode?: string | null;
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      "/api/edge-backend/commercial/offers/wizard",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listGeographicPricingRules: (country?: string) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      `/api/edge-backend/commercial/pricing/geographic-rules${toQuery({ country })}`,
+    ),
+
+  evaluateDiscountApproval: (body: {
+    discountPercent?: number | null;
+    actorTier: "AE" | "MANAGER" | "DIRECTOR" | "CFO";
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      "/api/edge-backend/commercial/discounts/evaluate-approval",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  getSalesEngineBeachhead: () =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      "/api/edge-backend/sales/engine/beachhead",
+    ),
+
+  scoreSalesLead: (body: {
+    fitScore?: number | null;
+    intentScore?: number | null;
+    engagementScore?: number | null;
+    readinessScore?: number | null;
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      "/api/edge-backend/sales/engine/lead-score",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  evaluateSalesBant: (body: {
+    budget?: boolean | null;
+    authority?: boolean | null;
+    need?: boolean | null;
+    timeline?: boolean | null;
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      "/api/edge-backend/sales/engine/bant",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
   configureCommercialOffer: (body: {
     mode?: string;
     productId: string;
@@ -935,6 +1574,35 @@ export const edgeApi = {
     edgeRequest(
       `/api/edge-backend/commercial/research-projects${toQuery({ marketId })}`,
     ),
+
+  createCommercialResearchProject: (body: {
+    marketId: string;
+    code: string;
+    title: string;
+    researchQuestion?: string | null;
+    hypothesis?: string | null;
+    methodology?: string | null;
+    ownerRef?: string | null;
+    geographicScope?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/commercial/research-projects", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  upsertCommercialSegmentIntelligence: (body: {
+    segmentId: string;
+    commercialDescription?: string | null;
+    lifecycleStatus?: string;
+    attractivenessScore?: string | null;
+    strategicFitScore?: string | null;
+    productReadinessScore?: string | null;
+    notes?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/commercial/segment-intelligence", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   listSegmentIntelligence: (segmentId?: string) =>
     edgeRequest(
@@ -984,6 +1652,95 @@ export const edgeApi = {
       })}`,
     ),
 
+  listCommercialDiscountPolicies: (productId?: string) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/discount-policies${toQuery({ productId })}`,
+    ),
+
+  createCommercialDiscountPolicy: (body: {
+    code: string;
+    name: string;
+    productId?: string | null;
+    discountType: string;
+    maxPercentage?: string | null;
+    maxAmount?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/commercial/discount-policies", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listCommercialPricingModels: (productId?: string) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/pricing-models${toQuery({ productId })}`,
+    ),
+
+  createCommercialPricingModel: (body: {
+    code: string;
+    name: string;
+    modelType: string;
+    productId: string;
+    pricingUnitId?: string | null;
+    currency?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/commercial/pricing-models", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listCommercialUsageMetrics: () =>
+    edgeRequest("/api/edge-backend/commercial/usage-metrics"),
+
+  createCommercialUsageMetric: (body: {
+    code: string;
+    name: string;
+    description?: string | null;
+    pricingUnitId?: string | null;
+    sourceEvent?: string | null;
+    aggregationWindow?: string | null;
+    aggregationMethod?: string | null;
+    deduplicationRequired?: boolean;
+  }) =>
+    edgeRequest("/api/edge-backend/commercial/usage-metrics", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listBuyingCommittees: (productId?: string) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/buying-committees${toQuery({ productId })}`,
+    ),
+
+  createBuyingCommittee: (body: {
+    code: string;
+    name: string;
+    productId?: string | null;
+    verticalId?: string | null;
+    segmentId?: string | null;
+    roles?: unknown[];
+  }) =>
+    edgeRequest("/api/edge-backend/commercial/buying-committees", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listDecisionJourneys: (productId?: string) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/decision-journeys${toQuery({ productId })}`,
+    ),
+
+  createDecisionJourney: (body: {
+    code: string;
+    name: string;
+    productId?: string | null;
+    verticalId?: string | null;
+    stages?: unknown[];
+  }) =>
+    edgeRequest("/api/edge-backend/commercial/decision-journeys", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   publishSolutionPackage: (packageId: string) =>
     edgeRequest(`/api/edge-backend/commercial/packages/${packageId}/publish`, {
       method: "POST",
@@ -1004,6 +1761,107 @@ export const edgeApi = {
       method: "POST",
       body: JSON.stringify({}),
     }),
+
+  getSolutionPackage: (id: string) =>
+    edgeRequest<EdgeSolutionPackage>(
+      `/api/edge-backend/commercial/packages/${id}`,
+    ),
+
+  addSolutionPackageCapability: (
+    packageId: string,
+    body: { capabilityId: string; inclusionType?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/commercial/packages/${packageId}/capabilities`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  addCommercialPlanCapability: (
+    planId: string,
+    body: { capabilityId: string; inclusionType?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/commercial/plans/${planId}/capabilities`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  linkCommercialAddonPlan: (
+    addonId: string,
+    body: { planId: string; compatibility?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/commercial/addons/${addonId}/plans`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  addCommercialAddonCapability: (
+    addonId: string,
+    body: { capabilityId: string; inclusionType?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/commercial/addons/${addonId}/capabilities`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listCommercialMarketAssessments: (marketId: string) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/markets/${marketId}/assessments`,
+    ),
+
+  createCommercialMarketAssessment: (
+    marketId: string,
+    body: {
+      dimension: string;
+      valueText?: string | null;
+      valueNumeric?: string | null;
+      unknown?: boolean;
+      sourceRef?: string | null;
+      confidence?: string | null;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/commercial/markets/${marketId}/assessments`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  addCommercialResearchSource: (
+    projectId: string,
+    body: {
+      sourceType: string;
+      title: string;
+      uri?: string | null;
+      reliability?: string | null;
+      confidence?: string | null;
+      notes?: string | null;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/research-projects/${projectId}/sources`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  completeCommercialResearchProject: (
+    projectId: string,
+    body?: {
+      findings?: string | null;
+      conclusions?: string | null;
+      limitations?: string | null;
+      confidenceLevel?: string | null;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/research-projects/${projectId}/complete`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  scoreCommercialSegmentIntelligence: (
+    segmentId: string,
+    body: { scores: Record<string, number>; modelCode?: string },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/commercial/segment-intelligence/${segmentId}/score`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
 
   publishEnterpriseTemplate: (templateId: string) =>
     edgeRequest(
@@ -1082,6 +1940,9 @@ export const edgeApi = {
       })}`,
     ),
 
+  getMarketingCampaign: (id: string) =>
+    edgeRequest(`/api/edge-backend/marketing/campaigns/${id}`),
+
   createMarketingCampaign: (body: {
     code: string;
     name: string;
@@ -1147,12 +2008,48 @@ export const edgeApi = {
       body: JSON.stringify({}),
     }),
 
+  submitMarketingFormPublic: (
+    slug: string,
+    body: {
+      payload: Record<string, unknown>;
+      utm?: Record<string, unknown>;
+      sourceUrl?: string | null;
+      consents?: unknown[];
+      idempotencyKey?: string;
+    },
+    idempotencyKey?: string,
+  ) =>
+    edgeRequest(`/api/edge-backend/marketing/forms/public/${slug}/submissions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: idempotencyKey
+        ? { "Idempotency-Key": idempotencyKey }
+        : undefined,
+    }),
+
   listMarketingLeads: (opts?: { status?: string; productId?: string }) =>
     edgeRequest(
       `/api/edge-backend/marketing/leads${toQuery({
         status: opts?.status,
         productId: opts?.productId,
       })}`,
+    ),
+
+  getMarketingLead: (id: string) =>
+    edgeRequest(`/api/edge-backend/marketing/leads/${id}`),
+
+  withdrawMarketingLeadConsent: (
+    id: string,
+    body: {
+      purpose: string;
+      channel: string;
+      consentTextVersion?: string;
+      locale?: string;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/marketing/leads/${id}/consents/withdraw`,
+      { method: "PATCH", body: JSON.stringify(body) },
     ),
 
   scoreMarketingLead: (
@@ -1268,6 +2165,59 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
+  listMarketingTemplates: () =>
+    edgeRequest("/api/edge-backend/marketing/templates"),
+
+  createMarketingTemplate: (body: {
+    code: string;
+    name: string;
+    channelType: string;
+    locale?: string;
+    subject?: string | null;
+    body?: Record<string, unknown>;
+  }) =>
+    edgeRequest("/api/edge-backend/marketing/templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  requestMarketingDelivery: (body: {
+    channelConfigId: string;
+    leadId: string;
+    templateId?: string | null;
+    campaignId?: string | null;
+    purpose: string;
+    channel: string;
+    idempotencyKey: string;
+  }) =>
+    edgeRequest("/api/edge-backend/marketing/deliveries/request", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listMarketingSuppressions: (opts?: { activeOnly?: boolean }) =>
+    edgeRequest(
+      `/api/edge-backend/marketing/suppressions${toQuery({
+        activeOnly:
+          opts?.activeOnly === undefined
+            ? undefined
+            : opts.activeOnly
+              ? "true"
+              : "false",
+      })}`,
+    ),
+
+  createMarketingSuppression: (body: {
+    leadId?: string | null;
+    emailNormalized?: string | null;
+    channel: string;
+    reason: string;
+  }) =>
+    edgeRequest("/api/edge-backend/marketing/suppressions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listMarketingJourneys: () =>
     edgeRequest("/api/edge-backend/marketing/journeys"),
 
@@ -1292,8 +2242,44 @@ export const edgeApi = {
       body: JSON.stringify({}),
     }),
 
+  startMarketingJourneyExecution: (
+    id: string,
+    body: { leadId: string; idempotencyKey: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/marketing/journeys/${id}/executions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listMarketingAttributionModels: () =>
     edgeRequest("/api/edge-backend/marketing/attribution/models"),
+
+  calculateMarketingAttribution: (body: {
+    leadId: string;
+    modelCode: string;
+    conversionKey: string;
+  }) =>
+    edgeRequest("/api/edge-backend/marketing/attribution/calculate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  ingestMarketingDeliveryReceipt: (body: {
+    deliveryAttemptId: string;
+    providerEventId: string;
+    receiptStatus:
+      | "DELIVERED"
+      | "FAILED"
+      | "BOUNCED"
+      | "OPENED"
+      | "CLICKED"
+      | "UNKNOWN";
+    rawPayload?: Record<string, unknown>;
+  }) =>
+    edgeRequest("/api/edge-backend/marketing/deliveries/receipts", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   listMarketingAnalyticsSnapshots: (scopeType?: string) =>
     edgeRequest(
@@ -1472,6 +2458,36 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
+  listSalesTerritories: () =>
+    edgeRequest("/api/edge-backend/sales/territories"),
+
+  createSalesTerritory: (body: {
+    code: string;
+    name: string;
+    territoryType?: string;
+    country?: string | null;
+    region?: string | null;
+    productId?: string | null;
+    verticalId?: string | null;
+    marketId?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/territories", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createSalesNote: (body: {
+    body: string;
+    accountId?: string | null;
+    contactId?: string | null;
+    salesLeadId?: string | null;
+    visibility?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/notes", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listSalesTasks: (opts?: { accountId?: string; status?: string }) =>
     edgeRequest(
       `/api/edge-backend/sales/tasks${toQuery({
@@ -1490,6 +2506,12 @@ export const edgeApi = {
     edgeRequest("/api/edge-backend/sales/tasks", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+
+  completeSalesTask: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/tasks/${id}/complete`, {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
 
   listSalesPipelines: () => edgeRequest("/api/edge-backend/sales/pipelines"),
@@ -1535,9 +2557,17 @@ export const edgeApi = {
       toStageId: string;
       reasonCode?: string | null;
       reasonText?: string | null;
+      requireQuote?: boolean;
+      requireContract?: boolean;
     },
   ) =>
     edgeRequest(`/api/edge-backend/sales/opportunities/${id}/stages`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  reopenSalesOpportunity: (id: string, body: { reason: string }) =>
+    edgeRequest(`/api/edge-backend/sales/opportunities/${id}/reopen`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -1744,6 +2774,78 @@ export const edgeApi = {
       },
     ),
 
+  completeSalesAssessment: (
+    assessmentId: string,
+    body: {
+      fitDecision: string;
+      uncoveredNeeds?: unknown[];
+      gapAnalysis?: unknown[];
+      recommendations?: string | null;
+      promisedCapabilities?: string[];
+      commerciallyAuthorizedCapabilities?: string[];
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/assessments/${assessmentId}/complete`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  validateSalesAssessmentSolutionFit: (
+    assessmentId: string,
+    body?: { commerciallyAuthorizedCapabilities?: string[] },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/assessments/${assessmentId}/solution-fit`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  executeSalesAmendment: (amendmentId: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/amendments/${amendmentId}/execute`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ),
+
+  grantSalesVisibility: (body: {
+    subjectType: string;
+    subjectId: string;
+    granteeAdministratorId?: string | null;
+    granteeTeamId?: string | null;
+    accessLevel?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/visibility/grants", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listSalesVisibilityGrants: (subjectType: string, subjectId: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/visibility/grants${toQuery({
+        subjectType,
+        subjectId,
+      })}`,
+    ),
+
+  assertSalesVisibility: (body: {
+    subjectType: string;
+    subjectId: string;
+    ownerAdministratorId?: string | null;
+    teamIds?: string[];
+    isElevated?: boolean;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/visibility/assert", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listSalesHandoffs: (opts?: { status?: string }) =>
     edgeRequest(
       `/api/edge-backend/sales/handoffs${toQuery({ status: opts?.status })}`,
@@ -1831,10 +2933,25 @@ export const edgeApi = {
       body: JSON.stringify({}),
     }),
 
-  listSalesApprovals: (opts?: { status?: string }) =>
+  listSalesApprovals: (opts?: { status?: string; subjectType?: string }) =>
     edgeRequest(
-      `/api/edge-backend/sales/approvals${toQuery({ status: opts?.status })}`,
+      `/api/edge-backend/sales/approvals${toQuery({
+        status: opts?.status,
+        subjectType: opts?.subjectType,
+      })}`,
     ),
+
+  decideSalesApproval: (
+    id: string,
+    body: {
+      decision: "APPROVED" | "REJECTED" | "CHANGES_REQUESTED";
+      decisionNotes?: string | null;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/approvals/${id}/decision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   persistSalesForecastSnapshot: (body: {
     periodType: string;
@@ -1845,6 +2962,270 @@ export const edgeApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  addSalesAccountRelationship: (
+    accountId: string,
+    body: {
+      toAccountId: string;
+      relationshipType: string;
+      notes?: string | null;
+    },
+    idempotencyKey?: string,
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/accounts/${accountId}/relationships`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: idempotencyKey
+        ? { "Idempotency-Key": idempotencyKey }
+        : undefined,
+    }),
+
+  findSalesAccountDuplicates: (body: {
+    legalName: string;
+    legalIdentifier?: string | null;
+    emailDomain?: string | null;
+    phoneNormalized?: string | null;
+    country?: string | null;
+    excludeAccountId?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/accounts/duplicates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  mergeSalesAccounts: (body: {
+    survivingAccountId: string;
+    mergedAccountId: string;
+    reason: string;
+  }) =>
+    edgeRequest("/api/edge-backend/sales/accounts/merge", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  syncSalesActivityCalendar: (activityId: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/activities/${activityId}/calendar-sync`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  completeSalesActivity: (
+    id: string,
+    body?: { outcomeSummary?: string | null },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/activities/${id}/complete`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  getSalesContact: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/contacts/${id}`),
+
+  listSalesContactRoles: (contactId: string) =>
+    edgeRequest(`/api/edge-backend/sales/contacts/${contactId}/roles`),
+
+  addSalesContactRole: (
+    contactId: string,
+    body: {
+      accountId: string;
+      roleType: string;
+      isPrimary?: boolean;
+      effectiveUntil?: string | null;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/contacts/${contactId}/roles`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listSalesContractAmendments: (contractId: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/contracts/${contractId}/amendments`,
+    ),
+
+  createSalesContractAmendment: (
+    contractId: string,
+    body: { summary: string; changes?: Record<string, unknown> },
+    idempotencyKey?: string,
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/contracts/${contractId}/amendments`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: idempotencyKey
+        ? { "Idempotency-Key": idempotencyKey }
+        : undefined,
+    }),
+
+  getSalesLead: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/leads/${id}`),
+
+  assignSalesLead: (
+    id: string,
+    body: { ownerAdministratorId: string; teamId?: string | null },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/leads/${id}/assignment`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  closeSalesOpportunity: (
+    id: string,
+    body: {
+      toStageId: string;
+      reasonCode?: string | null;
+      reasonText?: string | null;
+      requireQuote?: boolean;
+      requireContract?: boolean;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/opportunities/${id}/close`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  addSalesOpportunityRisk: (
+    opportunityId: string,
+    body: {
+      code: string;
+      title: string;
+      severity?: string;
+      description?: string | null;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/opportunities/${opportunityId}/risks`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  addSalesOpportunityCompetitor: (
+    opportunityId: string,
+    body: {
+      competitorName: string;
+      threatLevel?: string;
+      notes?: string | null;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/opportunities/${opportunityId}/competitors`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  addSalesOpportunityContact: (
+    opportunityId: string,
+    body: {
+      contactId: string;
+      roleOnOpportunity?: string;
+      isPrimary?: boolean;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/opportunities/${opportunityId}/contacts`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listSalesOpportunityOffers: (opportunityId: string) =>
+    edgeRequest(
+      `/api/edge-backend/sales/opportunities/${opportunityId}/offers`,
+    ),
+
+  createSalesOpportunityOffer: (
+    opportunityId: string,
+    body: {
+      productId: string;
+      productLifecycleStatus: string;
+      planId: string;
+      planProductId: string;
+      planStatus: string;
+      packageId?: string | null;
+      packageProductId?: string | null;
+      addonIds?: string[];
+      addonProductIds?: string[];
+      currency?: string;
+      listAmount?: number | null;
+      netAmount?: number | null;
+      geographicScope?: string | null;
+      deploymentMode?: string | null;
+      rulesVersion?: number;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/sales/opportunities/${opportunityId}/offers`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listSalesOrderLines: (orderId: string) =>
+    edgeRequest(`/api/edge-backend/sales/orders/${orderId}/lines`),
+
+  setSalesOrderLines: (
+    orderId: string,
+    body: {
+      lines: Array<{
+        lineNumber: number;
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        productId?: string | null;
+        planId?: string | null;
+        packageId?: string | null;
+        addonId?: string | null;
+        p2Refs?: Record<string, unknown>;
+      }>;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/orders/${orderId}/lines`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  transitionSalesOrder: (orderId: string, body: { toStatus: string }) =>
+    edgeRequest(`/api/edge-backend/sales/orders/${orderId}/transition`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getSalesQuote: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/quotes/${id}`),
+
+  createSalesQuoteRevision: (
+    quoteId: string,
+    body: {
+      changeReason: string;
+      lines: Array<{
+        lineNumber: number;
+        lineType?: string;
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        discountPercent?: number;
+        productId?: string | null;
+        planId?: string | null;
+        packageId?: string | null;
+        addonId?: string | null;
+        pricingModel?: string | null;
+        p2Refs?: Record<string, unknown>;
+      }>;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/quotes/${quoteId}/revisions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  addSalesTeamMember: (
+    teamId: string,
+    body: {
+      administratorId: string;
+      memberRole?: string;
+      territoryId?: string | null;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/sales/teams/${teamId}/members`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  deleteSalesSavedView: (id: string) =>
+    edgeRequest(`/api/edge-backend/sales/views/${id}`, { method: "DELETE" }),
 
   // --- P5 Subscriptions ---
   getSubscriptionOverview: () =>
@@ -2021,10 +3402,19 @@ export const edgeApi = {
   listSubscriptionRenewals: (id: string) =>
     edgeRequest(`/api/edge-backend/subscriptions/${id}/renewals`),
 
-  createSubscriptionRenewal: (id: string) =>
+  createSubscriptionRenewal: (id: string, body?: { dueAt?: string }) =>
     edgeRequest(`/api/edge-backend/subscriptions/${id}/renewals`, {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  confirmSubscriptionRenewal: (
+    id: string,
+    body?: { renewalId?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/renewals/confirm`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
     }),
 
   listSubscriptionTrials: (opts?: {
@@ -2105,6 +3495,23 @@ export const edgeApi = {
       },
     ),
 
+  advanceSubscriptionProvisioningAfterPaid: (id: string) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/${id}/provisioning/advance-after-paid`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  processProvisioningJobs: (body?: { limit?: number }) =>
+    edgeRequest("/api/edge-backend/provisioning-jobs/process", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  listProvisioningJobsBySubscription: (subscriptionId: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/provisioning-jobs/by-subscription/${subscriptionId}`,
+    ),
+
   listSubscriptionBillingCoordination: (id: string) =>
     edgeRequest<unknown[]>(
       `/api/edge-backend/subscriptions/${id}/billing-coordination`,
@@ -2125,20 +3532,101 @@ export const edgeApi = {
       `/api/edge-backend/subscriptions/${id}/cancellations`,
     ),
 
-  approveSubscriptionChange: (id: string, changeId: string) =>
+  approveSubscriptionChange: (
+    id: string,
+    changeId: string,
+    body?: { decisionNote?: string },
+  ) =>
     edgeRequest(
       `/api/edge-backend/subscriptions/${id}/changes/${changeId}/approve`,
       {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify(body ?? {}),
       },
+    ),
+
+  rejectSubscriptionChange: (
+    id: string,
+    changeId: string,
+    body?: { decisionNote?: string },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/${id}/changes/${changeId}/reject`,
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
+  scheduleSubscriptionChange: (
+    id: string,
+    changeId: string,
+    body: { executeAt: string },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/${id}/changes/${changeId}/schedule`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  processDueScheduledSubscriptionChanges: () =>
+    edgeRequest("/api/edge-backend/subscriptions/scheduled-changes/process-due", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  listSubscriptionPublications: (id: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/subscriptions/${id}/publications`,
     ),
 
   reconcileSubscriptionEntitlements: (
     id: string,
-    body?: { reason?: string; force?: boolean },
+    body?: { reason?: string; force?: boolean; remediateBb?: boolean },
   ) =>
     edgeRequest(`/api/edge-backend/subscriptions/${id}/entitlements/reconcile`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  scanSubscriptionEntitlementDrift: (body?: {
+    remediateBb?: boolean;
+    limit?: number;
+    status?: string;
+  }) =>
+    edgeRequest(`/api/edge-backend/subscriptions/entitlements/drift-scan`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  listSubscriptionTenantAssociations: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/associations`),
+
+  getActiveSubscriptionTenantAssociation: (id: string) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/associations/active`),
+
+  bindSubscriptionTenantAssociation: (
+    id: string,
+    body: {
+      productTenantRef: string;
+      productTenantId?: string;
+      associationType?: string;
+      environmentSlot?: string;
+      supersedeExisting?: boolean;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/associations/bind`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  closeSubscriptionTenantAssociation: (
+    id: string,
+    body?: { associationId?: string; reason?: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/${id}/associations/close`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
@@ -2160,6 +3648,24 @@ export const edgeApi = {
 
   getSubscriptionPolicies: () =>
     edgeRequest<unknown[]>("/api/edge-backend/subscriptions/policies"),
+
+  putSubscriptionPolicy: (
+    code: string,
+    body: {
+      policyType?: string;
+      rules?: Record<string, unknown>;
+      status?: string;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/subscriptions/policies/${code}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  listSubscriptionApprovals: (limit?: number) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/approvals${toQuery({ limit })}`,
+    ),
 
   // --- P6 Billing ---
   getBillingOverview: () =>
@@ -2191,6 +3697,29 @@ export const edgeApi = {
     edgeRequest("/api/edge-backend/billing/invoices/draft-from-subscription", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+
+  previewBillingInvoice: (body: {
+    currency: string;
+    lines: {
+      description: string;
+      quantity: string | number;
+      unitPrice: string;
+      discountAmount?: string;
+      taxAmount?: string;
+    }[];
+    taxLines?: { taxAmount: string }[];
+    discountTotal?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/invoices/preview", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  markOverdueBillingInvoices: () =>
+    edgeRequest("/api/edge-backend/billing/invoices/mark-overdue", {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
 
   approveBillingInvoice: (id: string) =>
@@ -2331,6 +3860,110 @@ export const edgeApi = {
       body: JSON.stringify({}),
     }),
 
+  applyCollectionDunningPolicy: (id: string) =>
+    edgeRequest<{ data: unknown }>(
+      `/api/edge-backend/billing/collections/${id}/apply-policy`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  processDunningScan: (body?: { limit?: number }) =>
+    edgeRequest<{ data: unknown }>(
+      "/api/edge-backend/billing/collections/dunning-scan",
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  dispatchDunningNotification: (
+    id: string,
+    body?: { channel?: string; templateRef?: string | null; toEmail?: string | null },
+  ) =>
+    edgeRequest<{ data: unknown }>(
+      `/api/edge-backend/billing/collections/${id}/notify`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    ),
+
+  getBillingCashTruth: (params?: {
+    currency?: string;
+    periodStart?: string;
+    periodEnd?: string;
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      `/api/edge-backend/billing/cash-truth${toQuery({
+        currency: params?.currency,
+        periodStart: params?.periodStart,
+        periodEnd: params?.periodEnd,
+      })}`,
+    ),
+
+  configureBillingCadence: (body: {
+    subscriptionId: string;
+    billingFrequency: string;
+    setupFeeAmount?: string | number | null;
+    nextBillAt?: string | null;
+  }) =>
+    edgeRequest<{ data: unknown }>("/api/edge-backend/billing/cadence", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listGeoPaymentMethods: (params?: {
+    country?: string;
+    currency?: string;
+    methodType?: string;
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      `/api/edge-backend/billing/geo-payment-methods${toQuery({
+        country: params?.country,
+        currency: params?.currency,
+        methodType: params?.methodType,
+      })}`,
+    ),
+
+  registerBillingPaymentMethod: (
+    billingAccountId: string,
+    body: {
+      provider: string;
+      providerMethodRef: string;
+      methodType: string;
+      brand?: string | null;
+      last4?: string | null;
+      country?: string | null;
+      currency?: string | null;
+      isDefault?: boolean;
+    },
+  ) =>
+    edgeRequest(
+      `/api/edge-backend/billing/accounts/${billingAccountId}/payment-methods`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listBillingRefunds: (params?: { paymentIntentId?: string; limit?: number }) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/refunds${toQuery({
+        paymentIntentId: params?.paymentIntentId,
+        limit: params?.limit,
+      })}`,
+    ),
+
+  createBillingCreditNote: (
+    invoiceId: string,
+    body: { amount: string; reason: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/billing/invoices/${invoiceId}/credit-notes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listBillingCreditNotes: (params?: {
+    billingAccountId?: string;
+    invoiceId?: string;
+  }) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/credit-notes${toQuery({
+        billingAccountId: params?.billingAccountId,
+        invoiceId: params?.invoiceId,
+      })}`,
+    ),
+
   runBillingReconciliation: (body: { provider: string }) =>
     edgeRequest("/api/edge-backend/billing/reconciliation/runs", {
       method: "POST",
@@ -2362,8 +3995,42 @@ export const edgeApi = {
       `/api/edge-backend/billing/policies${toQuery({ policyType })}`,
     ),
 
+  upsertBillingPolicy: (body: {
+    code: string;
+    policyType: string;
+    rules: Record<string, unknown>;
+    status?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/policies", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listTaxJurisdictions: () =>
+    edgeRequest<unknown[]>("/api/edge-backend/billing/tax/jurisdictions"),
+
   listBillingFxRates: () =>
     edgeRequest<unknown[]>("/api/edge-backend/billing/fx/rates"),
+
+  convertBillingFx: (body: { amount: string; from: string; to: string }) =>
+    edgeRequest("/api/edge-backend/billing/fx/convert", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  ingestProviderTransaction: (body: {
+    provider: string;
+    providerTxnId: string;
+    paymentIntentId?: string | null;
+    amount: string;
+    currency: string;
+    status?: string;
+    fees?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/provider-transactions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   listBillingSettlements: () =>
     edgeRequest<unknown[]>("/api/edge-backend/billing/settlements"),
@@ -2393,6 +4060,113 @@ export const edgeApi = {
 
   listBillingExports: () =>
     edgeRequest<unknown[]>("/api/edge-backend/billing/exports"),
+
+  getBillingExport: (id: string) =>
+    edgeRequest<unknown>(`/api/edge-backend/billing/exports/${id}`),
+
+  listBillingAccountJournal: (accountId: string, limit?: number) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/accounts/${accountId}/journal${toQuery({
+        limit,
+      })}`,
+    ),
+
+  listBillingAccountParties: (accountId: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/accounts/${accountId}/parties`,
+    ),
+
+  listBillingAccountPaymentMethods: (accountId: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/accounts/${accountId}/payment-methods`,
+    ),
+
+  revokeBillingPaymentMethod: (accountId: string, methodId: string) =>
+    edgeRequest(
+      `/api/edge-backend/billing/accounts/${accountId}/payment-methods/${methodId}`,
+      { method: "DELETE" },
+    ),
+
+  getBillingAccountCurrentProfile: (accountId: string) =>
+    edgeRequest(
+      `/api/edge-backend/billing/accounts/${accountId}/profiles/current`,
+    ),
+
+  linkBillingAccountSubscription: (
+    accountId: string,
+    body: { subscriptionId: string },
+  ) =>
+    edgeRequest(`/api/edge-backend/billing/accounts/${accountId}/subscriptions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getBillingCollectionCase: (id: string) =>
+    edgeRequest<unknown>(`/api/edge-backend/billing/collections/${id}`),
+
+  recordBillingCollectionDunning: (
+    id: string,
+    body: { channel: string; templateRef?: string | null },
+  ) =>
+    edgeRequest(`/api/edge-backend/billing/collections/${id}/dunning`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  resolveBillingDispute: (
+    id: string,
+    body: { status: string; resolution?: Record<string, unknown> },
+  ) =>
+    edgeRequest(`/api/edge-backend/billing/disputes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  listBillingSchedules: (subscriptionId: string) =>
+    edgeRequest<unknown[]>(
+      `/api/edge-backend/billing/schedules${toQuery({ subscriptionId })}`,
+    ),
+
+  createBillingSchedule: (body: {
+    subscriptionId: string;
+    billingAccountId: string;
+    frequency: string;
+    nextBillAt?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/schedules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createBillingDispute: (body: {
+    billingAccountId: string;
+    paymentIntentId?: string | null;
+    invoiceId?: string | null;
+    provider: string;
+    amount: string;
+    currency: string;
+    disputeType?: string;
+    providerDisputeId?: string | null;
+  }) =>
+    edgeRequest("/api/edge-backend/billing/disputes", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  upsertBillingAccountParty: (
+    accountId: string,
+    body: {
+      partyRole: string;
+      legalName: string;
+      taxId?: string | null;
+      country?: string | null;
+      email?: string | null;
+    },
+  ) =>
+    edgeRequest(`/api/edge-backend/billing/accounts/${accountId}/parties`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   listRevenuePolicies: () =>
     edgeRequest<unknown[]>("/api/edge-backend/billing/revenue-policies"),
@@ -3107,6 +4881,24 @@ export const edgeApi = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
+  completeWorkflowTask: (id: string) =>
+    edgeRequest<WorkflowHumanTaskRecord>(
+      `/api/edge-backend/workflow-tasks/${id}/complete`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  startWorkflowCompensation: (workflowId: string) =>
+    edgeRequest(`/api/edge-backend/workflows/${workflowId}/compensation/start`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  completeWorkflowCompensation: (workflowId: string) =>
+    edgeRequest(
+      `/api/edge-backend/workflows/${workflowId}/compensation/complete`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+
   listWorkflowWorkers: (opts?: WorkflowListQuery) =>
     edgeRequest<WorkflowListPage<WorkflowWorkerRecord>>(
       `/api/edge-backend/workflow-workers${toQuery({
@@ -3591,6 +5383,11 @@ export const edgeApi = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
+  getConfigurationSchema: (id: string) =>
+    edgeRequest<ConfigurationSchemaRecord>(
+      `/api/edge-backend/configuration/schemas/${id}`,
+    ),
+
   listConfigurationTemplates: (opts?: {
     limit?: number;
     offset?: number;
@@ -3631,6 +5428,11 @@ export const edgeApi = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
+  getConfigurationTemplate: (id: string) =>
+    edgeRequest<ConfigurationTemplateRecord>(
+      `/api/edge-backend/configuration/templates/${id}`,
+    ),
+
   listConfigurationBundles: (opts?: {
     limit?: number;
     offset?: number;
@@ -3669,6 +5471,11 @@ export const edgeApi = {
     edgeRequest<ConfigurationBundleRecord>(
       `/api/edge-backend/configuration/bundles/${id}/publish`,
       { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  getConfigurationBundle: (id: string) =>
+    edgeRequest<ConfigurationBundleRecord>(
+      `/api/edge-backend/configuration/bundles/${id}`,
     ),
 
   listTenantConfigurationAssignments: (opts?: {
@@ -3811,6 +5618,11 @@ export const edgeApi = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
+  getExperienceProfile: (id: string) =>
+    edgeRequest<ExperienceProfile>(
+      `/api/edge-backend/experience/profiles/${id}`,
+    ),
+
   listExperienceApplications: (opts?: {
     limit?: number;
     offset?: number;
@@ -3858,6 +5670,11 @@ export const edgeApi = {
     edgeRequest<ExperienceApplication>(
       `/api/edge-backend/experience/applications/${id}/publish`,
       { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  getExperienceApplication: (id: string) =>
+    edgeRequest<ExperienceApplication>(
+      `/api/edge-backend/experience/applications/${id}`,
     ),
 
   listTenantExperienceAssignments: (opts?: {
@@ -4164,6 +5981,127 @@ export const edgeApi = {
     edgeRequest<LifecycleListPage<LifecycleEvidence>>(
       `/api/edge-backend/lifecycle/records/${recordId}/evidence`,
     ),
+
+  // --- RGOM-E11 Partner opportunities ---
+  registerPartnerOpportunity: (body: {
+    partnerCode: string;
+    accountName: string;
+    territoryCode?: string | null;
+    productSegment?: string | null;
+    estimatedMrr?: number | null;
+    conflictWindowDays?: number;
+    notes?: string | null;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      "/api/edge-backend/partners/opportunities",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listPartnerOpportunities: (params?: {
+    partnerCode?: string;
+    status?: string;
+    limit?: number;
+  }) =>
+    edgeRequest<{ data: { items: unknown[]; total: number } }>(
+      `/api/edge-backend/partners/opportunities${toQuery({
+        partnerCode: params?.partnerCode,
+        status: params?.status,
+        limit: params?.limit,
+      })}`,
+    ),
+
+  transitionPartnerOpportunity: (
+    id: string,
+    body: { status: string },
+  ) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      `/api/edge-backend/partners/opportunities/${encodeURIComponent(id)}/transition`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  // --- RGOM-E9 Customer Success ---
+  // edgeRequest already wraps JSON `data` → do not nest another `{ data: ... }` here.
+  listAhaMoments: (segment?: "RETAIL_PHARMACY" | "WHOLESALE" | "RESTAURANT") =>
+    edgeRequest<{
+      segment: string;
+      moments: Array<{
+        code: string;
+        productSegment: string;
+        title: string;
+        description: string;
+        targetDay: number;
+      }>;
+    }>(`/api/edge-backend/cs/aha-moments${toQuery({ segment })}`),
+
+  computeCustomerHealthScore: (body: {
+    adoptionScore?: number | null;
+    ahaCompletionPct?: number | null;
+    supportLoadInverseScore?: number | null;
+    paymentHealthScore?: number | null;
+    delinquent?: boolean;
+    suspended?: boolean;
+  }) =>
+    edgeRequest<Record<string, unknown>>("/api/edge-backend/cs/health-score", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  ingestAdoptionEvent: (body: {
+    subscriptionId: string;
+    productTenantRef?: string | null;
+    eventCode: string;
+    occurredAt?: string | null;
+    source?: "BB" | "EDGE_OPS" | "MANUAL";
+    correlationId?: string | null;
+    payload?: Record<string, unknown>;
+  }) =>
+    edgeRequest<Record<string, unknown>>(
+      "/api/edge-backend/cs/adoption-events",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  listAdoptionEvents: (params: {
+    subscriptionId: string;
+    segment?: "RETAIL_PHARMACY" | "WHOLESALE" | "RESTAURANT";
+    limit?: number;
+  }) =>
+    edgeRequest<{
+      ahaCompletion?: { completionPct?: number };
+      [key: string]: unknown;
+    }>(
+      `/api/edge-backend/cs/adoption-events${toQuery({
+        subscriptionId: params.subscriptionId,
+        segment: params.segment,
+        limit: params.limit,
+      })}`,
+    ),
+
+  evaluateExpansionSignals: (body: {
+    signals: Array<{
+      kind: "ORGS" | "USERS" | "MODULES" | "VOLUME" | "SITES";
+      observed: number | null;
+      granted: number | null;
+      softThresholdRatio?: number;
+    }>;
+  }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      "/api/edge-backend/cs/expansion-signals",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  computeChurnRisk: (body: {
+    healthBand?: "HIGH" | "MID" | "LOW" | "UNKNOWN" | null;
+    healthScore?: number | null;
+    delinquent?: boolean | null;
+    suspended?: boolean | null;
+    daysToRenewal?: number | null;
+    ahaCompletionPct?: number | null;
+  }) =>
+    edgeRequest<Record<string, unknown>>("/api/edge-backend/cs/churn-risk", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   // --- P7.12 Onboarding Operations ---
   listOnboardingTemplates: (opts?: {
@@ -4517,6 +6455,22 @@ export const edgeApi = {
       })}`,
     ),
 
+  /** Cross-run evidence history (GET /reconciliation/history). */
+  listReconciliationHistory: (opts?: {
+    runId?: string;
+    findingId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<ReconciliationEvidence[] | { items?: ReconciliationEvidence[] }>(
+      `/api/edge-backend/reconciliation/history${toQuery({
+        runId: opts?.runId,
+        findingId: opts?.findingId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
   // --- P7.14 Connectivity Agent & Edge Agent Registry ---
   listConnectivityAgents: (opts?: {
     status?: string;
@@ -4532,6 +6486,20 @@ export const edgeApi = {
         tenantId: opts?.tenantId,
         productId: opts?.productId,
         q: opts?.q,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
+  /** Agent history events (GET /agent-history). */
+  listConnectivityAgentHistory: (opts?: {
+    agentId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<unknown[] | { items?: unknown[] }>(
+      `/api/edge-backend/agent-history${toQuery({
+        agentId: opts?.agentId,
         limit: opts?.limit,
         offset: opts?.offset,
       })}`,
@@ -4757,6 +6725,20 @@ export const edgeApi = {
       })}`,
     ),
 
+  /** Cross-package evidence history (GET /certification/history). */
+  listCertificationHistory: (opts?: {
+    packageId?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
+    edgeRequest<CertificationEvidence[] | { items?: CertificationEvidence[] }>(
+      `/api/edge-backend/certification/history${toQuery({
+        packageId: opts?.packageId,
+        limit: opts?.limit,
+        offset: opts?.offset,
+      })}`,
+    ),
+
   // --- P8 Tenant Management & Governance ---
   listTenants: (opts?: {
     q?: string;
@@ -4812,6 +6794,11 @@ export const edgeApi = {
   getTenantPortfolioAnalytics: () =>
     edgeRequest<TenantPortfolioMetrics>(
       `/api/edge-backend/tenant-management/analytics/portfolio`,
+    ),
+
+  getTenantsAnalyticsPortfolio: () =>
+    edgeRequest<TenantPortfolioMetrics>(
+      `/api/edge-backend/tenants/analytics/portfolio`,
     ),
 
   registerTenant: (body: {
@@ -5361,6 +7348,18 @@ export const edgeApi = {
     edgeRequest<{ request: LegalHoldChangeRequestRecord; tenant: TenantRegistryRecord }>(
       `/api/edge-backend/tenant-management/legal-hold-requests/${requestId}/approve`,
       { method: "POST", body: JSON.stringify({}) },
+    ),
+
+  rejectTenantLegalHoldChangeRequest: (
+    requestId: string,
+    body?: { reason?: string },
+  ) =>
+    edgeRequest<{
+      request: LegalHoldChangeRequestRecord;
+      tenant?: TenantRegistryRecord;
+    }>(
+      `/api/edge-backend/tenant-management/legal-hold-requests/${requestId}/reject`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
     ),
 
   // --- P9 Platform Operations -------------------------------------------------
@@ -6379,6 +8378,49 @@ export const edgeApi = {
       note?: string;
     }>(`/api/acquisition-public/checkout/${encodeURIComponent(id)}`),
 
+  getPublicAcquisitionChallenge: () =>
+    edgeRequest<{
+      challengeId: string;
+      challengeToken: string;
+      issuedAt: string;
+      expiresAt: string;
+      operandA: number;
+      operandB: number;
+      prompt: string;
+    }>(`/api/acquisition-public/challenge`),
+
+  getPublicAcquisitionSegments: (params?: AcquisitionListFilter) =>
+    edgeRequest<AcquisitionListPage<SegmentPresentation>>(
+      `/api/acquisition-public/segments${toQuery({
+        productId: params?.productId,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
+    ),
+
+  getPublicAcquisitionCatalog: (params?: {
+    productId?: string;
+    verticalId?: string;
+  }) =>
+    edgeRequest<{ data: unknown }>(
+      `/api/acquisition-public/catalog${toQuery({
+        productId: params?.productId,
+        verticalId: params?.verticalId,
+      })}`,
+    ),
+
+  postPublicAcquisitionApplication: (body: Record<string, unknown>) =>
+    edgeRequest(`/api/acquisition-public/applications`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  postPublicAcquisitionCheckout: (body: Record<string, unknown>) =>
+    edgeRequest(`/api/acquisition-public/checkout`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   postPublicAcquisitionLead: (body: CaptureLeadBody) =>
     edgeRequest<AcquisitionLead>(`/api/acquisition-public/leads`, {
       method: "POST",
@@ -6500,6 +8542,52 @@ export const edgeApi = {
       body: JSON.stringify({}),
     }),
 
+  createBusinessAlertPolicy: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    metricCode: string;
+    businessUnitId?: string;
+    comparator?: string;
+    thresholdValue: number;
+    severity?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest("/api/edge-backend/business/alerts/policies", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  evaluateBusinessAlert: (body: {
+    policyId: string;
+    observedValue?: number | null;
+    asOf?: string;
+  }) =>
+    edgeRequest("/api/edge-backend/business/alerts/evaluate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  recordRevenueRetentionSnapshot: (body: {
+    cohortId: string;
+    periodStart: string;
+    periodEnd: string;
+    asOf?: string;
+    startingMrr?: number | null;
+    contraction?: number | null;
+    churned?: number | null;
+    expansion?: number | null;
+    reactivation?: number | null;
+    includeReactivationInNrr?: boolean;
+    currency?: string;
+    sourceProvenance?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest("/api/edge-backend/revenue/retention/snapshots", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listBusinessTargets: (params?: { limit?: number; offset?: number }) =>
     edgeRequest(
       `/api/edge-backend/business/targets${toQuery({
@@ -6549,6 +8637,12 @@ export const edgeApi = {
   ) =>
     edgeRequest<RevenueForecastScenario>(
       `/api/edge-backend/revenue/forecasts/${encodeURIComponent(forecastId)}/scenarios`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  buildNamedForecastScenarios: (body: { actuals: number[] }) =>
+    edgeRequest<{ data: Record<string, unknown> }>(
+      `/api/edge-backend/revenue/forecasts/named-scenarios`,
       { method: "POST", body: JSON.stringify(body) },
     ),
 
@@ -6619,6 +8713,78 @@ export const edgeApi = {
 
   appendBusinessAudit: (body: AppendBusinessAuditBody) =>
     edgeRequest<BusinessAuditEvent>(`/api/edge-backend/business/audit`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  computeRevenueChurnRates: (body: {
+    periodStart: string;
+    periodEnd: string;
+    asOf?: string;
+    currency?: string;
+    businessUnitId?: string;
+    startingLogos?: number | null;
+    churnedLogos?: number | null;
+    startingSubscriptions?: number | null;
+    churnedSubscriptions?: number | null;
+    persistSnapshots?: boolean;
+  }) =>
+    edgeRequest(`/api/edge-backend/revenue/churn/compute`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  recordRevenueUnitEconomicsSnapshot: (body: {
+    periodStart: string;
+    periodEnd: string;
+    asOf?: string;
+    currency: string;
+    businessUnitId?: string;
+    acquisitionSpend?: number | null;
+    newCustomers?: number | null;
+    avgRecurringRevenue?: number | null;
+    grossMarginPct?: number | null;
+    churnRate?: number | null;
+    monthlyContribution?: number | null;
+    mirrorMetricSnapshots?: boolean;
+    sourceProvenance?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest(`/api/edge-backend/revenue/unit-economics/snapshots`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  recordRevenueProductProfitabilitySnapshot: (body: {
+    productRefId?: string;
+    commercialPlanRefId?: string;
+    businessUnitId?: string;
+    periodStart: string;
+    periodEnd: string;
+    asOf?: string;
+    revenueAmount: number;
+    revenueDataQuality?: string;
+    directCostAmount?: number | null;
+    costDataQuality?: string;
+    currency: string;
+    mirrorMetricSnapshots?: boolean;
+    sourceProvenance?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest(`/api/edge-backend/revenue/product-profitability/snapshots`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  createBusinessDecision: (body: {
+    code: string;
+    title: string;
+    decisionType?: string;
+    rationale?: string;
+    relatedReportId?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    edgeRequest(`/api/edge-backend/business/decisions`, {
       method: "POST",
       body: JSON.stringify(body),
     }),

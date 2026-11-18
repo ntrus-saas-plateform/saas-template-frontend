@@ -564,6 +564,8 @@ export type PublicProductPage = {
     commercialAvailability?: string;
     [key: string]: unknown;
   };
+  /** Active public form slug when configured / published for the product. */
+  defaultFormSlug?: string | null;
 };
 
 export type CustomerPortalSnapshot = {

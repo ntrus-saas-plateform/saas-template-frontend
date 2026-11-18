@@ -112,6 +112,12 @@ export function EdgeAgentsModule() {
     enabled: canHistory && Boolean(selectedAgentId) && tab === "history",
   });
 
+  const globalHistoryQ = useQuery({
+    queryKey: ["agents", "agent-history"],
+    queryFn: () => edgeApi.listConnectivityAgentHistory({ limit: 50 }),
+    enabled: canHistory && tab === "history",
+  });
+
   const agents = useMemo(
     () => unwrapInfraList<ConnectivityAgent>(agentsQ.data?.data),
     [agentsQ.data],
@@ -122,6 +128,14 @@ export function EdgeAgentsModule() {
     if (Array.isArray(raw)) return raw as AgentEvidence[];
     return unwrapInfraList<AgentEvidence>(raw).items;
   }, [evidenceQ.data]);
+  const globalHistory = useMemo(() => {
+    const raw = globalHistoryQ.data?.data ?? globalHistoryQ.data;
+    if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+    if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
+      return (raw as { items: Array<Record<string, unknown>> }).items;
+    }
+    return [] as Array<Record<string, unknown>>;
+  }, [globalHistoryQ.data]);
 
   const createM = useMutation({
     mutationFn: () =>
@@ -421,37 +435,75 @@ export function EdgeAgentsModule() {
       )}
 
       {tab === "history" && canHistory && (
-        <Card>
-          <CardHeader title="Evidence" />
-          <CardBody>
-            {!selectedAgentId ? (
-              <EdgeEmptyState
-                title="Sélectionnez un agent"
-                description="Choisissez un agent pour afficher l’evidence."
-              />
-            ) : evidenceQ.isLoading ? (
-              <EdgeLoadingState />
-            ) : evidence.length === 0 ? (
-              <EdgeEmptyState
-                title="Aucune evidence"
-                description="Pas encore d’evidence workflow pour cet agent."
-              />
-            ) : (
-              <ul className="space-y-2" data-testid="agents-evidence-list">
-                {evidence.map((ev) => (
-                  <li key={ev.id} className="type-sm border-b py-2">
-                    <div className="font-medium">
-                      {ev.operation} · {ev.outcome}
-                    </div>
-                    <div className="text-[var(--text-muted)]">
-                      {formatWhen(ev.createdAt)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader title="Agent history (global)" />
+            <CardBody>
+              <p className="type-xs text-[var(--text-muted)] mb-2">
+                GET /agent-history — pas un filtre client de l’evidence agent.
+              </p>
+              {globalHistoryQ.isLoading ? (
+                <EdgeLoadingState />
+              ) : globalHistory.length === 0 ? (
+                <EdgeEmptyState
+                  title="Aucun événement d’historique"
+                  description="La liste globale est vide."
+                />
+              ) : (
+                <ul className="space-y-2" data-testid="agents-global-history-list">
+                  {globalHistory.map((row, i) => {
+                    const id = String(row.id ?? i);
+                    return (
+                      <li key={id} className="type-sm border-b py-2">
+                        <div className="font-medium">
+                          {String(row.operation ?? row.eventType ?? row.kind ?? id)}
+                          {row.outcome ? ` · ${String(row.outcome)}` : ""}
+                        </div>
+                        <div className="text-[var(--text-muted)]">
+                          {formatWhen(
+                            (row.createdAt as string | undefined) ??
+                              (row.occurredAt as string | undefined),
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader title="Evidence (agent sélectionné)" />
+            <CardBody>
+              {!selectedAgentId ? (
+                <EdgeEmptyState
+                  title="Sélectionnez un agent"
+                  description="Choisissez un agent pour afficher l’evidence."
+                />
+              ) : evidenceQ.isLoading ? (
+                <EdgeLoadingState />
+              ) : evidence.length === 0 ? (
+                <EdgeEmptyState
+                  title="Aucune evidence"
+                  description="Pas encore d’evidence workflow pour cet agent."
+                />
+              ) : (
+                <ul className="space-y-2" data-testid="agents-evidence-list">
+                  {evidence.map((ev) => (
+                    <li key={ev.id} className="type-sm border-b py-2">
+                      <div className="font-medium">
+                        {ev.operation} · {ev.outcome}
+                      </div>
+                      <div className="text-[var(--text-muted)]">
+                        {formatWhen(ev.createdAt)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+        </div>
       )}
     </div>
   );

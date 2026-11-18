@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { LiveCompleteAdapterStatusBadge } from "@/components/edge/live-complete/adapter-status-badge";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
@@ -106,6 +107,16 @@ export default function EdgeBillingPage() {
     invoiceId: "",
     voidReason: "",
   });
+  const [previewForm, setPreviewForm] = useState({
+    currency: "USD",
+    description: "Line item",
+    quantity: "1",
+    unitPrice: "100",
+  });
+  const [previewResult, setPreviewResult] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     billingAccountId: "",
     invoiceId: "",
@@ -113,6 +124,46 @@ export default function EdgeBillingPage() {
     currency: "USD",
   });
   const [confirmIntentId, setConfirmIntentId] = useState("");
+  const [cadenceForm, setCadenceForm] = useState({
+    subscriptionId: "",
+    billingFrequency: "MONTHLY",
+    setupFeeAmount: "",
+  });
+  const [scheduleForm, setScheduleForm] = useState({
+    subscriptionId: "",
+    billingAccountId: "",
+    frequency: "MONTHLY",
+  });
+  const [scheduleLookupSubId, setScheduleLookupSubId] = useState("");
+  const [partyForm, setPartyForm] = useState({
+    partyRole: "BILL_TO",
+    legalName: "",
+    email: "",
+  });
+  const [disputeForm, setDisputeForm] = useState({
+    billingAccountId: "",
+    amount: "",
+    currency: "USD",
+    provider: "sandbox",
+    invoiceId: "",
+  });
+  const [collectionInspectId, setCollectionInspectId] = useState("");
+  const [refundForm, setRefundForm] = useState({
+    paymentIntentId: "",
+    amount: "",
+    currency: "USD",
+    reason: "",
+  });
+  const [geoFilter, setGeoFilter] = useState({ country: "CI", currency: "XOF" });
+  const [pmForm, setPmForm] = useState({
+    billingAccountId: "",
+    provider: "sandbox",
+    providerMethodRef: "",
+    methodType: "MOBILE_MONEY",
+    brand: "MTN",
+    country: "CI",
+    currency: "XOF",
+  });
   const [recentInvoices, setRecentInvoices] = useState<
     Record<string, unknown>[]
   >([]);
@@ -141,6 +192,20 @@ export default function EdgeBillingPage() {
       (tab === "overview" || tab === "reports") && canReadAny,
   });
 
+  const cashTruthQuery = useQuery({
+    queryKey: ["edge", "billing", "cash-truth"],
+    queryFn: async () => {
+      const res = await edgeApi.getBillingCashTruth({ currency: "USD" });
+      return (
+        unwrap<Record<string, unknown>>(res) ??
+        (res as { data?: Record<string, unknown> })?.data ??
+        (res as Record<string, unknown>)
+      );
+    },
+    enabled:
+      (tab === "overview" || tab === "reports") && canReadAny,
+  });
+
   const accountsQuery = useQuery({
     queryKey: ["edge", "billing", "accounts"],
     queryFn: () => edgeApi.listBillingAccounts(),
@@ -148,7 +213,9 @@ export default function EdgeBillingPage() {
       (tab === "accounts" ||
         tab === "payments" ||
         tab === "invoices" ||
-        tab === "collections") &&
+        tab === "collections" ||
+        tab === "configuration" ||
+        tab === "reconciliation") &&
       canReadAny,
   });
 
@@ -161,12 +228,32 @@ export default function EdgeBillingPage() {
   const invoicesQuery = useQuery({
     queryKey: ["edge", "billing", "invoices"],
     queryFn: () => edgeApi.listBillingInvoices({ limit: 50 }),
-    enabled: (tab === "invoices" || tab === "collections") && canReadAny,
+    enabled:
+      (tab === "invoices" ||
+        tab === "collections" ||
+        tab === "payments" ||
+        tab === "reconciliation") &&
+      canReadAny,
+  });
+
+  const creditNotesQuery = useQuery({
+    queryKey: ["edge", "billing", "credit-notes"],
+    queryFn: () => edgeApi.listBillingCreditNotes(),
+    enabled: tab === "invoices" && canReadAny,
   });
 
   const paymentsQuery = useQuery({
     queryKey: ["edge", "billing", "payments"],
     queryFn: () => edgeApi.listBillingPayments({ limit: 50 }),
+    enabled: tab === "payments" && canReadAny,
+  });
+
+  const geoMethodsQuery = useQuery({
+    queryKey: ["edge", "billing", "geo-payment-methods", geoFilter],
+    queryFn: async () => {
+      const res = await edgeApi.listGeoPaymentMethods(geoFilter);
+      return unwrap<Record<string, unknown>>(res) ?? res;
+    },
     enabled: tab === "payments" && canReadAny,
   });
 
@@ -194,6 +281,12 @@ export default function EdgeBillingPage() {
     enabled: tab === "configuration" && canReadAny,
   });
 
+  const taxJurisdictionsQuery = useQuery({
+    queryKey: ["edge", "billing", "tax-jurisdictions"],
+    queryFn: () => edgeApi.listTaxJurisdictions(),
+    enabled: tab === "configuration" && canReadAny,
+  });
+
   const fxRatesQuery = useQuery({
     queryKey: ["edge", "billing", "fx"],
     queryFn: () => edgeApi.listBillingFxRates(),
@@ -205,6 +298,113 @@ export default function EdgeBillingPage() {
     queryFn: () => edgeApi.getBillingAccount(lookupAccountId),
     enabled: Boolean(lookupAccountId) && tab === "accounts" && canReadAny,
   });
+
+  const accountJournalQuery = useQuery({
+    queryKey: ["edge", "billing", "journal", lookupAccountId],
+    queryFn: () => edgeApi.listBillingAccountJournal(lookupAccountId, 40),
+    enabled:
+      Boolean(lookupAccountId) && tab === "accounts" && canReadAny,
+  });
+
+  const accountPartiesQuery = useQuery({
+    queryKey: ["edge", "billing", "parties", lookupAccountId],
+    queryFn: () => edgeApi.listBillingAccountParties(lookupAccountId),
+    enabled:
+      Boolean(lookupAccountId) && tab === "accounts" && canReadAny,
+  });
+
+  const billingSchedulesQuery = useQuery({
+    queryKey: ["edge", "billing", "schedules", scheduleLookupSubId],
+    queryFn: () => edgeApi.listBillingSchedules(scheduleLookupSubId.trim()),
+    enabled:
+      tab === "configuration" &&
+      Boolean(scheduleLookupSubId.trim()) &&
+      canReadAny,
+  });
+
+  const disputesQuery = useQuery({
+    queryKey: ["edge", "billing", "disputes"],
+    queryFn: () => edgeApi.listBillingDisputes(),
+    enabled: tab === "reconciliation" && canReadAny,
+  });
+
+  const collectionDetailQuery = useQuery({
+    queryKey: ["edge", "billing", "collection", collectionInspectId],
+    queryFn: () => edgeApi.getBillingCollectionCase(collectionInspectId),
+    enabled:
+      tab === "collections" &&
+      Boolean(collectionInspectId.trim()) &&
+      canReadAny,
+  });
+
+  const subscriptionsQuery = useQuery({
+    queryKey: ["edge", "subscriptions", "billing-picker"],
+    queryFn: () => edgeApi.listSubscriptions({ limit: 100 }),
+    enabled: (tab === "invoices" || tab === "configuration") && canReadAny,
+  });
+
+  const billingAccountPickOptions = useMemo(
+    () =>
+      asRows(accountsQuery.data).map((a) => ({
+        id: String(a.id),
+        label: `${String(a.accountNumber ?? a.id)} · ${String(a.currency ?? "")}`,
+      })),
+    [accountsQuery.data],
+  );
+
+  const commercialAccountPickOptions = useMemo(
+    () =>
+      asRows(commercialAccountsQuery.data).map((ca) => ({
+        id: String(ca.id),
+        label: String(ca.name ?? ca.legalName ?? ca.accountNumber ?? ca.id),
+      })),
+    [commercialAccountsQuery.data],
+  );
+
+  const invoicePickOptions = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    for (const inv of [...asRows(invoicesQuery.data), ...recentInvoices]) {
+      const id = String(inv.id);
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          label: `${String(inv.invoiceNumber ?? id.slice(0, 8))} · ${String(inv.status ?? "")}`,
+        });
+      }
+    }
+    return [...map.values()];
+  }, [invoicesQuery.data, recentInvoices]);
+
+  const subscriptionPickOptions = useMemo(
+    () =>
+      asRows(subscriptionsQuery.data).map((s) => ({
+        id: String(s.id),
+        label: `${String(s.subscriptionNumber ?? s.id).slice(0, 16)} · ${String(s.status ?? "")}`,
+      })),
+    [subscriptionsQuery.data],
+  );
+
+  const collectionCasePickOptions = useMemo(
+    () =>
+      asRows(collectionsQuery.data).map((c) => ({
+        id: String(c.id),
+        label: `Case ${String(c.id).slice(0, 8)} · ${String(c.status ?? "")}`,
+      })),
+    [collectionsQuery.data],
+  );
+
+  const paymentIntentPickOptions = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    for (const pi of [...asRows(paymentsQuery.data), ...recentIntents]) {
+      if (!pi.id) continue;
+      const id = String(pi.id);
+      map.set(id, {
+        id,
+        label: `${id.slice(0, 8)}… · ${String(pi.status)} · ${String(pi.amount)} ${String(pi.currency)}`,
+      });
+    }
+    return [...map.values()];
+  }, [paymentsQuery.data, recentIntents]);
 
   const [collectionForm, setCollectionForm] = useState({
     billingAccountId: "",
@@ -308,6 +508,38 @@ export default function EdgeBillingPage() {
     },
   });
 
+  const previewInvoice = useMutation({
+    mutationFn: () =>
+      edgeApi.previewBillingInvoice({
+        currency: previewForm.currency,
+        lines: [
+          {
+            description: previewForm.description,
+            quantity: previewForm.quantity,
+            unitPrice: previewForm.unitPrice,
+          },
+        ],
+      }),
+    onSuccess: (res) => {
+      setPreviewResult(
+        unwrap<Record<string, unknown>>(res) ??
+          (res as Record<string, unknown>),
+      );
+    },
+  });
+
+  const markOverdue = useMutation({
+    mutationFn: () => edgeApi.markOverdueBillingInvoices(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["edge", "billing", "invoices"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["edge", "billing", "overview"],
+      });
+    },
+  });
+
   const createPaymentIntent = useMutation({
     mutationFn: () =>
       edgeApi.createBillingPaymentIntent({
@@ -400,12 +632,13 @@ export default function EdgeBillingPage() {
   }>(analyticsQuery.data);
 
   const accounts = asRows(accountsQuery.data);
-  const commercialAccounts = asRows(commercialAccountsQuery.data);
   const serverInvoices = asRows(invoicesQuery.data);
+  const creditNotes = asRows(creditNotesQuery.data);
   const collections = asRows(collectionsQuery.data);
   const reconRuns = asRows(reconRunsQuery.data);
   const reconExceptions = asRows(reconExceptionsQuery.data);
   const policies = asRows(policiesQuery.data);
+  const taxJurisdictions = asRows(taxJurisdictionsQuery.data);
   const fxRates = asRows(fxRatesQuery.data);
   const serverPayments = asRows(paymentsQuery.data);
 
@@ -509,10 +742,17 @@ export default function EdgeBillingPage() {
                 </p>
               </div>
             </div>
+            <CashTruthPanel
+              truth={cashTruthQuery.data as Record<string, unknown> | undefined}
+              loading={cashTruthQuery.isLoading}
+              error={cashTruthQuery.isError ? cashTruthQuery.error : null}
+              onRetry={() => void cashTruthQuery.refetch()}
+            />
             {tab === "reports" ? (
               <p className="text-sm text-muted-foreground">
-                Billed ≠ collected ≠ recognized. Refunds are subtracted under
-                CASH_BASED_NET. DEFERRED_MANUAL leaves recognized null.
+                Contracted ≠ invoiced ≠ collected ≠ recognized. Refunds are
+                subtracted under CASH_BASED_NET. DEFERRED_MANUAL leaves recognized
+                null.
               </p>
             ) : null}
           </section>
@@ -533,24 +773,16 @@ export default function EdgeBillingPage() {
                 <h2 className="sm:col-span-2 text-sm font-medium">
                   Create billing account
                 </h2>
-                <select
-                  className={fieldControlClass}
+                <ListOrUuidField
                   value={accountForm.commercialAccountId}
-                  onChange={(e) =>
-                    setAccountForm((s) => ({
-                      ...s,
-                      commercialAccountId: e.target.value,
-                    }))
+                  onChange={(commercialAccountId) =>
+                    setAccountForm((s) => ({ ...s, commercialAccountId }))
                   }
+                  options={commercialAccountPickOptions}
+                  placeholder="Select commercial account…"
+                  fallbackPlaceholder="Commercial account ID"
                   required
-                >
-                  <option value="">Select commercial account…</option>
-                  {commercialAccounts.map((ca) => (
-                    <option key={String(ca.id)} value={String(ca.id)}>
-                      {String(ca.name ?? ca.legalName ?? ca.accountNumber ?? ca.id)}
-                    </option>
-                  ))}
-                </select>
+                />
                 <input
                   className={fieldControlClass}
                   placeholder="Currency"
@@ -583,6 +815,15 @@ export default function EdgeBillingPage() {
                 </div>
               </form>
             </EdgePermissionGate>
+
+            <ListOrUuidField
+              className="max-w-md"
+              value={lookupAccountId}
+              onChange={setLookupAccountId}
+              options={billingAccountPickOptions}
+              placeholder="Inspect billing account…"
+              fallbackPlaceholder="Billing account ID"
+            />
 
             {accountsQuery.isLoading ? (
               <EdgeLoadingState label="Loading accounts…" />
@@ -645,6 +886,93 @@ export default function EdgeBillingPage() {
                 </pre>
               )
             ) : null}
+
+            {lookupAccountId ? (
+              <div className="space-y-4 rounded-xl border border-border/70 p-4">
+                <h2 className="text-sm font-medium">Journal &amp; parties</h2>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div>
+                    <p className="mb-2 text-xs text-muted-foreground">Ledger journal</p>
+                    {accountJournalQuery.isLoading ? (
+                      <EdgeLoadingState label="Journal…" />
+                    ) : (
+                      <pre className="max-h-48 overflow-auto rounded-lg bg-muted/30 p-2 text-xs">
+                        {JSON.stringify(
+                          unwrap(accountJournalQuery.data) ?? [],
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs text-muted-foreground">Parties</p>
+                    {accountPartiesQuery.isLoading ? (
+                      <EdgeLoadingState label="Parties…" />
+                    ) : (
+                      <pre className="max-h-48 overflow-auto rounded-lg bg-muted/30 p-2 text-xs">
+                        {JSON.stringify(
+                          unwrap(accountPartiesQuery.data) ?? [],
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+                <EdgePermissionGate permission="platform:billing:accounts:update">
+                  <form
+                    className="grid gap-3 sm:grid-cols-4"
+                    onSubmit={(e: FormEvent) => {
+                      e.preventDefault();
+                      void edgeApi
+                        .upsertBillingAccountParty(lookupAccountId, {
+                          partyRole: partyForm.partyRole,
+                          legalName: partyForm.legalName,
+                          email: partyForm.email || null,
+                        })
+                        .then(() => accountPartiesQuery.refetch());
+                    }}
+                  >
+                    <select
+                      className={fieldControlClass}
+                      value={partyForm.partyRole}
+                      onChange={(e) =>
+                        setPartyForm((f) => ({
+                          ...f,
+                          partyRole: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="BILL_TO">BILL_TO</option>
+                      <option value="SHIP_TO">SHIP_TO</option>
+                      <option value="LEGAL_ENTITY">LEGAL_ENTITY</option>
+                    </select>
+                    <input
+                      className={fieldControlClass}
+                      placeholder="Legal name"
+                      value={partyForm.legalName}
+                      onChange={(e) =>
+                        setPartyForm((f) => ({
+                          ...f,
+                          legalName: e.target.value,
+                        }))
+                      }
+                      required
+                    />
+                    <input
+                      className={fieldControlClass}
+                      placeholder="Email"
+                      value={partyForm.email}
+                      onChange={(e) =>
+                        setPartyForm((f) => ({ ...f, email: e.target.value }))
+                      }
+                    />
+                    <Button type="submit">Upsert party</Button>
+                  </form>
+                </EdgePermissionGate>
+              </div>
+            ) : null}
           </section>
         </EdgePermissionGate>
       ) : null}
@@ -653,12 +981,79 @@ export default function EdgeBillingPage() {
         <EdgePermissionGate permission="platform:billing:invoices:read">
           <section className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Invoice registry list is not exposed on{" "}
-              <code className="text-xs">EdgeBillingController</code>; this tab
-              shows drafts you create in-session and lifecycle actions by ID.
-              Amount due / paid on issued invoices comes from the API — we do
-              not mark invoices paid unless status says so.
+              Preview totals, draft from subscription, lifecycle actions by ID,
+              mark overdue batch, and credit notes. Amount due / paid comes from
+              the API — we do not invent paid status.
             </p>
+
+            <EdgePermissionGate permission="platform:billing:invoices:preview">
+              <form
+                className="grid gap-3 rounded-xl border border-border/70 p-4 sm:grid-cols-2"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  previewInvoice.mutate();
+                }}
+              >
+                <h2 className="sm:col-span-2 text-sm font-medium">
+                  Invoice preview
+                </h2>
+                <input
+                  className={fieldControlClass}
+                  placeholder="Currency"
+                  value={previewForm.currency}
+                  onChange={(e) =>
+                    setPreviewForm((s) => ({ ...s, currency: e.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Description"
+                  value={previewForm.description}
+                  onChange={(e) =>
+                    setPreviewForm((s) => ({
+                      ...s,
+                      description: e.target.value,
+                    }))
+                  }
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Quantity"
+                  value={previewForm.quantity}
+                  onChange={(e) =>
+                    setPreviewForm((s) => ({ ...s, quantity: e.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Unit price"
+                  value={previewForm.unitPrice}
+                  onChange={(e) =>
+                    setPreviewForm((s) => ({ ...s, unitPrice: e.target.value }))
+                  }
+                  required
+                />
+                <div className="sm:col-span-2">
+                  <Button type="submit" disabled={previewInvoice.isPending}>
+                    Preview totals
+                  </Button>
+                  {previewInvoice.isError ? (
+                    <p className="mt-2 text-sm text-destructive">
+                      {(previewInvoice.error as EdgeApiError)?.message ??
+                        "Preview failed"}
+                    </p>
+                  ) : null}
+                  {previewResult ? (
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-border/60 bg-muted/30 p-2 text-xs">
+                      {JSON.stringify(previewResult, null, 2)}
+                    </pre>
+                  ) : null}
+                </div>
+              </form>
+            </EdgePermissionGate>
 
             <EdgePermissionGate permission="platform:billing:invoices:create">
               <form
@@ -671,16 +1066,14 @@ export default function EdgeBillingPage() {
                 <h2 className="sm:col-span-2 text-sm font-medium">
                   Draft invoice from subscription
                 </h2>
-                <input
-                  className={fieldControlClass}
-                  placeholder="Subscription ID"
+                <ListOrUuidField
                   value={draftInvoiceForm.subscriptionId}
-                  onChange={(e) =>
-                    setDraftInvoiceForm((s) => ({
-                      ...s,
-                      subscriptionId: e.target.value,
-                    }))
+                  onChange={(subscriptionId) =>
+                    setDraftInvoiceForm((s) => ({ ...s, subscriptionId }))
                   }
+                  options={subscriptionPickOptions}
+                  placeholder="Select subscription"
+                  fallbackPlaceholder="Subscription ID"
                   required
                 />
                 <input
@@ -712,13 +1105,15 @@ export default function EdgeBillingPage() {
               <h2 className="sm:col-span-2 text-sm font-medium">
                 Invoice lifecycle (by ID)
               </h2>
-              <input
-                className={fieldControlClass + " sm:col-span-2"}
-                placeholder="Invoice ID"
+              <ListOrUuidField
+                className="sm:col-span-2"
                 value={invoiceOps.invoiceId}
-                onChange={(e) =>
-                  setInvoiceOps((s) => ({ ...s, invoiceId: e.target.value }))
+                onChange={(invoiceId) =>
+                  setInvoiceOps((s) => ({ ...s, invoiceId }))
                 }
+                options={invoicePickOptions}
+                placeholder="Select invoice"
+                fallbackPlaceholder="Invoice ID"
               />
               <EdgePermissionGate permission="platform:billing:invoices:approve">
                 <Button
@@ -757,9 +1152,48 @@ export default function EdgeBillingPage() {
                   Void
                 </Button>
               </EdgePermissionGate>
+              <EdgePermissionGate permission="platform:billing:invoices:issue">
+                <Button
+                  variant="secondary"
+                  disabled={markOverdue.isPending}
+                  onClick={() => markOverdue.mutate()}
+                >
+                  Mark overdue invoices
+                </Button>
+                {markOverdue.isError ? (
+                  <p className="sm:col-span-2 text-sm text-destructive">
+                    {(markOverdue.error as EdgeApiError)?.message ??
+                      "Mark overdue failed"}
+                  </p>
+                ) : null}
+                {markOverdue.isSuccess ? (
+                  <p className="sm:col-span-2 text-xs text-muted-foreground">
+                    Overdue batch completed — invoice list refreshed.
+                  </p>
+                ) : null}
+              </EdgePermissionGate>
             </div>
 
-            {recentInvoices.length ? (
+            {invoicesQuery.isLoading ? (
+              <EdgeLoadingState label="Loading invoices…" />
+            ) : serverInvoices.length ? (
+              <ul className="divide-y rounded-xl border border-border/70 text-sm">
+                {serverInvoices.map((inv) => (
+                  <li key={String(inv.id)} className="p-3">
+                    <p className="font-medium">
+                      {String(inv.invoiceNumber ?? inv.id)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Status <Badge tone="default">{String(inv.status)}</Badge>
+                      · Total {String(inv.total ?? "—")}{" "}
+                      {String(inv.currency ?? "")} · Due{" "}
+                      {String(inv.amountDue ?? "—")} · Paid{" "}
+                      {String(inv.amountPaid ?? "0")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : recentInvoices.length ? (
               <ul className="divide-y rounded-xl border border-border/70 text-sm">
                 {recentInvoices.map((inv) => {
                   const subId =
@@ -796,10 +1230,46 @@ export default function EdgeBillingPage() {
               </ul>
             ) : (
               <EdgeEmptyState
-                title="No session invoices"
+                title="No invoices"
                 description="Draft an invoice from a subscription or run lifecycle actions by ID."
               />
             )}
+
+            <div>
+              <h2 className="mb-2 text-sm font-medium">Credit notes</h2>
+              {creditNotesQuery.isLoading ? (
+                <EdgeLoadingState label="Loading credit notes…" />
+              ) : creditNotesQuery.isError ? (
+                <EdgeErrorState
+                  description={
+                    (creditNotesQuery.error as EdgeApiError)?.message ??
+                    "Credit notes failed"
+                  }
+                  onRetry={() => void creditNotesQuery.refetch()}
+                />
+              ) : !creditNotes.length ? (
+                <EdgeEmptyState
+                  title="No credit notes"
+                  description="Credit notes appear after void/credit actions on issued invoices."
+                />
+              ) : (
+                <ul className="divide-y rounded-xl border border-border/70 text-sm">
+                  {creditNotes.map((cn) => (
+                    <li key={String(cn.id)} className="p-3">
+                      <p className="font-medium">
+                        {String(cn.creditNoteNumber ?? cn.id)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Invoice {String(cn.invoiceId ?? "—")} · Amount{" "}
+                        {String(cn.amount ?? cn.total ?? "—")}{" "}
+                        {String(cn.currency ?? "")} ·{" "}
+                        {String(cn.reason ?? "—")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </section>
         </EdgePermissionGate>
       ) : null}
@@ -808,10 +1278,137 @@ export default function EdgeBillingPage() {
         <EdgePermissionGate permission="platform:billing:payments:read">
           <section className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Payment list endpoints are not on P6 controller; collected totals
-              in overview count only intents with status{" "}
-              <code className="text-xs">SUCCEEDED</code>.
+              Collected totals count only intents with status{" "}
+              <code className="text-xs">SUCCEEDED</code>. Geo methods are
+              beachhead availability — not cash proof.
             </p>
+
+            <div className="space-y-3 rounded-xl border border-border/70 p-4">
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="grid gap-1 text-sm">
+                  Country
+                  <input
+                    className={fieldControlClass}
+                    value={geoFilter.country}
+                    onChange={(e) =>
+                      setGeoFilter((s) => ({ ...s, country: e.target.value }))
+                    }
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  Currency
+                  <input
+                    className={fieldControlClass}
+                    value={geoFilter.currency}
+                    onChange={(e) =>
+                      setGeoFilter((s) => ({ ...s, currency: e.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+              {geoMethodsQuery.isLoading ? (
+                <EdgeLoadingState label="Loading geo methods…" />
+              ) : (
+                <ul className="divide-y rounded-xl border border-border/60 text-sm">
+                  {(
+                    ((geoMethodsQuery.data as { methods?: Record<string, unknown>[] })
+                      ?.methods ?? []) as Record<string, unknown>[]
+                  ).map((m) => (
+                    <li key={String(m.code)} className="p-2">
+                      <span className="font-medium">{String(m.code)}</span> ·{" "}
+                      <Badge>{String(m.methodType)}</Badge>
+                      {m.brand ? ` · ${String(m.brand)}` : ""} ·{" "}
+                      {String(m.status)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <EdgePermissionGate permission="platform:billing:payments:initiate">
+              <form
+                className="grid gap-3 rounded-xl border border-border/70 p-4 sm:grid-cols-2"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void edgeApi.registerBillingPaymentMethod(
+                    pmForm.billingAccountId,
+                    {
+                      provider: pmForm.provider,
+                      providerMethodRef: pmForm.providerMethodRef,
+                      methodType: pmForm.methodType,
+                      brand: pmForm.brand || null,
+                      country: pmForm.country,
+                      currency: pmForm.currency,
+                    },
+                  );
+                }}
+              >
+                <h2 className="sm:col-span-2 text-sm font-medium">
+                  Register tokenized payment method (geo-gated)
+                </h2>
+                <ListOrUuidField
+                  value={pmForm.billingAccountId}
+                  onChange={(billingAccountId) =>
+                    setPmForm((s) => ({ ...s, billingAccountId }))
+                  }
+                  options={billingAccountPickOptions}
+                  placeholder="Select billing account"
+                  fallbackPlaceholder="Billing account ID"
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Provider method ref (token)"
+                  value={pmForm.providerMethodRef}
+                  onChange={(e) =>
+                    setPmForm((s) => ({
+                      ...s,
+                      providerMethodRef: e.target.value,
+                    }))
+                  }
+                  required
+                />
+                <select
+                  className={fieldControlClass}
+                  value={pmForm.methodType}
+                  onChange={(e) =>
+                    setPmForm((s) => ({ ...s, methodType: e.target.value }))
+                  }
+                >
+                  <option value="MOBILE_MONEY">MOBILE_MONEY</option>
+                  <option value="CARD">CARD</option>
+                  <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+                  <option value="MANUAL">MANUAL</option>
+                </select>
+                <input
+                  className={fieldControlClass}
+                  placeholder="Brand (MTN/ORANGE/WAVE/MOOV)"
+                  value={pmForm.brand}
+                  onChange={(e) =>
+                    setPmForm((s) => ({ ...s, brand: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Country"
+                  value={pmForm.country}
+                  onChange={(e) =>
+                    setPmForm((s) => ({ ...s, country: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Currency"
+                  value={pmForm.currency}
+                  onChange={(e) =>
+                    setPmForm((s) => ({ ...s, currency: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <Button type="submit">Register method</Button>
+                </div>
+              </form>
+            </EdgePermissionGate>
 
             <EdgePermissionGate permission="platform:billing:payments:initiate">
               <form
@@ -824,28 +1421,24 @@ export default function EdgeBillingPage() {
                 <h2 className="sm:col-span-2 text-sm font-medium">
                   Create payment intent
                 </h2>
-                <input
-                  className={fieldControlClass}
-                  placeholder="Billing account ID"
+                <ListOrUuidField
                   value={paymentForm.billingAccountId}
-                  onChange={(e) =>
-                    setPaymentForm((s) => ({
-                      ...s,
-                      billingAccountId: e.target.value,
-                    }))
+                  onChange={(billingAccountId) =>
+                    setPaymentForm((s) => ({ ...s, billingAccountId }))
                   }
+                  options={billingAccountPickOptions}
+                  placeholder="Select billing account"
+                  fallbackPlaceholder="Billing account ID"
                   required
                 />
-                <input
-                  className={fieldControlClass}
-                  placeholder="Invoice ID (optional)"
+                <ListOrUuidField
                   value={paymentForm.invoiceId}
-                  onChange={(e) =>
-                    setPaymentForm((s) => ({
-                      ...s,
-                      invoiceId: e.target.value,
-                    }))
+                  onChange={(invoiceId) =>
+                    setPaymentForm((s) => ({ ...s, invoiceId }))
                   }
+                  options={invoicePickOptions}
+                  placeholder="Select invoice (optional)"
+                  fallbackPlaceholder="Invoice ID (optional)"
                 />
                 <input
                   className={fieldControlClass}
@@ -877,11 +1470,13 @@ export default function EdgeBillingPage() {
 
             <EdgePermissionGate permission="platform:billing:payments:confirm">
               <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border/70 p-4">
-                <input
-                  className={fieldControlClass + " min-w-[16rem] flex-1"}
-                  placeholder="Payment intent ID to confirm"
+                <ListOrUuidField
+                  className="min-w-[16rem] flex-1"
                   value={confirmIntentId}
-                  onChange={(e) => setConfirmIntentId(e.target.value)}
+                  onChange={setConfirmIntentId}
+                  options={paymentIntentPickOptions}
+                  placeholder="Select payment intent"
+                  fallbackPlaceholder="Payment intent ID to confirm"
                 />
                 <Button
                   disabled={!confirmIntentId || confirmPayment.isPending}
@@ -890,6 +1485,66 @@ export default function EdgeBillingPage() {
                   Confirm capture
                 </Button>
               </div>
+            </EdgePermissionGate>
+
+            <EdgePermissionGate permission="platform:billing:refunds:create">
+              <form
+                className="grid gap-3 rounded-xl border border-border/70 p-4 sm:grid-cols-2"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void edgeApi
+                    .createBillingRefund({
+                      paymentIntentId: refundForm.paymentIntentId,
+                      amount: refundForm.amount,
+                      currency: refundForm.currency,
+                      reason: refundForm.reason || undefined,
+                    })
+                    .then(() => paymentsQuery.refetch());
+                }}
+              >
+                <p className="sm:col-span-2 text-sm text-muted-foreground">
+                  Refunds require a SUCCEEDED intent — never invent collected
+                  cash.
+                </p>
+                <ListOrUuidField
+                  value={refundForm.paymentIntentId}
+                  onChange={(paymentIntentId) =>
+                    setRefundForm((s) => ({ ...s, paymentIntentId }))
+                  }
+                  options={paymentIntentPickOptions}
+                  placeholder="Select payment intent"
+                  fallbackPlaceholder="Payment intent ID"
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Amount"
+                  value={refundForm.amount}
+                  onChange={(e) =>
+                    setRefundForm((s) => ({ ...s, amount: e.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Currency"
+                  value={refundForm.currency}
+                  onChange={(e) =>
+                    setRefundForm((s) => ({ ...s, currency: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Reason"
+                  value={refundForm.reason}
+                  onChange={(e) =>
+                    setRefundForm((s) => ({ ...s, reason: e.target.value }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <Button type="submit">Request refund</Button>
+                </div>
+              </form>
             </EdgePermissionGate>
 
             {recentIntents.length ? (
@@ -930,43 +1585,26 @@ export default function EdgeBillingPage() {
               <h2 className="sm:col-span-2 text-sm font-medium">
                 Open collection case
               </h2>
-              <select
-                className={fieldControlClass}
+              <ListOrUuidField
                 value={collectionForm.billingAccountId}
-                onChange={(e) =>
-                  setCollectionForm((s) => ({
-                    ...s,
-                    billingAccountId: e.target.value,
-                  }))
+                onChange={(billingAccountId) =>
+                  setCollectionForm((s) => ({ ...s, billingAccountId }))
                 }
+                options={billingAccountPickOptions}
+                placeholder="Billing account…"
+                fallbackPlaceholder="Billing account ID"
                 required
-              >
-                <option value="">Billing account…</option>
-                {accounts.map((a) => (
-                  <option key={String(a.id)} value={String(a.id)}>
-                    {String(a.accountNumber ?? a.id)}
-                  </option>
-                ))}
-              </select>
-              <select
-                className={fieldControlClass}
+              />
+              <ListOrUuidField
                 value={collectionForm.invoiceId}
-                onChange={(e) =>
-                  setCollectionForm((s) => ({
-                    ...s,
-                    invoiceId: e.target.value,
-                  }))
+                onChange={(invoiceId) =>
+                  setCollectionForm((s) => ({ ...s, invoiceId }))
                 }
+                options={invoicePickOptions}
+                placeholder="Invoice…"
+                fallbackPlaceholder="Invoice ID"
                 required
-              >
-                <option value="">Invoice…</option>
-                {serverInvoices.map((inv) => (
-                  <option key={String(inv.id)} value={String(inv.id)}>
-                    {String(inv.invoiceNumber ?? inv.id)} ·{" "}
-                    {String(inv.status)}
-                  </option>
-                ))}
-              </select>
+              />
               <div className="sm:col-span-2">
                 <Button type="submit" disabled={openCollection.isPending}>
                   Open case
@@ -981,48 +1619,124 @@ export default function EdgeBillingPage() {
                 description="Open a case for an overdue issued invoice to start dunning."
               />
             ) : (
-              <ul className="divide-y rounded-xl border border-border/70 text-sm">
-                {collections.map((c) => (
-                  <li
-                    key={String(c.id)}
-                    className="flex flex-wrap items-center justify-between gap-2 p-3"
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      void edgeApi
+                        .processDunningScan({ limit: 50 })
+                        .then(() => collectionsQuery.refetch())
+                    }
                   >
-                    <div>
-                      <p className="font-medium">
-                        Case {String(c.id).slice(0, 8)} ·{" "}
-                        <Badge>{String(c.status)}</Badge>
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Invoice {String(c.invoiceId)} · policy{" "}
-                        {String(c.policyCode ?? "—")}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() =>
-                          void edgeApi
-                            .escalateCollectionCase(String(c.id))
-                            .then(() => collectionsQuery.refetch())
-                        }
-                      >
-                        Escalate
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          void edgeApi
-                            .resolveCollectionCase(String(c.id))
-                            .then(() => collectionsQuery.refetch())
-                        }
-                      >
-                        Resolve
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    Run dunning scan
+                  </Button>
+                </div>
+                <ul className="divide-y rounded-xl border border-border/70 text-sm">
+                  {collections.map((c) => (
+                    <li
+                      key={String(c.id)}
+                      className="flex flex-wrap items-center justify-between gap-2 p-3"
+                    >
+                      <div>
+                        <p className="font-medium">
+                          Case {String(c.id).slice(0, 8)} ·{" "}
+                          <Badge>{String(c.status)}</Badge>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Invoice {String(c.invoiceId)} · policy{" "}
+                          {String(c.policyCode ?? "—")}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void edgeApi
+                              .applyCollectionDunningPolicy(String(c.id))
+                              .then(() => collectionsQuery.refetch())
+                          }
+                        >
+                          Apply policy
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void edgeApi
+                              .dispatchDunningNotification(String(c.id))
+                              .then(() => collectionsQuery.refetch())
+                          }
+                        >
+                          Notify
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            void edgeApi
+                              .escalateCollectionCase(String(c.id))
+                              .then(() => collectionsQuery.refetch())
+                          }
+                        >
+                          Escalate → suspend
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            void edgeApi
+                              .resolveCollectionCase(String(c.id))
+                              .then(() => collectionsQuery.refetch())
+                          }
+                        >
+                          Resolve → reactivate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setCollectionInspectId(String(c.id))}
+                        >
+                          Detail
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void edgeApi
+                              .recordBillingCollectionDunning(String(c.id), {
+                                channel: "EMAIL",
+                              })
+                              .then(() => collectionsQuery.refetch())
+                          }
+                        >
+                          Log dunning
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <ListOrUuidField
+                  className="max-w-md"
+                  value={collectionInspectId}
+                  onChange={setCollectionInspectId}
+                  options={collectionCasePickOptions}
+                  placeholder="Inspect collection case…"
+                  fallbackPlaceholder="Collection case ID"
+                />
+                {collectionInspectId ? (
+                  <pre className="max-h-56 overflow-auto rounded-xl border border-border/70 bg-muted/30 p-3 text-xs">
+                    {collectionDetailQuery.isLoading
+                      ? "Loading…"
+                      : JSON.stringify(
+                          unwrap(collectionDetailQuery.data),
+                          null,
+                          2,
+                        )}
+                  </pre>
+                ) : null}
+              </>
             )}
           </section>
         </EdgePermissionGate>
@@ -1113,6 +1827,98 @@ export default function EdgeBillingPage() {
                 )}
               </div>
             </div>
+            <div className="space-y-3 rounded-xl border border-border/70 p-4">
+              <h2 className="text-sm font-medium">Payment disputes</h2>
+              <form
+                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void edgeApi
+                    .createBillingDispute({
+                      billingAccountId: disputeForm.billingAccountId,
+                      amount: disputeForm.amount,
+                      currency: disputeForm.currency,
+                      provider: disputeForm.provider,
+                      invoiceId: disputeForm.invoiceId || null,
+                    })
+                    .then(() => disputesQuery.refetch());
+                }}
+              >
+                <ListOrUuidField
+                  value={disputeForm.billingAccountId}
+                  onChange={(billingAccountId) =>
+                    setDisputeForm((f) => ({ ...f, billingAccountId }))
+                  }
+                  options={billingAccountPickOptions}
+                  placeholder="Billing account…"
+                  fallbackPlaceholder="Billing account ID"
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Amount"
+                  value={disputeForm.amount}
+                  onChange={(e) =>
+                    setDisputeForm((f) => ({ ...f, amount: e.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Currency"
+                  value={disputeForm.currency}
+                  onChange={(e) =>
+                    setDisputeForm((f) => ({ ...f, currency: e.target.value }))
+                  }
+                />
+                <ListOrUuidField
+                  value={disputeForm.invoiceId}
+                  onChange={(invoiceId) =>
+                    setDisputeForm((f) => ({ ...f, invoiceId }))
+                  }
+                  options={invoicePickOptions}
+                  placeholder="Invoice (optional)"
+                  fallbackPlaceholder="Invoice ID (optional)"
+                />
+                <Button type="submit">Open dispute</Button>
+              </form>
+              {disputesQuery.isLoading ? (
+                <EdgeLoadingState label="Disputes…" />
+              ) : (
+                <ul className="divide-y rounded-lg border border-border/70 text-sm">
+                  {asRows(disputesQuery.data).map((d) => (
+                    <li
+                      key={String(d.id)}
+                      className="flex flex-wrap items-center justify-between gap-2 p-3"
+                    >
+                      <span>
+                        {String(d.amount)} {String(d.currency)} ·{" "}
+                        <Badge>{String(d.status)}</Badge>
+                      </span>
+                      {String(d.status) === "OPEN" ? (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            void edgeApi
+                              .resolveBillingDispute(String(d.id), {
+                                status: "RESOLVED",
+                              })
+                              .then(() => disputesQuery.refetch())
+                          }
+                        >
+                          Resolve
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                  {!asRows(disputesQuery.data).length ? (
+                    <li className="p-3 text-xs text-muted-foreground">
+                      No disputes
+                    </li>
+                  ) : null}
+                </ul>
+              )}
+            </div>
           </section>
         </EdgePermissionGate>
       ) : null}
@@ -1140,12 +1946,152 @@ export default function EdgeBillingPage() {
             <p className="text-sm text-muted-foreground">
               Billing policies, FX registry, revenue recognition, and ERP export
               snapshots. Payment engine is pluggable via{" "}
-              <code>BILLING_PAYMENT_ADAPTER</code> (not Hyperswitch).
+              <code>BILLING_PAYMENT_ADAPTER</code> (
+              <code>hyperswitch</code> = orchestration only, never catalogue
+              SoT).
             </p>
+            <EdgePermissionGate permission="platform:billing:schedules:manage">
+              <form
+                className="mb-4 grid gap-3 rounded-xl border border-border/70 p-4 sm:grid-cols-2 lg:grid-cols-4"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void edgeApi
+                    .createBillingSchedule({
+                      subscriptionId: scheduleForm.subscriptionId,
+                      billingAccountId: scheduleForm.billingAccountId,
+                      frequency: scheduleForm.frequency,
+                    })
+                    .then(() => {
+                      setScheduleLookupSubId(scheduleForm.subscriptionId);
+                    });
+                }}
+              >
+                <p className="sm:col-span-2 lg:col-span-4 text-sm font-medium">
+                  Create billing schedule
+                </p>
+                <ListOrUuidField
+                  value={scheduleForm.subscriptionId}
+                  onChange={(subscriptionId) =>
+                    setScheduleForm((s) => ({ ...s, subscriptionId }))
+                  }
+                  options={subscriptionPickOptions}
+                  placeholder="Select subscription"
+                  fallbackPlaceholder="Subscription ID"
+                  required
+                />
+                <ListOrUuidField
+                  value={scheduleForm.billingAccountId}
+                  onChange={(billingAccountId) =>
+                    setScheduleForm((s) => ({ ...s, billingAccountId }))
+                  }
+                  options={billingAccountPickOptions}
+                  placeholder="Billing account…"
+                  fallbackPlaceholder="Billing account ID"
+                  required
+                />
+                <select
+                  className={fieldControlClass}
+                  value={scheduleForm.frequency}
+                  onChange={(e) =>
+                    setScheduleForm((s) => ({ ...s, frequency: e.target.value }))
+                  }
+                >
+                  <option value="MONTHLY">MONTHLY</option>
+                  <option value="QUARTERLY">QUARTERLY</option>
+                  <option value="ANNUAL">ANNUAL</option>
+                </select>
+                <Button type="submit">Create schedule</Button>
+              </form>
+              <div className="mb-4 flex flex-wrap items-end gap-3">
+                <ListOrUuidField
+                  value={scheduleLookupSubId}
+                  onChange={setScheduleLookupSubId}
+                  options={subscriptionPickOptions}
+                  placeholder="List schedules for subscription"
+                  fallbackPlaceholder="Subscription ID"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!scheduleLookupSubId.trim()}
+                  onClick={() => void billingSchedulesQuery.refetch()}
+                >
+                  List schedules
+                </Button>
+              </div>
+              {billingSchedulesQuery.data ? (
+                <pre className="mb-4 max-h-40 overflow-auto rounded-lg bg-muted/30 p-2 text-xs">
+                  {JSON.stringify(
+                    unwrap(billingSchedulesQuery.data) ?? [],
+                    null,
+                    2,
+                  )}
+                </pre>
+              ) : null}
+              <form
+                className="grid gap-3 rounded-xl border border-border/70 p-4 sm:grid-cols-2"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void edgeApi.configureBillingCadence({
+                    subscriptionId: cadenceForm.subscriptionId,
+                    billingFrequency: cadenceForm.billingFrequency,
+                    setupFeeAmount: cadenceForm.setupFeeAmount || null,
+                  });
+                }}
+              >
+                <p className="sm:col-span-2 text-sm font-medium">
+                  Cadence &amp; setup fee
+                </p>
+                <ListOrUuidField
+                  value={cadenceForm.subscriptionId}
+                  onChange={(subscriptionId) =>
+                    setCadenceForm((s) => ({ ...s, subscriptionId }))
+                  }
+                  options={subscriptionPickOptions}
+                  placeholder="Select subscription"
+                  fallbackPlaceholder="Subscription ID"
+                  required
+                />
+                <select
+                  className={fieldControlClass}
+                  value={cadenceForm.billingFrequency}
+                  onChange={(e) =>
+                    setCadenceForm((s) => ({
+                      ...s,
+                      billingFrequency: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="MONTHLY">MONTHLY</option>
+                  <option value="QUARTERLY">QUARTERLY</option>
+                  <option value="SEMI_ANNUAL">SEMI_ANNUAL</option>
+                  <option value="ANNUAL">ANNUAL</option>
+                  <option value="ENTERPRISE_CONTRACT">ENTERPRISE_CONTRACT</option>
+                  <option value="ONE_TIME">ONE_TIME</option>
+                </select>
+                <input
+                  className={fieldControlClass}
+                  placeholder="Setup fee (optional, one-time)"
+                  value={cadenceForm.setupFeeAmount}
+                  onChange={(e) =>
+                    setCadenceForm((s) => ({
+                      ...s,
+                      setupFeeAmount: e.target.value,
+                    }))
+                  }
+                />
+                <div className="sm:col-span-2">
+                  <Button type="submit">Save cadence</Button>
+                </div>
+              </form>
+            </EdgePermissionGate>
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <h2 className="mb-2 text-sm font-medium">Policies</h2>
-                {!policies.length ? (
+                {policiesQuery.isLoading ? (
+                  <EdgeLoadingState label="Loading policies…" />
+                ) : !policies.length ? (
                   <EdgeEmptyState
                     title="No policies"
                     description="Seed includes DUNNING_DEFAULT after migrate 092+."
@@ -1184,6 +2130,32 @@ export default function EdgeBillingPage() {
                   </ul>
                 )}
               </div>
+              <div className="lg:col-span-2">
+                <h2 className="mb-2 text-sm font-medium">Tax jurisdictions</h2>
+                {taxJurisdictionsQuery.isLoading ? (
+                  <EdgeLoadingState label="Loading tax jurisdictions…" />
+                ) : !taxJurisdictions.length ? (
+                  <EdgeEmptyState
+                    title="No tax jurisdictions"
+                    description="Jurisdictions appear after tax seed/migrate."
+                  />
+                ) : (
+                  <ul className="divide-y rounded-xl border border-border/70 text-sm">
+                    {taxJurisdictions.map((j) => (
+                      <li key={String(j.id ?? j.code)} className="p-3">
+                        <p className="font-medium">
+                          {String(j.code ?? j.name ?? j.id)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {String(j.country ?? "—")} ·{" "}
+                          {String(j.category ?? j.taxType ?? "—")} ·{" "}
+                          {String(j.rate ?? j.status ?? "")}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <p className="text-sm">
               <Link
@@ -1196,6 +2168,65 @@ export default function EdgeBillingPage() {
           </section>
         </EdgePermissionGate>
       ) : null}
+    </div>
+  );
+}
+
+function formatCashBucket(bucket: unknown): string {
+  if (!bucket || typeof bucket !== "object") return "—";
+  const b = bucket as { amount?: number | null; dataQuality?: string };
+  if (b.dataQuality === "UNAVAILABLE" || b.amount == null) {
+    return "UNAVAILABLE";
+  }
+  return String(b.amount);
+}
+
+function CashTruthPanel({
+  truth,
+  loading,
+  error,
+  onRetry,
+}: {
+  truth?: Record<string, unknown>;
+  loading: boolean;
+  error: unknown;
+  onRetry: () => void;
+}) {
+  if (loading) {
+    return <EdgeLoadingState label="Loading cash truth…" />;
+  }
+  if (error) {
+    return (
+      <EdgeErrorState
+        description={(error as EdgeApiError)?.message ?? "Cash truth failed"}
+        onRetry={onRetry}
+      />
+    );
+  }
+  if (!truth) return null;
+  const currency = String(truth.currency ?? "USD");
+  return (
+    <div className="space-y-3 rounded-xl border border-border/70 p-4">
+      <div>
+        <h2 className="text-sm font-medium">Cash truth</h2>
+        <p className="text-xs text-muted-foreground">
+          Contracted ≠ invoiced ≠ collected ({currency})
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MoneyCard
+          label="Contracted (MRR)"
+          amount={formatCashBucket(truth.contracted)}
+        />
+        <MoneyCard
+          label="Invoiced"
+          amount={formatCashBucket(truth.invoiced)}
+        />
+        <MoneyCard
+          label="Collected"
+          amount={formatCashBucket(truth.collected)}
+        />
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -20,6 +21,7 @@ import { useEdgePlatform } from "@/providers/edge-platform-provider";
 type Tab =
   | "catalog"
   | "markets"
+  | "segments"
   | "icps"
   | "packages"
   | "plans"
@@ -32,6 +34,7 @@ type Tab =
 const TABS: { id: Tab; label: string; permission: string }[] = [
   { id: "catalog", label: "Catalog", permission: "platform:commercial:catalog:read" },
   { id: "markets", label: "Markets", permission: "platform:commercial:markets:read" },
+  { id: "segments", label: "Segments", permission: "platform:commercial:catalog:read" },
   { id: "icps", label: "ICPs", permission: "platform:commercial:icp:manage" },
   { id: "packages", label: "Packages", permission: "platform:commercial:packages:read" },
   { id: "plans", label: "Plans", permission: "platform:commercial:plans:read" },
@@ -64,6 +67,18 @@ export default function EdgeCommercialPage() {
   const [marketVerticalId, setMarketVerticalId] = useState(
     activeVerticalId ?? "",
   );
+  const [researchMarketId, setResearchMarketId] = useState("");
+  const [researchCode, setResearchCode] = useState("");
+  const [researchTitle, setResearchTitle] = useState("");
+  const [researchProjectId, setResearchProjectId] = useState("");
+  const [researchSourceTitle, setResearchSourceTitle] = useState("");
+  const [segmentIntelId, setSegmentIntelId] = useState("");
+  const [segmentScoreJson, setSegmentScoreJson] = useState('{"fit":0.7}');
+  const [capabilityTarget, setCapabilityTarget] = useState({
+    offerType: "package" as "package" | "plan" | "addon",
+    offerId: "",
+    capabilityId: "",
+  });
 
   const [planCode, setPlanCode] = useState("");
   const [planName, setPlanName] = useState("");
@@ -108,6 +123,25 @@ export default function EdgeCommercialPage() {
     },
   });
 
+  const verticalsQuery = useQuery({
+    queryKey: ["edge", "verticals", "commercial-pick"],
+    enabled: anyAllowed,
+    queryFn: async () => {
+      const { data } = await edgeApi.listVerticals("page=1&limit=100");
+      return data ?? [];
+    },
+    retry: false,
+  });
+
+  const verticalPickOptions = useMemo(
+    () =>
+      (verticalsQuery.data ?? []).map((v) => ({
+        id: v.id,
+        label: `${v.code ?? v.slug ?? v.id} — ${v.displayName ?? v.name ?? v.id}`,
+      })),
+    [verticalsQuery.data],
+  );
+
   const catalogQuery = useQuery({
     queryKey: ["edge", "commercial", "catalog", catalogView, productId || "all"],
     enabled: anyAllowed && tab === "catalog",
@@ -139,6 +173,52 @@ export default function EdgeCommercialPage() {
     queryFn: async () => {
       const { data } = await edgeApi.listCommercialMarkets({ limit: 100 });
       return data;
+    },
+  });
+
+  const researchProjectsQuery = useQuery({
+    queryKey: ["edge", "commercial", "research", researchMarketId],
+    enabled: tab === "markets" && Boolean(researchMarketId),
+    queryFn: async () => {
+      const res = await edgeApi.listResearchProjects(researchMarketId);
+      return (res as { data?: unknown[] }).data ?? res;
+    },
+  });
+
+  const segmentIntelQuery = useQuery({
+    queryKey: ["edge", "commercial", "segment-intel", segmentIntelId],
+    enabled: tab === "segments" && Boolean(segmentIntelId.trim()),
+    queryFn: async () => {
+      const res = await edgeApi.listSegmentIntelligence(
+        segmentIntelId.trim() || undefined,
+      );
+      return (res as { data?: unknown[] }).data ?? res;
+    },
+  });
+
+  const segmentsVerticalId = marketVerticalId || activeVerticalId || "";
+  const segmentsQuery = useQuery({
+    queryKey: ["edge", "commercial", "segments", segmentsVerticalId],
+    enabled: anyAllowed && tab === "segments" && Boolean(segmentsVerticalId),
+    queryFn: async () => {
+      const { data } = await edgeApi.listMarketSegments(segmentsVerticalId);
+      return data ?? [];
+    },
+  });
+  const profilesQuery = useQuery({
+    queryKey: ["edge", "commercial", "profiles", segmentsVerticalId],
+    enabled: anyAllowed && tab === "segments" && Boolean(segmentsVerticalId),
+    queryFn: async () => {
+      const { data } = await edgeApi.listBusinessProfiles(segmentsVerticalId);
+      return data ?? [];
+    },
+  });
+  const operatingModelsQuery = useQuery({
+    queryKey: ["edge", "commercial", "operating-models", segmentsVerticalId],
+    enabled: anyAllowed && tab === "segments" && Boolean(segmentsVerticalId),
+    queryFn: async () => {
+      const { data } = await edgeApi.listOperatingModels(segmentsVerticalId);
+      return data ?? [];
     },
   });
 
@@ -192,7 +272,7 @@ export default function EdgeCommercialPage() {
 
   const plansQuery = useQuery({
     queryKey: ["edge", "commercial", "plans", productId || "all"],
-    enabled: anyAllowed && tab === "plans",
+    enabled: anyAllowed && (tab === "plans" || tab === "packages"),
     queryFn: async () => {
       const { data } = await edgeApi.listCommercialPlans(
         productId || undefined,
@@ -203,7 +283,7 @@ export default function EdgeCommercialPage() {
 
   const addonsQuery = useQuery({
     queryKey: ["edge", "commercial", "addons", productId || "all"],
-    enabled: anyAllowed && tab === "addons",
+    enabled: anyAllowed && (tab === "addons" || tab === "packages"),
     queryFn: async () => {
       const { data } = await edgeApi.listCommercialAddons(
         productId || undefined,
@@ -211,6 +291,42 @@ export default function EdgeCommercialPage() {
       return data ?? [];
     },
   });
+
+  const capabilitiesQuery = useQuery({
+    queryKey: ["edge", "capabilities", "commercial-link"],
+    enabled: anyAllowed && tab === "packages",
+    queryFn: async () => {
+      const { data } = await edgeApi.listCapabilities();
+      return data ?? [];
+    },
+  });
+
+  const capabilityOfferOptions = useMemo(() => {
+    const rows =
+      capabilityTarget.offerType === "plan"
+        ? (plansQuery.data ?? [])
+        : capabilityTarget.offerType === "addon"
+          ? (addonsQuery.data ?? [])
+          : (packagesQuery.data ?? []);
+    return rows.map((row) => ({
+      id: row.id,
+      label: `${row.code ?? row.id} — ${row.name ?? row.id}`,
+    }));
+  }, [
+    capabilityTarget.offerType,
+    packagesQuery.data,
+    plansQuery.data,
+    addonsQuery.data,
+  ]);
+
+  const capabilityPickOptions = useMemo(
+    () =>
+      (capabilitiesQuery.data ?? []).map((cap) => ({
+        id: cap.id,
+        label: `${cap.code ?? cap.id} — ${cap.name ?? cap.id}`,
+      })),
+    [capabilitiesQuery.data],
+  );
 
   const booksQuery = useQuery({
     queryKey: ["edge", "commercial", "price-books", productId || "all"],
@@ -220,6 +336,67 @@ export default function EdgeCommercialPage() {
       return data ?? [];
     },
   });
+
+  const discountPoliciesQuery = useQuery({
+    queryKey: ["edge", "commercial", "discount-policies", productId || "all"],
+    enabled: anyAllowed && tab === "pricing",
+    queryFn: async () => {
+      const { data } = await edgeApi.listCommercialDiscountPolicies(
+        productId || undefined,
+      );
+      return (data as Record<string, unknown>[]) ?? [];
+    },
+  });
+
+  const pricingModelsQuery = useQuery({
+    queryKey: ["edge", "commercial", "pricing-models", productId || "all"],
+    enabled: anyAllowed && tab === "pricing",
+    queryFn: async () => {
+      const { data } = await edgeApi.listCommercialPricingModels(
+        productId || undefined,
+      );
+      return (data as Record<string, unknown>[]) ?? [];
+    },
+  });
+
+  const usageMetricsQuery = useQuery({
+    queryKey: ["edge", "commercial", "usage-metrics"],
+    enabled: anyAllowed && tab === "pricing",
+    queryFn: async () => {
+      const { data } = await edgeApi.listCommercialUsageMetrics();
+      return (data as Record<string, unknown>[]) ?? [];
+    },
+  });
+
+  const buyingCommitteesQuery = useQuery({
+    queryKey: ["edge", "commercial", "buying-committees", productId || "all"],
+    enabled: anyAllowed && tab === "personas",
+    queryFn: async () => {
+      const { data } = await edgeApi.listBuyingCommittees(productId || undefined);
+      return (data as Record<string, unknown>[]) ?? [];
+    },
+  });
+
+  const decisionJourneysQuery = useQuery({
+    queryKey: ["edge", "commercial", "decision-journeys", productId || "all"],
+    enabled: anyAllowed && tab === "personas",
+    queryFn: async () => {
+      const { data } = await edgeApi.listDecisionJourneys(productId || undefined);
+      return (data as Record<string, unknown>[]) ?? [];
+    },
+  });
+
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountName, setDiscountName] = useState("");
+  const [pricingModelCode, setPricingModelCode] = useState("");
+  const [pricingModelName, setPricingModelName] = useState("");
+  const [pricingModelType, setPricingModelType] = useState("PER_USER");
+  const [usageMetricCode, setUsageMetricCode] = useState("");
+  const [usageMetricName, setUsageMetricName] = useState("");
+  const [committeeCode, setCommitteeCode] = useState("");
+  const [committeeName, setCommitteeName] = useState("");
+  const [journeyCode, setJourneyCode] = useState("");
+  const [journeyName, setJourneyName] = useState("");
 
   const createMarket = useMutation({
     mutationFn: async () =>
@@ -472,6 +649,114 @@ export default function EdgeCommercialPage() {
     },
   });
 
+  const createDiscountPolicy = useMutation({
+    mutationFn: async () =>
+      edgeApi.createCommercialDiscountPolicy({
+        code: discountCode.trim(),
+        name: discountName.trim(),
+        productId: productId || null,
+        discountType: "PERCENT",
+      }),
+    onSuccess: async () => {
+      setDiscountCode("");
+      setDiscountName("");
+      await queryClient.invalidateQueries({
+        queryKey: ["edge", "commercial", "discount-policies"],
+      });
+    },
+    onError: (err) => {
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Discount policy failed",
+      );
+    },
+  });
+
+  const createPricingModel = useMutation({
+    mutationFn: async () => {
+      if (!productId) throw new Error("Select a product first.");
+      return edgeApi.createCommercialPricingModel({
+        code: pricingModelCode.trim(),
+        name: pricingModelName.trim(),
+        modelType: pricingModelType,
+        productId,
+      });
+    },
+    onSuccess: async () => {
+      setPricingModelCode("");
+      setPricingModelName("");
+      await queryClient.invalidateQueries({
+        queryKey: ["edge", "commercial", "pricing-models"],
+      });
+    },
+    onError: (err) => {
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Pricing model failed",
+      );
+    },
+  });
+
+  const createUsageMetric = useMutation({
+    mutationFn: async () =>
+      edgeApi.createCommercialUsageMetric({
+        code: usageMetricCode.trim(),
+        name: usageMetricName.trim(),
+      }),
+    onSuccess: async () => {
+      setUsageMetricCode("");
+      setUsageMetricName("");
+      await queryClient.invalidateQueries({
+        queryKey: ["edge", "commercial", "usage-metrics"],
+      });
+    },
+    onError: (err) => {
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Usage metric failed",
+      );
+    },
+  });
+
+  const createBuyingCommittee = useMutation({
+    mutationFn: async () =>
+      edgeApi.createBuyingCommittee({
+        code: committeeCode.trim(),
+        name: committeeName.trim(),
+        productId: productId || null,
+      }),
+    onSuccess: async () => {
+      setCommitteeCode("");
+      setCommitteeName("");
+      await queryClient.invalidateQueries({
+        queryKey: ["edge", "commercial", "buying-committees"],
+      });
+    },
+    onError: (err) => {
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Buying committee failed",
+      );
+    },
+  });
+
+  const createDecisionJourney = useMutation({
+    mutationFn: async () =>
+      edgeApi.createDecisionJourney({
+        code: journeyCode.trim(),
+        name: journeyName.trim(),
+        productId: productId || null,
+      }),
+    onSuccess: async () => {
+      setJourneyCode("");
+      setJourneyName("");
+      await queryClient.invalidateQueries({
+        queryKey: ["edge", "commercial", "decision-journeys"],
+      });
+    },
+    onError: (err) => {
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Decision journey failed",
+      );
+    },
+  });
+
   const configureOffer = useMutation({
     mutationFn: async () =>
       edgeApi.configureCommercialOffer({
@@ -576,6 +861,7 @@ export default function EdgeCommercialPage() {
       </div>
 
       {(tab === "catalog" ||
+        tab === "segments" ||
         tab === "icps" ||
         tab === "packages" ||
         tab === "plans" ||
@@ -674,6 +960,143 @@ export default function EdgeCommercialPage() {
         </section>
       ) : null}
 
+      {tab === "segments" ? (
+        <section className="space-y-[var(--space-4)]">
+          <div className="grid max-w-xl gap-[var(--space-3)]">
+            <h2 className="type-md font-semibold">Beachhead taxonomy</h2>
+            <ListOrUuidField
+              value={marketVerticalId}
+              onChange={setMarketVerticalId}
+              options={verticalPickOptions}
+              placeholder="Select vertical (required)"
+              fallbackPlaceholder="Vertical ID (required)"
+            />
+            <p className="type-xs text-[var(--text-muted)]">
+              Lists market segments, business profiles and operating models from
+              Edge control-plane (Syntix seed via migrate/seed:rgom:syntix).
+            </p>
+          </div>
+          {!segmentsVerticalId ? (
+            <EdgeEmptyState
+              title="Vertical required"
+              description="Select the Pharmacy vertical to load Syntix segments."
+            />
+          ) : segmentsQuery.isLoading ||
+            profilesQuery.isLoading ||
+            operatingModelsQuery.isLoading ? (
+            <EdgeLoadingState />
+          ) : segmentsQuery.isError ? (
+            <EdgeErrorState
+              description="Unable to load market segments."
+              onRetry={() => segmentsQuery.refetch()}
+            />
+          ) : (
+            <div className="grid gap-[var(--space-6)] lg:grid-cols-3">
+              <div>
+                <h3 className="type-sm font-semibold mb-2">Segments</h3>
+                <ul className="divide-y divide-[var(--border)]">
+                  {(Array.isArray(segmentsQuery.data)
+                    ? segmentsQuery.data
+                    : []
+                  ).map((s) => (
+                    <li key={String(s.id)} className="py-[var(--space-2)]">
+                      <p className="type-sm font-medium">{String(s.name)}</p>
+                      <p className="type-xs text-[var(--text-muted)] font-mono">
+                        {String(s.code)}
+                      </p>
+                    </li>
+                  ))}
+                  {!Array.isArray(segmentsQuery.data) ||
+                  segmentsQuery.data.length === 0 ? (
+                    <li className="type-xs text-[var(--text-muted)]">
+                      No segments for this vertical
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+              <div>
+                <h3 className="type-sm font-semibold mb-2">Profiles</h3>
+                <ul className="divide-y divide-[var(--border)]">
+                  {(Array.isArray(profilesQuery.data)
+                    ? profilesQuery.data
+                    : []
+                  ).map((p) => (
+                    <li key={String(p.id)} className="py-[var(--space-2)]">
+                      <p className="type-sm font-medium">{String(p.name)}</p>
+                      <p className="type-xs text-[var(--text-muted)] font-mono">
+                        {String(p.code)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="type-sm font-semibold mb-2">Operating models</h3>
+                <ul className="divide-y divide-[var(--border)]">
+                  {(Array.isArray(operatingModelsQuery.data)
+                    ? operatingModelsQuery.data
+                    : []
+                  ).map((o) => (
+                    <li key={String(o.id)} className="py-[var(--space-2)]">
+                      <p className="type-sm font-medium">{String(o.name)}</p>
+                      <p className="type-xs text-[var(--text-muted)] font-mono">
+                        {String(o.code)} · {String(o.dimension ?? "—")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          <div className="mt-6 space-y-3 rounded-xl border border-[var(--border)] p-4">
+            <h3 className="type-sm font-semibold">Segment intelligence score</h3>
+            <div className="flex flex-wrap gap-2">
+              <input
+                className={fieldControlClass}
+                placeholder="Market segment ID"
+                value={segmentIntelId}
+                onChange={(e) => setSegmentIntelId(e.target.value)}
+              />
+              <textarea
+                className={fieldControlClass + " min-h-[3rem] min-w-[12rem] flex-1"}
+                value={segmentScoreJson}
+                onChange={(e) => setSegmentScoreJson(e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!segmentIntelId.trim()}
+                onClick={() => {
+                  let scores: Record<string, number> = {};
+                  try {
+                    scores = JSON.parse(segmentScoreJson) as Record<
+                      string,
+                      number
+                    >;
+                  } catch {
+                    setFormError("Invalid scores JSON");
+                    return;
+                  }
+                  void edgeApi
+                    .scoreCommercialSegmentIntelligence(
+                      segmentIntelId.trim(),
+                      { scores },
+                    )
+                    .then(() => segmentIntelQuery.refetch());
+                }}
+              >
+                Score segment
+              </Button>
+            </div>
+            {segmentIntelId ? (
+              <pre className="max-h-40 overflow-auto rounded-lg bg-[var(--surface-muted)] p-2 text-xs">
+                {JSON.stringify(segmentIntelQuery.data ?? [], null, 2)}
+              </pre>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       {tab === "markets" ? (
         <section className="space-y-[var(--space-4)]">
           <EdgePermissionGate permission="platform:commercial:markets:manage">
@@ -699,11 +1122,12 @@ export default function EdgeCommercialPage() {
                 onChange={(e) => setMarketName(e.target.value)}
                 required
               />
-              <input
-                className={fieldControlClass}
-                placeholder="Vertical ID"
+              <ListOrUuidField
                 value={marketVerticalId}
-                onChange={(e) => setMarketVerticalId(e.target.value)}
+                onChange={setMarketVerticalId}
+                options={verticalPickOptions}
+                placeholder="Select vertical"
+                fallbackPlaceholder="Vertical ID"
                 required
               />
               <Button type="submit" disabled={createMarket.isPending}>
@@ -739,11 +1163,128 @@ export default function EdgeCommercialPage() {
                   <div className="flex gap-2">
                     <Badge>{m.marketStatus}</Badge>
                     <Badge tone="warning">{m.researchStatus}</Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setResearchMarketId(m.id)}
+                    >
+                      Research
+                    </Button>
                   </div>
                 </li>
               ))}
             </ul>
           )}
+          {researchMarketId ? (
+            <div className="space-y-3 rounded-xl border border-[var(--border)] p-4">
+              <h2 className="type-sm font-semibold">Research projects</h2>
+              <form
+                className="grid max-w-xl gap-2"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void edgeApi
+                    .createCommercialResearchProject({
+                      marketId: researchMarketId,
+                      code: researchCode,
+                      title: researchTitle,
+                    })
+                    .then(() => {
+                      setResearchCode("");
+                      setResearchTitle("");
+                      void researchProjectsQuery.refetch();
+                    });
+                }}
+              >
+                <input
+                  className={fieldControlClass}
+                  placeholder="Project code"
+                  value={researchCode}
+                  onChange={(e) => setResearchCode(e.target.value)}
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Title"
+                  value={researchTitle}
+                  onChange={(e) => setResearchTitle(e.target.value)}
+                  required
+                />
+                <Button type="submit" size="sm">
+                  Start project
+                </Button>
+              </form>
+              {researchProjectsQuery.isLoading ? (
+                <EdgeLoadingState />
+              ) : (
+                <ul className="divide-y divide-[var(--border)] text-sm">
+                  {(Array.isArray(researchProjectsQuery.data)
+                    ? researchProjectsQuery.data
+                    : []
+                  ).map((p) => (
+                    <li
+                      key={String((p as { id?: string }).id)}
+                      className="flex flex-wrap items-center justify-between gap-2 py-2"
+                    >
+                      <span>
+                        {String((p as { title?: string }).title)} ·{" "}
+                        {String((p as { status?: string }).status)}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setResearchProjectId(String((p as { id: string }).id))
+                        }
+                      >
+                        Select
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {researchProjectId ? (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    className={fieldControlClass}
+                    placeholder="Source title"
+                    value={researchSourceTitle}
+                    onChange={(e) => setResearchSourceTitle(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!researchSourceTitle.trim()}
+                    onClick={() =>
+                      void edgeApi
+                        .addCommercialResearchSource(researchProjectId, {
+                          sourceType: "INTERVIEW",
+                          title: researchSourceTitle,
+                        })
+                        .then(() => setResearchSourceTitle(""))
+                    }
+                  >
+                    Add source
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      void edgeApi
+                        .completeCommercialResearchProject(researchProjectId, {
+                          findings: "Completed from console",
+                        })
+                        .then(() => void researchProjectsQuery.refetch())
+                    }
+                  >
+                    Complete project
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -776,11 +1317,12 @@ export default function EdgeCommercialPage() {
                 onChange={(e) => setIcpName(e.target.value)}
                 required
               />
-              <input
-                className={fieldControlClass}
-                placeholder="Vertical ID"
+              <ListOrUuidField
                 value={icpVerticalId}
-                onChange={(e) => setIcpVerticalId(e.target.value)}
+                onChange={setIcpVerticalId}
+                options={verticalPickOptions}
+                placeholder="Select vertical"
+                fallbackPlaceholder="Vertical ID"
                 required
               />
               <Button type="submit" disabled={createIcp.isPending}>
@@ -909,6 +1451,64 @@ export default function EdgeCommercialPage() {
               ))}
             </ul>
           )}
+          <EdgePermissionGate permission="platform:commercial:packages:manage">
+            <form
+              className="flex flex-wrap items-end gap-2 rounded-xl border border-[var(--border)] p-4"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                const fn =
+                  capabilityTarget.offerType === "plan"
+                    ? edgeApi.addCommercialPlanCapability
+                    : capabilityTarget.offerType === "addon"
+                      ? edgeApi.addCommercialAddonCapability
+                      : edgeApi.addSolutionPackageCapability;
+                void fn(capabilityTarget.offerId, {
+                  capabilityId: capabilityTarget.capabilityId,
+                }).then(() => setCapabilityTarget((c) => ({ ...c, capabilityId: "" })));
+              }}
+            >
+              <select
+                className={fieldControlClass}
+                value={capabilityTarget.offerType}
+                onChange={(e) =>
+                  setCapabilityTarget((c) => ({
+                    ...c,
+                    offerType: e.target.value as "package" | "plan" | "addon",
+                    offerId: "",
+                  }))
+                }
+              >
+                <option value="package">Package</option>
+                <option value="plan">Plan</option>
+                <option value="addon">Add-on</option>
+              </select>
+              <ListOrUuidField
+                value={capabilityTarget.offerId}
+                onChange={(offerId) =>
+                  setCapabilityTarget((c) => ({ ...c, offerId }))
+                }
+                options={capabilityOfferOptions}
+                placeholder="Select offer"
+                fallbackPlaceholder="Offer ID"
+                required
+                aria-label="Capability offer"
+              />
+              <ListOrUuidField
+                value={capabilityTarget.capabilityId}
+                onChange={(capabilityId) =>
+                  setCapabilityTarget((c) => ({ ...c, capabilityId }))
+                }
+                options={capabilityPickOptions}
+                placeholder="Select capability"
+                fallbackPlaceholder="P1 capability ID"
+                required
+                aria-label="Capability"
+              />
+              <Button type="submit" size="sm">
+                Link capability
+              </Button>
+            </form>
+          </EdgePermissionGate>
         </section>
       ) : null}
 
@@ -1286,6 +1886,151 @@ export default function EdgeCommercialPage() {
               </p>
             ) : null}
           </form>
+
+          <div className="space-y-[var(--space-4)] border-t border-[var(--border)] pt-[var(--space-4)]">
+            <h2 className="type-md font-semibold">Discount policies</h2>
+            <EdgePermissionGate permission="platform:pricing:discounts:manage">
+              <form
+                className="grid max-w-xl gap-[var(--space-3)]"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  createDiscountPolicy.mutate();
+                }}
+              >
+                <input
+                  className={fieldControlClass}
+                  placeholder="Code"
+                  value={discountCode}
+                  onChange={(e) => setDiscountCode(e.target.value)}
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Name"
+                  value={discountName}
+                  onChange={(e) => setDiscountName(e.target.value)}
+                  required
+                />
+                <Button type="submit" disabled={createDiscountPolicy.isPending}>
+                  Create discount policy
+                </Button>
+              </form>
+            </EdgePermissionGate>
+            {(discountPoliciesQuery.data?.length ?? 0) === 0 ? (
+              <EdgeEmptyState
+                title="No discount policies"
+                description="Approval matrices stay empty until pricing governance defines them."
+              />
+            ) : (
+              <ul className="divide-y divide-[var(--border)]">
+                {discountPoliciesQuery.data?.map((row) => (
+                  <li key={String(row.id)} className="py-[var(--space-2)]">
+                    <p className="type-sm font-medium">{String(row.name)}</p>
+                    <p className="type-xs text-[var(--text-muted)]">
+                      {String(row.code)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="space-y-[var(--space-4)] border-t border-[var(--border)] pt-[var(--space-4)]">
+            <h2 className="type-md font-semibold">Pricing models & usage metrics</h2>
+            <EdgePermissionGate permission="platform:pricing:manage">
+              <form
+                className="grid max-w-xl gap-[var(--space-3)]"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  createPricingModel.mutate();
+                }}
+              >
+                <input
+                  className={fieldControlClass}
+                  placeholder="Model code"
+                  value={pricingModelCode}
+                  onChange={(e) => setPricingModelCode(e.target.value)}
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Model name"
+                  value={pricingModelName}
+                  onChange={(e) => setPricingModelName(e.target.value)}
+                  required
+                />
+                <select
+                  className={fieldControlClass}
+                  value={pricingModelType}
+                  onChange={(e) => setPricingModelType(e.target.value)}
+                >
+                  {["PER_USER", "PER_LOCATION", "FLAT_FEE", "USAGE"].map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" disabled={createPricingModel.isPending}>
+                  Create pricing model
+                </Button>
+              </form>
+              <form
+                className="grid max-w-xl gap-[var(--space-3)] mt-[var(--space-4)]"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  createUsageMetric.mutate();
+                }}
+              >
+                <input
+                  className={fieldControlClass}
+                  placeholder="Metric code"
+                  value={usageMetricCode}
+                  onChange={(e) => setUsageMetricCode(e.target.value)}
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Metric name"
+                  value={usageMetricName}
+                  onChange={(e) => setUsageMetricName(e.target.value)}
+                  required
+                />
+                <Button type="submit" disabled={createUsageMetric.isPending}>
+                  Create usage metric
+                </Button>
+              </form>
+            </EdgePermissionGate>
+            {(pricingModelsQuery.data?.length ?? 0) === 0 &&
+            (usageMetricsQuery.data?.length ?? 0) === 0 ? (
+              <EdgeEmptyState
+                title="No models or usage metrics"
+                description="Recorded only from validated pricing decisions — never invented."
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ul className="divide-y divide-[var(--border)]">
+                  {(pricingModelsQuery.data ?? []).map((row) => (
+                    <li key={String(row.id)} className="py-[var(--space-2)]">
+                      <p className="type-sm font-medium">{String(row.name)}</p>
+                      <p className="type-xs text-[var(--text-muted)]">
+                        {String(row.code)} · {String(row.modelType ?? "—")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <ul className="divide-y divide-[var(--border)]">
+                  {(usageMetricsQuery.data ?? []).map((row) => (
+                    <li key={String(row.id)} className="py-[var(--space-2)]">
+                      <p className="type-sm font-medium">{String(row.name)}</p>
+                      <p className="type-xs text-[var(--text-muted)]">
+                        {String(row.code)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </section>
       ) : null}
 
@@ -1397,7 +2142,7 @@ export default function EdgeCommercialPage() {
       ) : null}
 
       {tab === "personas" ? (
-        <section>
+        <section className="space-y-[var(--space-5)]">
           {personasQuery.isLoading ? (
             <EdgeLoadingState />
           ) : personasQuery.isError ? (
@@ -1425,6 +2170,92 @@ export default function EdgeCommercialPage() {
               ))}
             </ul>
           )}
+
+          <div className="border-t border-[var(--border)] pt-[var(--space-4)] space-y-[var(--space-4)]">
+            <h2 className="type-md font-semibold">Buying committees & journeys</h2>
+            <EdgePermissionGate permission="platform:commercial:personas:manage">
+              <form
+                className="grid max-w-xl gap-[var(--space-3)]"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  createBuyingCommittee.mutate();
+                }}
+              >
+                <input
+                  className={fieldControlClass}
+                  placeholder="Committee code"
+                  value={committeeCode}
+                  onChange={(e) => setCommitteeCode(e.target.value)}
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Committee name"
+                  value={committeeName}
+                  onChange={(e) => setCommitteeName(e.target.value)}
+                  required
+                />
+                <Button type="submit" disabled={createBuyingCommittee.isPending}>
+                  Create buying committee
+                </Button>
+              </form>
+              <form
+                className="grid max-w-xl gap-[var(--space-3)]"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  createDecisionJourney.mutate();
+                }}
+              >
+                <input
+                  className={fieldControlClass}
+                  placeholder="Journey code"
+                  value={journeyCode}
+                  onChange={(e) => setJourneyCode(e.target.value)}
+                  required
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Journey name"
+                  value={journeyName}
+                  onChange={(e) => setJourneyName(e.target.value)}
+                  required
+                />
+                <Button type="submit" disabled={createDecisionJourney.isPending}>
+                  Create decision journey
+                </Button>
+              </form>
+            </EdgePermissionGate>
+            {(buyingCommitteesQuery.data?.length ?? 0) === 0 &&
+            (decisionJourneysQuery.data?.length ?? 0) === 0 ? (
+              <EdgeEmptyState
+                title="No committees or journeys"
+                description="Commercial buying maps stay empty until product marketing defines them."
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ul className="divide-y divide-[var(--border)]">
+                  {(buyingCommitteesQuery.data ?? []).map((row) => (
+                    <li key={String(row.id)} className="py-[var(--space-2)]">
+                      <p className="type-sm font-medium">{String(row.name)}</p>
+                      <p className="type-xs text-[var(--text-muted)]">
+                        {String(row.code)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <ul className="divide-y divide-[var(--border)]">
+                  {(decisionJourneysQuery.data ?? []).map((row) => (
+                    <li key={String(row.id)} className="py-[var(--space-2)]">
+                      <p className="type-sm font-medium">{String(row.name)}</p>
+                      <p className="type-xs text-[var(--text-muted)]">
+                        {String(row.code)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </section>
       ) : null}
 

@@ -32,8 +32,22 @@ export default function AcquirePublicLayout({ children }: { children: ReactNode 
       </header>
       <main className="mx-auto w-full max-w-5xl px-6 pb-16">{children}</main>
       <footer className="border-t border-[var(--border)] bg-[var(--bg-surface)] px-6 py-8 type-sm text-[var(--text-muted)]">
-        <div className="mx-auto max-w-5xl">
-          Okapi — acquisition publique. Compteurs et statuts uniquement depuis l&apos;API.
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>Okapi — acquisition publique. Compteurs et statuts uniquement depuis l&apos;API.</p>
+          <nav className="flex flex-wrap gap-4" aria-label="Confiance">
+            <Link href="/trust/security" className="hover:text-[var(--text-primary)]">
+              Sécurité
+            </Link>
+            <Link href="/trust/privacy" className="hover:text-[var(--text-primary)]">
+              Confidentialité
+            </Link>
+            <Link href="/trust/support" className="hover:text-[var(--text-primary)]">
+              Support
+            </Link>
+            <Link href="/trust/status" className="hover:text-[var(--text-primary)]">
+              Statut
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>

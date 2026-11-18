@@ -15,6 +15,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -141,6 +142,32 @@ export function EdgeReconciliationModule() {
     enabled: canHistory && Boolean(historyRunId),
   });
 
+  const globalHistoryQ = useQuery({
+    queryKey: ["recon", "history-global"],
+    queryFn: () => edgeApi.listReconciliationHistory({ limit: 50 }),
+    enabled: canHistory && tab === "history",
+  });
+
+  const tenantsPickQ = useQuery({
+    queryKey: ["recon", "tenants-pick"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listTenants({ limit: 100 });
+      return data;
+    },
+    enabled: canRead && runFormOpen,
+    retry: false,
+  });
+
+  const productsPickQ = useQuery({
+    queryKey: ["recon", "products-pick"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listProducts({ limit: 100 });
+      return data ?? [];
+    },
+    enabled: canRead && runFormOpen,
+    retry: false,
+  });
+
   const runs = useMemo(
     () => unwrapInfraList<ReconciliationRun>(runsQ.data?.data),
     [runsQ.data],
@@ -153,6 +180,32 @@ export function EdgeReconciliationModule() {
   const evidence = useMemo(
     () => unwrapInfraList<ReconciliationEvidence>(historyQ.data?.data).items,
     [historyQ.data],
+  );
+  const globalHistory = useMemo(() => {
+    const raw = globalHistoryQ.data?.data ?? globalHistoryQ.data;
+    if (Array.isArray(raw)) return raw as ReconciliationEvidence[];
+    return unwrapInfraList<ReconciliationEvidence>(raw).items;
+  }, [globalHistoryQ.data]);
+
+  const tenantPickOptions = useMemo(() => {
+    const page = tenantsPickQ.data as
+      | { items?: Array<{ id: string; displayName?: string; tenantCode?: string }> }
+      | Array<{ id: string; displayName?: string; tenantCode?: string }>
+      | undefined;
+    const items = Array.isArray(page) ? page : (page?.items ?? []);
+    return items.map((t) => ({
+      id: t.id,
+      label: `${t.displayName ?? t.tenantCode ?? t.id} · ${t.id.slice(0, 8)}…`,
+    }));
+  }, [tenantsPickQ.data]);
+
+  const productPickOptions = useMemo(
+    () =>
+      (productsPickQ.data ?? []).map((p) => ({
+        id: p.id,
+        label: `${p.code} — ${p.name}`,
+      })),
+    [productsPickQ.data],
   );
 
   const createRunM = useMutation({
@@ -278,21 +331,23 @@ export function EdgeReconciliationModule() {
                   <CardHeader title="Créer un run" />
                   <CardBody>
                     <form className="grid gap-3 md:grid-cols-2" onSubmit={onCreateRun}>
-                      <input
-                        className={fieldControlClass}
-                        placeholder="tenantId (UUID)"
+                      <ListOrUuidField
                         value={runForm.tenantId}
-                        onChange={(e) =>
-                          setRunForm((f) => ({ ...f, tenantId: e.target.value }))
+                        onChange={(v) =>
+                          setRunForm((f) => ({ ...f, tenantId: v }))
                         }
+                        options={tenantPickOptions}
+                        placeholder="Select tenant (optional)"
+                        fallbackPlaceholder="tenantId (UUID)"
                       />
-                      <input
-                        className={fieldControlClass}
-                        placeholder="productId (UUID)"
+                      <ListOrUuidField
                         value={runForm.productId}
-                        onChange={(e) =>
-                          setRunForm((f) => ({ ...f, productId: e.target.value }))
+                        onChange={(v) =>
+                          setRunForm((f) => ({ ...f, productId: v }))
                         }
+                        options={productPickOptions}
+                        placeholder="Select product (optional)"
+                        fallbackPlaceholder="productId (UUID)"
                       />
                       <label className="flex items-center gap-2 type-sm md:col-span-2">
                         <input
@@ -595,38 +650,66 @@ export function EdgeReconciliationModule() {
       {tab === "history" ? (
         <EdgePermissionGate permission="platform:reconciliation:history:read">
           <div className="space-y-4">
+            <div className="space-y-2" data-testid="recon-global-history">
+              <h3 className="type-sm font-medium">History (global)</h3>
+              <p className="type-xs text-[var(--text-muted)]">
+                GET /reconciliation/history
+              </p>
+              {globalHistoryQ.isLoading ? (
+                <EdgeLoadingState label="Chargement historique..." />
+              ) : globalHistory.length === 0 ? (
+                <EdgeEmptyState
+                  title="Aucun historique global"
+                  description="Pas d’evidence transversale pour le moment."
+                />
+              ) : (
+                <ul className="space-y-2">
+                  {globalHistory.map((e) => (
+                    <li
+                      key={e.id}
+                      className="rounded border border-[var(--border)] p-2 type-sm"
+                    >
+                      <Badge tone={statusTone(e.outcome)}>{e.outcome}</Badge>{" "}
+                      {e.operation} · {formatWhen(e.createdAt)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <Select
               aria-label="Choisir un run pour l’historique"
               value={historyRunId}
               onChange={(e) => setHistoryRunId(e.target.value)}
             >
-              <option value="">Choisir un run</option>
+              <option value="">Filtrer par run (optionnel)</option>
               {runs.items.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.id.slice(0, 8)} — {r.runStatus}
                 </option>
               ))}
             </Select>
-            {historyQ.isLoading ? (
-              <EdgeLoadingState label="Chargement evidence..." />
-            ) : evidence.length === 0 ? (
-              <EdgeEmptyState
-                title="Aucune evidence"
-                description="Evidence de réconciliation (P7.13)."
-              />
-            ) : (
-              <ul className="space-y-2">
-                {evidence.map((e) => (
-                  <li
-                    key={e.id}
-                    className="rounded border border-[var(--border)] p-2 type-sm"
-                  >
-                    <Badge tone={statusTone(e.outcome)}>{e.outcome}</Badge>{" "}
-                    {e.operation} · {formatWhen(e.createdAt)}
-                  </li>
-                ))}
-              </ul>
-            )}
+            {historyRunId ? (
+              historyQ.isLoading ? (
+                <EdgeLoadingState label="Chargement evidence..." />
+              ) : evidence.length === 0 ? (
+                <EdgeEmptyState
+                  title="Aucune evidence"
+                  description="Evidence de réconciliation (P7.13) pour ce run."
+                />
+              ) : (
+                <ul className="space-y-2">
+                  {evidence.map((e) => (
+                    <li
+                      key={e.id}
+                      className="rounded border border-[var(--border)] p-2 type-sm"
+                    >
+                      <Badge tone={statusTone(e.outcome)}>{e.outcome}</Badge>{" "}
+                      {e.operation} · {formatWhen(e.createdAt)}
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : null}
           </div>
         </EdgePermissionGate>
       ) : null}

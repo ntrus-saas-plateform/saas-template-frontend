@@ -13,6 +13,7 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import { G11ProductBadge } from "@/components/edge/g11-product-badge";
 import { edgeApi } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -54,6 +55,7 @@ export default function EdgeVerticalProductsPage() {
   }
 
   const title =
+    verticalQuery.data?.displayName ??
     verticalQuery.data?.name ??
     verticalQuery.data?.code ??
     "Vertical products";
@@ -67,14 +69,22 @@ export default function EdgeVerticalProductsPage() {
             {title}
           </h1>
           <p className="type-sm text-[var(--text-secondary)]">
-            Products filtered to this vertical.
+            Products filtered to this vertical. Bindings BB and Product Control
+            complete the delivery path.
           </p>
         </div>
-        <EdgePermissionGate permission="platform:products:create">
-          <Button asChild>
-            <Link href="/edge/catalog/new">New product</Link>
+        <div className="flex flex-wrap gap-[var(--space-2)]">
+          <Button asChild variant="outline">
+            <Link href="/edge/backends">Backends</Link>
           </Button>
-        </EdgePermissionGate>
+          <EdgePermissionGate permission="platform:products:create">
+            <Button asChild>
+              <Link href={`/edge/catalog/new?verticalId=${verticalId}`}>
+                New product
+              </Link>
+            </Button>
+          </EdgePermissionGate>
+        </div>
       </header>
 
       {productsQuery.isLoading ? <EdgeLoadingState /> : null}
@@ -110,7 +120,10 @@ export default function EdgeVerticalProductsPage() {
                     {product.code}
                   </span>
                 </span>
-                <Badge>{product.lifecycleStatus}</Badge>
+                <span className="flex flex-wrap items-center justify-end gap-[var(--space-2)]">
+                  <G11ProductBadge product={product} compact />
+                  <Badge>{product.lifecycleStatus}</Badge>
+                </span>
               </Link>
             </li>
           ))}

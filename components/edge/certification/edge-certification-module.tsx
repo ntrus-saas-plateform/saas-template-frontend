@@ -106,12 +106,26 @@ export function EdgeCertificationModule({
     enabled: canRead && Boolean(selectedId),
   });
 
+  const globalHistoryQ = useQuery({
+    queryKey: ["cert", "history-global"],
+    queryFn: () => edgeApi.listCertificationHistory({ limit: 50 }),
+    enabled: canHistory && tab === "evidence",
+  });
+
   const packages = useMemo(
     () => unwrapInfraList<CertificationPackage>(packagesQ.data?.data),
     [packagesQ.data],
   );
   const detail = detailQ.data?.data ?? null;
   const evidenceItems: CertificationEvidenceItem[] = detail?.evidenceItems ?? [];
+  const globalHistory = useMemo(() => {
+    const raw = globalHistoryQ.data?.data ?? globalHistoryQ.data;
+    if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+    if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
+      return (raw as { items: Array<Record<string, unknown>> }).items;
+    }
+    return [] as Array<Record<string, unknown>>;
+  }, [globalHistoryQ.data]);
 
   const createM = useMutation({
     mutationFn: () =>
@@ -412,7 +426,53 @@ export function EdgeCertificationModule({
           ) : packagesQ.isLoading ? (
             <EdgeLoadingState label="Chargement evidence..." />
           ) : (
-            <div className="space-y-3" data-testid="cert-evidence-viewer">
+            <div className="space-y-4" data-testid="cert-evidence-viewer">
+              <div className="space-y-2" data-testid="cert-global-history">
+                <h3 className="type-sm font-medium">Certification history</h3>
+                <p className="type-xs text-[var(--text-muted)]">
+                  GET /certification/history
+                </p>
+                {globalHistoryQ.isLoading ? (
+                  <EdgeLoadingState label="Chargement historique..." />
+                ) : globalHistory.length === 0 ? (
+                  <EdgeEmptyState
+                    title="Aucun historique"
+                    description="Pas d’evidence transversale pour le moment."
+                  />
+                ) : (
+                  <ul className="space-y-2">
+                    {globalHistory.map((row, i) => {
+                      const id = String(row.id ?? i);
+                      return (
+                        <li
+                          key={id}
+                          className="rounded border border-[var(--border)] p-2 type-sm"
+                        >
+                          <span className="font-medium">
+                            {String(row.evidenceKey ?? row.operation ?? id)}
+                          </span>
+                          {row.outcome ? (
+                            <>
+                              {" "}
+                              <Badge tone={statusTone(String(row.outcome))}>
+                                {String(row.outcome)}
+                              </Badge>
+                            </>
+                          ) : null}
+                          <span className="text-[var(--text-muted)]">
+                            {" "}
+                            ·{" "}
+                            {formatWhen(
+                              (row.createdAt as string | undefined) ??
+                                (row.recordedAt as string | undefined),
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
               <p className="type-sm text-[var(--text-muted)]">
                 Vue transversale des packages de certification et liens vers le détail.
               </p>

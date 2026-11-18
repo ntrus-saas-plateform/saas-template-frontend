@@ -16,6 +16,11 @@ const edgeApiMocks = vi.hoisted(() => ({
   publishAcquisitionFormVersion: vi.fn(),
   listAcquisitionProspects: vi.fn(),
   createAcquisitionProspect: vi.fn(),
+  transitionAcquisitionProspect: vi.fn(),
+  listAcquisitionLeads: vi.fn(),
+  captureAcquisitionLead: vi.fn(),
+  promoteAcquisitionLead: vi.fn(),
+  createAcquisitionFormFromContract: vi.fn(),
   listAcquisitionApplications: vi.fn(),
   submitAcquisitionApplication: vi.fn(),
   saveAcquisitionApplicationAnswers: vi.fn(),
@@ -96,6 +101,9 @@ describe("EdgeAcquisitionModule", () => {
       data: { items: [], total: 0 },
     });
     edgeApiMocks.listAcquisitionProspects.mockResolvedValue({
+      data: { items: [], total: 0 },
+    });
+    edgeApiMocks.listAcquisitionLeads.mockResolvedValue({
       data: { items: [], total: 0 },
     });
     edgeApiMocks.listAcquisitionApplications.mockResolvedValue({

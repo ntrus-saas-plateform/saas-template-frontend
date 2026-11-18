@@ -11,10 +11,21 @@ export type EdgeAdministrator = {
 export type EdgeVertical = {
   id: string;
   code?: string;
+  /** Prefer displayName from Edge API; name kept for older payloads. */
   name?: string;
-  status?: string;
+  displayName?: string;
+  status?: EdgeVerticalStatus | string;
   slug?: string;
   description?: string | null;
+  iconRef?: string | null;
+  visualIdentityRef?: string | null;
+  keycloakOrganizationId?: string | null;
+  configurationVersion?: number;
+  activatedAt?: string | null;
+  suspendedAt?: string | null;
+  deactivatedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type EdgeMembership = {
@@ -22,7 +33,27 @@ export type EdgeMembership = {
   administratorId?: string;
   verticalId: string;
   status?: string;
+  invitationId?: string | null;
+  invitedBy?: string | null;
+  activatedAt?: string | null;
+  suspendedAt?: string | null;
+  revokedAt?: string | null;
+  reason?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
+
+export type EdgeVerticalStatus =
+  | "DRAFT"
+  | "CONFIGURING"
+  | "READY_FOR_ACTIVATION"
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "DEACTIVATION_PENDING"
+  | "DEACTIVATED"
+  | "DEPRECATED"
+  | "RETIRED"
+  | "ARCHIVED";
 
 export type EdgeWorkspaceOption = {
   membership: EdgeMembership;

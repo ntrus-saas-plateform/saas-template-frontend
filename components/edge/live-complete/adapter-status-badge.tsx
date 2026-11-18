@@ -53,19 +53,20 @@ export function LiveCompleteAdapterStatusBadge({
     retry: false,
   });
 
+  const payload = query.data?.data;
   const status: AdapterLabStatus =
-    query.isError || !query.data
+    query.isError || !payload
       ? "UNAVAILABLE"
-      : query.data.mode === "LIVE" ||
-          query.data.mode === "PARTIAL" ||
-          query.data.mode === "UNAVAILABLE"
-        ? query.data.mode
+      : payload.mode === "LIVE" ||
+          payload.mode === "PARTIAL" ||
+          payload.mode === "UNAVAILABLE"
+        ? payload.mode
         : "UNAVAILABLE";
 
   const tip =
-    query.isError || !query.data
+    query.isError || !payload
       ? DEFAULT_TIPS.UNAVAILABLE
-      : (query.data.note ?? DEFAULT_TIPS[status]);
+      : (payload.note ?? DEFAULT_TIPS[status]);
 
   return (
     <AdapterStatusBadge status={status} title={tip} className={className} />

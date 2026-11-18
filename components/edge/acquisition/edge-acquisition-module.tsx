@@ -5,11 +5,13 @@
  * Tabbed control plane — API state only; never invent conversion metrics.
  */
 import { useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Tabs } from "@/components/ui/tabs";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -28,6 +30,7 @@ import type {
   FormSchemaDefinition,
   PlanPresentation,
   ProductPresentation,
+  AcquisitionLead,
   Prospect,
   QuoteRequest,
   SubscriptionHandoff,
@@ -39,6 +42,7 @@ type TabId =
   | "plans"
   | "forms"
   | "prospects"
+  | "leads"
   | "applications"
   | "documents"
   | "quotes"
@@ -52,6 +56,7 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
   { id: "plans", label: "Plans", permission: "platform:acquisition:read" },
   { id: "forms", label: "Forms", permission: "platform:acquisition:read" },
   { id: "prospects", label: "Prospects", permission: "platform:acquisition:read" },
+  { id: "leads", label: "Leads", permission: "platform:acquisition:read" },
   { id: "applications", label: "Applications", permission: "platform:acquisition:read" },
   { id: "documents", label: "Documents", permission: "platform:acquisition:read" },
   { id: "quotes", label: "Quotes", permission: "platform:acquisition:read" },
@@ -257,6 +262,16 @@ export function EdgeAcquisitionModule() {
     enabled: canRead && activeTab === "products",
   });
 
+  const catalogProductsQ = useQuery({
+    queryKey: ["edge", "products", "for-acquisition"],
+    queryFn: async () => {
+      const { data } = await edgeApi.listProducts({ limit: 100 });
+      return data ?? [];
+    },
+    enabled: canRead && (activeTab === "products" || activeTab === "forms"),
+    retry: false,
+  });
+
   const plansQ = useQuery({
     queryKey: ["edge", "acquisition", "plans"],
     queryFn: () => edgeApi.listAcquisitionPlans({ limit: 100 }),
@@ -275,10 +290,21 @@ export function EdgeAcquisitionModule() {
     enabled: canRead && activeTab === "prospects",
   });
 
+  const leadsQ = useQuery({
+    queryKey: ["edge", "acquisition", "leads"],
+    queryFn: () => edgeApi.listAcquisitionLeads({ limit: 100 }),
+    enabled: canRead && activeTab === "leads",
+  });
+
   const applicationsQ = useQuery({
     queryKey: ["edge", "acquisition", "applications"],
     queryFn: () => edgeApi.listAcquisitionApplications({ limit: 100 }),
-    enabled: canRead && activeTab === "applications",
+    enabled:
+      canRead &&
+      (activeTab === "applications" ||
+        activeTab === "journeys" ||
+        activeTab === "documents" ||
+        activeTab === "checkout"),
   });
 
   const documentsQ = useQuery({
@@ -331,7 +357,14 @@ export function EdgeAcquisitionModule() {
     name: "",
     description: "",
   });
+  const [fromContractForm, setFromContractForm] = useState({
+    productId: "",
+    contractCode: "pharmacy.retail.v1",
+    code: "",
+    name: "",
+  });
   const [selectedFormId, setSelectedFormId] = useState("");
+  const [rowBusyId, setRowBusyId] = useState<string | null>(null);
   const [schemaJson, setSchemaJson] = useState(DEFAULT_SCHEMA_JSON);
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
   const [publishForm, setPublishForm] = useState({
@@ -342,6 +375,15 @@ export function EdgeAcquisitionModule() {
     email: "",
     displayName: "",
     companyName: "",
+  });
+  const [prospectTransition, setProspectTransition] = useState({
+    id: "",
+    toStatus: "ENGAGED",
+  });
+  const [leadCaptureForm, setLeadCaptureForm] = useState({
+    email: "",
+    sourceType: "MANUAL",
+    sourceRef: "",
   });
   const [docForm, setDocForm] = useState({
     applicationId: "",
@@ -435,6 +477,38 @@ export function EdgeAcquisitionModule() {
     },
   });
 
+  const createFormFromContract = useMutation({
+    mutationFn: () =>
+      edgeApi.createAcquisitionFormFromContract({
+        productId: fromContractForm.productId.trim(),
+        contractCode: fromContractForm.contractCode.trim(),
+        code: fromContractForm.code.trim(),
+        name: fromContractForm.name.trim(),
+      }),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "forms"] });
+      if (res.data?.id) setSelectedFormId(res.data.id);
+      setFromContractForm({
+        productId: "",
+        contractCode: "pharmacy.retail.v1",
+        code: "",
+        name: "",
+      });
+    },
+  });
+
+  const promoteLead = useMutation({
+    mutationFn: (id: string) =>
+      edgeApi.promoteAcquisitionLead(id, { createProspectIfMissing: true }),
+    onSuccess: () => {
+      setRowBusyId(null);
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "leads"] });
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "prospects"] });
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "overview"] });
+    },
+    onError: () => setRowBusyId(null),
+  });
+
   const createFormVersion = useMutation({
     mutationFn: () => {
       let parsed: FormSchemaDefinition;
@@ -487,6 +561,36 @@ export function EdgeAcquisitionModule() {
       void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "prospects"] });
       void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "overview"] });
       setProspectForm({ email: "", displayName: "", companyName: "" });
+    },
+  });
+
+  const transitionProspect = useMutation({
+    mutationFn: () => {
+      const id = prospectTransition.id.trim();
+      if (!id) throw new Error("prospectId requis");
+      const app = prospects.items.find((p) => p.id === id);
+      return edgeApi.transitionAcquisitionProspect(id, {
+        toStatus: prospectTransition.toStatus.trim(),
+        expectedVersion: app?.version,
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "prospects"] });
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "overview"] });
+    },
+  });
+
+  const captureLead = useMutation({
+    mutationFn: () =>
+      edgeApi.captureAcquisitionLead({
+        email: leadCaptureForm.email.trim(),
+        sourceType: leadCaptureForm.sourceType.trim() || "MANUAL",
+        sourceRef: leadCaptureForm.sourceRef.trim() || null,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "leads"] });
+      void qc.invalidateQueries({ queryKey: ["edge", "acquisition", "overview"] });
+      setLeadCaptureForm({ email: "", sourceType: "MANUAL", sourceRef: "" });
     },
   });
 
@@ -725,11 +829,20 @@ export function EdgeAcquisitionModule() {
   const plans = unwrapPage<PlanPresentation>(plansQ.data);
   const forms = unwrapPage<FormSchema>(formsQ.data);
   const prospects = unwrapPage<Prospect>(prospectsQ.data);
+  const leads = unwrapPage<AcquisitionLead>(leadsQ.data);
   const applications = unwrapPage<Application>(applicationsQ.data);
   const documents = unwrapPage<DocumentReference>(documentsQ.data);
   const quotations = unwrapPage<QuoteRequest>(quotationsQ.data);
   const checkouts = unwrapPage<CheckoutSession>(checkoutsQ.data);
   const handoffs = unwrapPage<SubscriptionHandoff>(handoffsQ.data);
+  const catalogProductOptions = (catalogProductsQ.data ?? []).map((p) => ({
+    id: p.id,
+    label: `${p.code} — ${p.name}`,
+  }));
+  const applicationPickOptions = applications.items.map((a) => ({
+    id: a.id,
+    label: `${a.applicationNumber || a.id.slice(0, 8)} · ${String(a.status)}`,
+  }));
   const funnel = unwrapData<import("@/types/edge-acquisition").ConversionFunnel>(
     funnelQ.data,
   );
@@ -744,9 +857,13 @@ export function EdgeAcquisitionModule() {
     createProduct.error ??
     createPlan.error ??
     createFormSchema.error ??
+    createFormFromContract.error ??
     createFormVersion.error ??
     publishFormVersion.error ??
     createProspect.error ??
+    transitionProspect.error ??
+    captureLead.error ??
+    promoteLead.error ??
     submitApp.error ??
     saveDraftAnswers.error ??
     transitionApp.error ??
@@ -809,32 +926,72 @@ export function EdgeAcquisitionModule() {
             emptyDescription="Create a presentation linked to a commercial product before publishing discovery content."
           >
             <DenseTable
-              headers={["Title", "Code", "Slug", "Status", "Locale", "Updated"]}
+              headers={[
+                "Title",
+                "Code",
+                "Slug",
+                "Status",
+                "Locale",
+                "Updated",
+                "Public",
+              ]}
               testId="acq-products-table"
             >
-              {products.items.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-3 py-2 font-medium">{p.title}</td>
-                  <td className="px-3 py-2 text-[var(--text-muted)]">{p.code}</td>
-                  <td className="px-3 py-2">{p.slug}</td>
-                  <td className="px-3 py-2">
-                    <Badge tone={statusTone(p.status)}>{p.status}</Badge>
-                  </td>
-                  <td className="px-3 py-2 text-[var(--text-muted)]">{p.locale}</td>
-                  <td className="px-3 py-2 text-[var(--text-muted)]">
-                    {formatWhen(p.updatedAt)}
-                  </td>
-                </tr>
-              ))}
+              {products.items.map((p) => {
+                const published = String(p.status).toUpperCase() === "PUBLISHED";
+                const href = `/acquire/${encodeURIComponent(p.slug)}`;
+                return (
+                  <tr key={p.id}>
+                    <td className="px-3 py-2 font-medium">{p.title}</td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">{p.code}</td>
+                    <td className="px-3 py-2">{p.slug}</td>
+                    <td className="px-3 py-2">
+                      <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">{p.locale}</td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">
+                      {formatWhen(p.updatedAt)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {published ? (
+                        <Link
+                          href={href}
+                          className="type-xs font-semibold text-[var(--primary)] underline-offset-2 hover:underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Voir en public
+                        </Link>
+                      ) : (
+                        <span
+                          className="type-xs text-[var(--text-muted)]"
+                          title="Catalogue public = PUBLISHED seulement (Legal + price MEASURED, doc 46)."
+                        >
+                          Après PUBLISH
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </DenseTable>
           </QueryShell>
           <EdgePermissionGate permission="platform:acquisition:manage">
             <div className="space-y-3 border-t border-[var(--border)] pt-4">
               <h3 className="type-sm font-medium">Create product presentation</h3>
               <div className="grid gap-3 md:grid-cols-2">
+                <ListOrUuidField
+                  aria-label="productId"
+                  value={productForm.productId}
+                  onChange={(v) =>
+                    setProductForm((f) => ({ ...f, productId: v }))
+                  }
+                  options={catalogProductOptions}
+                  placeholder="Select product"
+                  fallbackPlaceholder="productId (UUID)"
+                />
                 {(
                   [
-                    ["productId", "productId (UUID)"],
                     ["code", "code"],
                     ["slug", "slug"],
                     ["title", "title"],
@@ -1067,6 +1224,72 @@ export function EdgeAcquisitionModule() {
                 Create schema
               </Button>
 
+              <div
+                className="space-y-3 border-t border-[var(--border)] pt-4"
+                data-testid="acq-form-from-contract"
+              >
+                <h4 className="type-sm font-medium">From product contract template</h4>
+                <p className="type-xs text-[var(--text-muted)]">
+                  Brouillon via POST /forms/from-contract — non publié automatiquement.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <ListOrUuidField
+                    aria-label="contract form productId"
+                    value={fromContractForm.productId}
+                    onChange={(v) =>
+                      setFromContractForm((f) => ({ ...f, productId: v }))
+                    }
+                    options={catalogProductOptions}
+                    placeholder="Select product"
+                    fallbackPlaceholder="productId (UUID)"
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="contractCode"
+                    aria-label="contractCode"
+                    value={fromContractForm.contractCode}
+                    onChange={(e) =>
+                      setFromContractForm((f) => ({
+                        ...f,
+                        contractCode: e.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="code"
+                    aria-label="contract form code"
+                    value={fromContractForm.code}
+                    onChange={(e) =>
+                      setFromContractForm((f) => ({ ...f, code: e.target.value }))
+                    }
+                  />
+                  <input
+                    className={fieldControlClass}
+                    placeholder="name"
+                    aria-label="contract form name"
+                    value={fromContractForm.name}
+                    onChange={(e) =>
+                      setFromContractForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={
+                    createFormFromContract.isPending ||
+                    fromContractForm.productId.trim().length < 8 ||
+                    fromContractForm.contractCode.trim().length < 3 ||
+                    fromContractForm.code.trim().length < 1 ||
+                    fromContractForm.name.trim().length < 1
+                  }
+                  onClick={() => createFormFromContract.mutate()}
+                >
+                  Instantiate from contract
+                </Button>
+              </div>
+
               <label className="block type-xs text-[var(--text-muted)]" htmlFor="acq-schema-json">
                 Draft version schemaDefinition (JSON)
               </label>
@@ -1182,6 +1405,63 @@ export function EdgeAcquisitionModule() {
             </DenseTable>
           </QueryShell>
           <EdgePermissionGate permission="platform:acquisition:manage">
+            <div
+              className="space-y-3 border-t border-[var(--border)] pt-4"
+              data-testid="acq-prospect-transition"
+            >
+              <h3 className="type-sm font-medium">Prospect transition</h3>
+              <p className="type-xs text-[var(--text-muted)]">
+                POST transition — statut issu uniquement de la réponse API après refetch.
+              </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                {prospects.items.length ? (
+                  <select
+                    className={fieldControlClass}
+                    aria-label="transition prospectId"
+                    value={prospectTransition.id}
+                    onChange={(e) =>
+                      setProspectTransition((f) => ({ ...f, id: e.target.value }))
+                    }
+                  >
+                    <option value="">Select prospect</option>
+                    {prospects.items.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.emailNormalized}
+                        {p.displayName ? ` · ${p.displayName}` : ""} · {p.status}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={fieldControlClass}
+                    placeholder="prospectId"
+                    aria-label="transition prospectId"
+                    value={prospectTransition.id}
+                    onChange={(e) =>
+                      setProspectTransition((f) => ({ ...f, id: e.target.value }))
+                    }
+                  />
+                )}
+                <input
+                  className={fieldControlClass}
+                  placeholder="toStatus (ex. ENGAGED)"
+                  aria-label="transition toStatus"
+                  value={prospectTransition.toStatus}
+                  onChange={(e) =>
+                    setProspectTransition((f) => ({ ...f, toStatus: e.target.value }))
+                  }
+                />
+                <Button
+                  type="button"
+                  disabled={
+                    transitionProspect.isPending || prospectTransition.id.trim().length < 8
+                  }
+                  onClick={() => transitionProspect.mutate()}
+                >
+                  Transition
+                </Button>
+              </div>
+            </div>
             <div className="space-y-3 border-t border-[var(--border)] pt-4">
               <h3 className="type-sm font-medium">Create prospect</h3>
               <div className="grid gap-3 md:grid-cols-3">
@@ -1219,6 +1499,117 @@ export function EdgeAcquisitionModule() {
                 onClick={() => createProspect.mutate()}
               >
                 Create prospect
+              </Button>
+            </div>
+          </EdgePermissionGate>
+        </section>
+      ) : null}
+
+      {activeTab === "leads" && canRead ? (
+        <section className="space-y-4" data-testid="acq-leads">
+          <p className="type-sm text-[var(--text-muted)]">
+            Leads capturés — promotion via API uniquement (statut PROMOTED après refetch).
+          </p>
+          <QueryShell
+            loading={leadsQ.isLoading}
+            error={leadsQ.isError ? leadsQ.error : null}
+            empty={!leadsQ.isLoading && leads.items.length === 0}
+            emptyTitle="No leads"
+            emptyDescription="Aucun lead renvoyé par l’API."
+          >
+            <DenseTable
+              headers={[
+                "Email",
+                "Status",
+                "Source",
+                "Prospect",
+                "Score",
+                "Actions",
+              ]}
+              testId="acq-leads-table"
+            >
+              {leads.items.map((l) => (
+                <tr key={l.id}>
+                  <td className="px-3 py-2 font-medium">{l.emailNormalized}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone={statusTone(l.status)}>{l.status}</Badge>
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">
+                    {l.sourceType}
+                    {l.sourceRef ? ` · ${l.sourceRef}` : ""}
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">
+                    {l.prospectId ?? "—"}
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">
+                    {l.score ?? "—"}
+                    {l.scoreBand ? ` (${l.scoreBand})` : ""}
+                  </td>
+                  <td className="px-3 py-2">
+                    <EdgePermissionGate permission="platform:acquisition:manage">
+                      {!["PROMOTED", "MERGED", "REJECTED", "EXPIRED"].includes(
+                        String(l.status),
+                      ) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={promoteLead.isPending}
+                          onClick={() => {
+                            setRowBusyId(l.id);
+                            promoteLead.mutate(l.id);
+                          }}
+                        >
+                          Promote
+                        </Button>
+                      ) : (
+                        <span className="type-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </EdgePermissionGate>
+                  </td>
+                </tr>
+              ))}
+            </DenseTable>
+          </QueryShell>
+          <EdgePermissionGate permission="platform:acquisition:manage">
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <h3 className="type-sm font-medium">Capture lead (admin)</h3>
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  className={fieldControlClass}
+                  placeholder="email"
+                  aria-label="lead email"
+                  value={leadCaptureForm.email}
+                  onChange={(e) =>
+                    setLeadCaptureForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="sourceType (MANUAL)"
+                  aria-label="lead sourceType"
+                  value={leadCaptureForm.sourceType}
+                  onChange={(e) =>
+                    setLeadCaptureForm((f) => ({ ...f, sourceType: e.target.value }))
+                  }
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="sourceRef (optional)"
+                  aria-label="lead sourceRef"
+                  value={leadCaptureForm.sourceRef}
+                  onChange={(e) =>
+                    setLeadCaptureForm((f) => ({ ...f, sourceRef: e.target.value }))
+                  }
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={
+                  captureLead.isPending || leadCaptureForm.email.trim().length < 3
+                }
+                onClick={() => captureLead.mutate()}
+              >
+                Capture lead
               </Button>
             </div>
           </EdgePermissionGate>
@@ -1483,14 +1874,15 @@ export function EdgeAcquisitionModule() {
                 publique. storageKey privé + privateLocator edge-private://.
               </p>
               <div className="grid gap-3 md:grid-cols-2">
-                <input
-                  className={fieldControlClass}
-                  placeholder="applicationId"
+                <ListOrUuidField
                   aria-label="document applicationId"
                   value={docForm.applicationId}
-                  onChange={(e) =>
-                    setDocForm((f) => ({ ...f, applicationId: e.target.value }))
+                  onChange={(v) =>
+                    setDocForm((f) => ({ ...f, applicationId: v }))
                   }
+                  options={applicationPickOptions}
+                  placeholder="Select application"
+                  fallbackPlaceholder="applicationId"
                 />
                 <input
                   className={fieldControlClass}
@@ -1888,17 +2280,18 @@ export function EdgeAcquisitionModule() {
                     setCheckoutForm((f) => ({ ...f, prospectId: e.target.value }))
                   }
                 />
-                <input
-                  className={fieldControlClass}
-                  placeholder="applicationId (optional)"
+                <ListOrUuidField
                   aria-label="checkout applicationId"
                   value={checkoutForm.applicationId}
-                  onChange={(e) =>
+                  onChange={(v) =>
                     setCheckoutForm((f) => ({
                       ...f,
-                      applicationId: e.target.value,
+                      applicationId: v,
                     }))
                   }
+                  options={applicationPickOptions}
+                  placeholder="Select application (optional)"
+                  fallbackPlaceholder="applicationId (optional)"
                 />
                 <input
                   className={fieldControlClass}
@@ -1939,12 +2332,13 @@ export function EdgeAcquisitionModule() {
               <label className="type-xs text-[var(--text-muted)]" htmlFor="acq-journey-app">
                 Application id
               </label>
-              <input
+              <ListOrUuidField
                 id="acq-journey-app"
-                className={fieldControlClass}
                 value={journeyAppId}
-                onChange={(e) => setJourneyAppId(e.target.value)}
-                placeholder="UUID application"
+                onChange={setJourneyAppId}
+                options={applicationPickOptions}
+                placeholder="Select application"
+                fallbackPlaceholder="UUID application"
               />
             </div>
             <Button
