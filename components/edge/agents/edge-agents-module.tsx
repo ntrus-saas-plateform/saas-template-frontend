@@ -6,14 +6,13 @@
  * Register / command / revoke via P7.4. outbound_only always.
  * Vault public_key_ref only. Nonce anti-replay. Never invent ACTIVE/REVOKED.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -21,6 +20,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -41,6 +45,14 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "History",
     permission: "platform:agents:history:read",
   },
+];
+
+const AGENTS_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const AGENTS_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Registry", itemIds: ["agents"] },
+  { title: "Actions", itemIds: ["commands"] },
+  { title: "Governance", itemIds: ["history"] },
 ];
 
 function statusTone(
@@ -76,9 +88,17 @@ function randomNonce(): string {
 }
 
 export function EdgeAgentsModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading agents studio…" />}>
+      <EdgeAgentsStudio />
+    </Suspense>
+  );
+}
+
+function EdgeAgentsStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("agents");
+  const [tab, setTab] = useStudioSectionParam<TabId>("agents", AGENTS_SECTION_IDS);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({
@@ -171,6 +191,21 @@ export function EdgeAgentsModule() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["agents"] }),
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return AGENTS_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const t = TABS.find((x) => x.id === id);
+          return t ? hasEdgePermission(permissions, t.permission) : false;
+        })
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (!canRead && !agentsQ.isLoading) {
     return <EdgeForbiddenState />;
   }
@@ -188,22 +223,19 @@ export function EdgeAgentsModule() {
   };
 
   return (
-    <div className="space-y-4" data-testid="agents-module">
-      <Alert tone="info">
-        Agents outbound-only. Clés publiques en référence vault uniquement. Commandes
-        avec nonce unique (anti-replay). Révocation fail-closed — commandes actives →
-        REVOKED. Mutations via P7.4 (`p714.agent.*`).
-      </Alert>
-
-      <Tabs
-        tabs={TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map((t) => ({
-          id: t.id,
-          label: t.label,
-        }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
+    <EdgeStudioShell
+      title="Agents studio"
+      description="Agents outbound-only. Clés vault uniquement. Commandes avec nonce anti-replay. Mutations via P7.4."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="agents-module"
+      actions={
+        <Alert tone="info">
+          Fail-closed revoke — commandes actives → REVOKED.
+        </Alert>
+      }
+    >
       {tab === "agents" && (
         <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
           <Card>
@@ -505,6 +537,6 @@ export function EdgeAgentsModule() {
           </Card>
         </div>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

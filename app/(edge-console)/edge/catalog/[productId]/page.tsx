@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
@@ -17,6 +16,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { G11ProductBadge } from "@/components/edge/g11-product-badge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
@@ -31,7 +35,17 @@ import type {
 } from "@/types/edge";
 import type { ProductPlatform } from "@/types/edge-registry";
 
-const TABS = [
+type TabId =
+  | "overview"
+  | "edit"
+  | "lifecycle"
+  | "versions"
+  | "capabilities"
+  | "bindings"
+  | "compat"
+  | "readiness";
+
+const TABS: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "edit", label: "Edit" },
   { id: "lifecycle", label: "Lifecycle" },
@@ -40,6 +54,17 @@ const TABS = [
   { id: "bindings", label: "Backends" },
   { id: "compat", label: "Compatibility" },
   { id: "readiness", label: "Readiness" },
+];
+
+const PRODUCT_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const PRODUCT_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Product", itemIds: ["overview", "edit"] },
+  { title: "Lifecycle", itemIds: ["lifecycle", "versions", "readiness"] },
+  {
+    title: "Composition",
+    itemIds: ["capabilities", "bindings", "compat"],
+  },
 ];
 
 const LIFECYCLE_STATUSES: EdgeProductLifecycleStatus[] = [
@@ -63,6 +88,14 @@ const COMMERCIAL_OPTIONS: EdgeCommercialAvailability[] = [
 ];
 
 export default function EdgeProductDetailPage() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading product studio…" />}>
+      <EdgeProductDetailStudio />
+    </Suspense>
+  );
+}
+
+function EdgeProductDetailStudio() {
   const params = useParams<{ productId: string }>();
   const productId = params.productId;
   const queryClient = useQueryClient();
@@ -71,9 +104,24 @@ export default function EdgeProductDetailPage() {
   const allowed =
     !permissionKnown ||
     hasEdgePermission(permissions, "platform:products:read");
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useStudioSectionParam<TabId>(
+    "overview",
+    PRODUCT_SECTION_IDS,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionOk, setActionOk] = useState<string | null>(null);
+
+  const studioGroups: StudioSectionGroup[] = useMemo(
+    () =>
+      PRODUCT_STUDIO_GROUPS.map((g) => ({
+        title: g.title,
+        items: g.itemIds.map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+      })),
+    [],
+  );
 
   const productQuery = useQuery({
     queryKey: ["edge", "products", productId],
@@ -165,44 +213,43 @@ export default function EdgeProductDetailPage() {
         />
       ) : null}
       {productQuery.data ? (
-        <>
-          <header className="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
-            <div className="space-y-[var(--space-1)]">
-              <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-                {productQuery.data.name}
-              </h1>
-              <p className="type-sm text-[var(--text-secondary)]">
-                {[productQuery.data.code, productQuery.data.slug]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+        <EdgeStudioShell
+          title={productQuery.data.name}
+          description={[productQuery.data.code, productQuery.data.slug]
+            .filter(Boolean)
+            .join(" · ")}
+          groups={studioGroups}
+          section={tab}
+          onSectionChange={(id) => setTab(id as TabId)}
+          testId="edge-product-detail-studio"
+          actions={
+            <>
               <Badge>{productQuery.data.lifecycleStatus}</Badge>
-            </div>
-            <div className="flex flex-wrap gap-[var(--space-2)]">
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="sm">
                 <Link href={`/edge/verticals/${productQuery.data.verticalId}`}>
-                  Vertical studio
+                  Vertical
                 </Link>
               </Button>
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="sm">
                 <Link href="/edge/backends">Backends</Link>
               </Button>
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="sm">
                 <Link href="/edge/provisioning/product-controls">
-                  BB · Product Control
+                  Product Control
                 </Link>
               </Button>
               <EdgePermissionGate permission="platform:publication:approve">
                 <Button
+                  size="sm"
                   disabled={!versionId || publishMutation.isPending}
                   onClick={() => publishMutation.mutate()}
                 >
                   {publishMutation.isPending ? "Publishing…" : "Publish"}
                 </Button>
               </EdgePermissionGate>
-            </div>
-          </header>
-
+            </>
+          }
+        >
           {actionError ? (
             <p className="type-sm text-[var(--danger)]" role="alert">
               {actionError}
@@ -211,8 +258,6 @@ export default function EdgeProductDetailPage() {
           {actionOk ? (
             <p className="type-sm text-[var(--success)]">{actionOk}</p>
           ) : null}
-
-          <Tabs tabs={TABS} value={tab} onChange={setTab} />
 
           {tab === "overview" ? (
             <section className="space-y-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-[var(--space-5)]">
@@ -384,7 +429,7 @@ export default function EdgeProductDetailPage() {
               </div>
             </section>
           ) : null}
-        </>
+        </EdgeStudioShell>
       ) : null}
     </div>
   );

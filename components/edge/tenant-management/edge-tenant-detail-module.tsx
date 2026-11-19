@@ -3,7 +3,7 @@
 /**
  * P8 — Tenant workspace (360 overview, profile, lifecycle, governance, activity).
  */
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -19,6 +18,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -60,10 +64,53 @@ type WorkspaceTab =
   | "reconciliation"
   | "activity";
 
+const DETAIL_SECTION_IDS: WorkspaceTab[] = [
+  "overview",
+  "profile",
+  "commercial",
+  "lifecycle",
+  "resources",
+  "applications",
+  "configuration",
+  "health",
+  "governance",
+  "risk",
+  "exceptions",
+  "migrations",
+  "recovery",
+  "reconciliation",
+  "activity",
+];
+
+const DETAIL_STUDIO_GROUPS: { title: string; itemIds: WorkspaceTab[] }[] = [
+  { title: "Overview", itemIds: ["overview", "profile", "commercial"] },
+  {
+    title: "Runtime",
+    itemIds: ["lifecycle", "resources", "applications", "configuration"],
+  },
+  { title: "Health & risk", itemIds: ["health", "governance", "risk"] },
+  {
+    title: "Governance",
+    itemIds: ["exceptions", "migrations", "recovery", "reconciliation"],
+  },
+  { title: "Activity", itemIds: ["activity"] },
+];
+
 export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading tenant workspace…" />}>
+      <EdgeTenantDetailStudio tenantId={tenantId} />
+    </Suspense>
+  );
+}
+
+function EdgeTenantDetailStudio({ tenantId }: { tenantId: string }) {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<WorkspaceTab>("overview");
+  const [tab, setTab] = useStudioSectionParam<WorkspaceTab>(
+    "overview",
+    DETAIL_SECTION_IDS,
+  );
 
   const canRead = hasEdgePermission(permissions, "platform:tenant_management:read");
   const canUpdate = hasEdgePermission(
@@ -542,21 +589,29 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
   const workspaceTabs = useMemo(
     () =>
       [
-        { id: "overview", label: "Overview", show: canRead },
-        { id: "profile", label: "Profile", show: canUpdate },
-        { id: "commercial", label: "Commercial", show: canRead },
-        { id: "lifecycle", label: "Lifecycle", show: canLifecycle },
-        { id: "resources", label: "Resources", show: canRead },
-        { id: "applications", label: "Applications", show: canRead },
-        { id: "configuration", label: "Configuration", show: canRead },
-        { id: "health", label: "Health", show: canRead },
-        { id: "governance", label: "Governance", show: canRead },
-        { id: "risk", label: "Risk", show: canRead },
-        { id: "exceptions", label: "Exceptions", show: canExceptions || canExceptionApprove },
-        { id: "migrations", label: "Migrations", show: canMigrations },
-        { id: "recovery", label: "Recovery", show: canRecoveries },
-        { id: "reconciliation", label: "Reconciliation", show: canReconciliation },
-        { id: "activity", label: "Activity", show: canAudit },
+        { id: "overview" as const, label: "Overview", show: canRead },
+        { id: "profile" as const, label: "Profile", show: canUpdate },
+        { id: "commercial" as const, label: "Commercial", show: canRead },
+        { id: "lifecycle" as const, label: "Lifecycle", show: canLifecycle },
+        { id: "resources" as const, label: "Resources", show: canRead },
+        { id: "applications" as const, label: "Applications", show: canRead },
+        { id: "configuration" as const, label: "Configuration", show: canRead },
+        { id: "health" as const, label: "Health", show: canRead },
+        { id: "governance" as const, label: "Governance", show: canRead },
+        { id: "risk" as const, label: "Risk", show: canRead },
+        {
+          id: "exceptions" as const,
+          label: "Exceptions",
+          show: canExceptions || canExceptionApprove,
+        },
+        { id: "migrations" as const, label: "Migrations", show: canMigrations },
+        { id: "recovery" as const, label: "Recovery", show: canRecoveries },
+        {
+          id: "reconciliation" as const,
+          label: "Reconciliation",
+          show: canReconciliation,
+        },
+        { id: "activity" as const, label: "Activity", show: canAudit },
       ].filter((t) => t.show),
     [
       canRead,
@@ -570,6 +625,23 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
       canAudit,
     ],
   );
+
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(workspaceTabs.map((t) => t.id));
+    return DETAIL_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = workspaceTabs.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [workspaceTabs]);
+
+  const activeTab = workspaceTabs.some((t) => t.id === tab)
+    ? tab
+    : (workspaceTabs[0]?.id ?? "overview");
 
   if (!canRead) {
     return <EdgeForbiddenState />;
@@ -636,24 +708,15 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
   }
 
   return (
-    <div
-      className="flex flex-col gap-[var(--space-6)]"
-      data-testid="tm-detail-module"
-    >
-      {actionError ? (
-        <Alert tone="error" title="Action refusée">
-          {(actionError as Error).message}
-        </Alert>
-      ) : null}
-
-      <div className="flex flex-col gap-[var(--space-2)] md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">{registry.displayName}</h2>
-          <p className="type-sm text-[var(--text-muted)]">
-            {registry.tenantCode} · v{registry.version}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-[var(--space-2)]">
+    <EdgeStudioShell
+      title={registry.displayName}
+      description={`${registry.tenantCode} · v${registry.version}`}
+      groups={studioGroups}
+      section={activeTab}
+      onSectionChange={(id) => setTab(id as WorkspaceTab)}
+      testId="tm-detail-module"
+      actions={
+        <div className="flex flex-wrap items-center gap-[var(--space-2)]">
           <Badge tone={statusTone(registry.administrativeStatus)}>
             {registry.administrativeStatus}
           </Badge>
@@ -661,16 +724,15 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
             {registry.technicalStatus}
           </Badge>
           <Badge tone={statusTone(healthStatus)}>{healthStatus}</Badge>
+          {actionError ? (
+            <Alert tone="error" title="Action refusée">
+              {(actionError as Error).message}
+            </Alert>
+          ) : null}
         </div>
-      </div>
-
-      <Tabs
-        tabs={workspaceTabs.map(({ id, label }) => ({ id, label }))}
-        value={tab}
-        onChange={(id) => setTab(id as WorkspaceTab)}
-      />
-
-      {tab === "overview" && (
+      }
+    >
+      {activeTab === "overview" && (
         <div
           className="grid gap-[var(--space-4)] lg:grid-cols-2"
           data-testid="tm-detail-overview"
@@ -766,7 +828,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {tab === "commercial" && (
+      {activeTab === "commercial" && (
         <Card data-testid="tm-detail-commercial">
           <CardBody className="space-y-[var(--space-2)] type-sm">
             <p>
@@ -798,7 +860,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </Card>
       )}
 
-      {tab === "profile" && (
+      {activeTab === "profile" && (
         <EdgePermissionGate permission="platform:tenant_management:update_metadata">
           <Card>
             <CardHeader title="Metadata" />
@@ -1170,7 +1232,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </EdgePermissionGate>
       )}
 
-      {tab === "lifecycle" && (
+      {activeTab === "lifecycle" && (
         <EdgePermissionGate permission="platform:tenant_management:lifecycle:request">
           <Card>
             <CardHeader title="Request lifecycle action" />
@@ -1256,7 +1318,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </EdgePermissionGate>
       )}
 
-      {tab === "resources" && (
+      {activeTab === "resources" && (
         <SectionProjection
           title="Resources"
           availability={overview.resources?.availability}
@@ -1266,7 +1328,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </SectionProjection>
       )}
 
-      {tab === "applications" && (
+      {activeTab === "applications" && (
         <SectionProjection
           title="Applications"
           availability={overview.applications?.availability}
@@ -1276,7 +1338,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </SectionProjection>
       )}
 
-      {tab === "configuration" && (
+      {activeTab === "configuration" && (
         <SectionProjection
           title="Configuration"
           availability={overview.configuration?.availability}
@@ -1286,7 +1348,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </SectionProjection>
       )}
 
-      {tab === "health" && (
+      {activeTab === "health" && (
         <div className="flex flex-col gap-[var(--space-4)]">
           <Card>
             <CardHeader title="Registry health signal" />
@@ -1402,7 +1464,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {tab === "governance" && (
+      {activeTab === "governance" && (
         <div className="grid gap-[var(--space-4)] lg:grid-cols-2">
           <Card>
             <CardHeader title="Tags" />
@@ -1523,7 +1585,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {tab === "risk" && (
+      {activeTab === "risk" && (
         <div className="flex flex-col gap-[var(--space-4)]">
           <Card>
             <CardBody className="flex flex-wrap items-center justify-between gap-2 type-sm">
@@ -1568,7 +1630,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {tab === "exceptions" && (
+      {activeTab === "exceptions" && (
         <EdgePermissionGate permission="platform:tenant_management:exception:request">
           <Card>
             <CardHeader title="Request exception" />
@@ -1671,7 +1733,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </EdgePermissionGate>
       )}
 
-      {tab === "migrations" && (
+      {activeTab === "migrations" && (
         <EdgePermissionGate permission="platform:tenant_management:migration:request">
           <Card>
             <CardHeader title="Request migration" />
@@ -1721,7 +1783,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </EdgePermissionGate>
       )}
 
-      {tab === "recovery" && (
+      {activeTab === "recovery" && (
         <EdgePermissionGate permission="platform:tenant_management:recovery:request">
           <Card>
             <CardHeader title="Request recovery" />
@@ -1771,7 +1833,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </EdgePermissionGate>
       )}
 
-      {tab === "reconciliation" && (
+      {activeTab === "reconciliation" && (
         <EdgePermissionGate permission="platform:tenant_management:reconciliation:execute">
           {findingsQ.isLoading ? (
             <EdgeLoadingState label="Loading findings…" />
@@ -1820,7 +1882,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
         </EdgePermissionGate>
       )}
 
-      {tab === "activity" && (
+      {activeTab === "activity" && (
         <EdgePermissionGate permission="platform:tenant_management:audit:read">
           {activityQ.isLoading ? (
             <EdgeLoadingState label="Loading activity…" />
@@ -1831,7 +1893,7 @@ export function EdgeTenantDetailModule({ tenantId }: { tenantId: string }) {
           )}
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }
 

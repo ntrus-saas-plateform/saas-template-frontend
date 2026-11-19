@@ -51,6 +51,20 @@ test.describe("P10 acquisition live scenarios (browser + public API)", () => {
     await expect(product.or(back)).toBeVisible();
   });
 
+  test("P10-configure — /acquire/.../configure shell loads (plans BFF, no wizard public)", async ({
+    page,
+  }) => {
+    await page.goto("/acquire/some-slug/configure");
+    await expect(page.getByTestId("acquire-configure")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/Okapi/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Configurer/i }),
+    ).toBeVisible();
+    await expectNoCardFields(page);
+  });
+
   test("P10-S04/S07 — apply page loads, no card fields, honeypot/challenge UI", async ({
     page,
   }) => {

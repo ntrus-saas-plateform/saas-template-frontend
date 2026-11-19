@@ -15,6 +15,10 @@ import {
   resolvePublicFormSubmitIntent,
   type PublicFormSubmitIntent,
 } from "@/lib/edge/public-form-intent";
+import {
+  postPublicAcquisitionApplication,
+  postPublicAcquisitionLead,
+} from "@/lib/edge/public-acquisition-client";
 
 function collectFields(payload: PublicFormPayload | null): FormFieldDefinition[] {
   if (!payload?.formVersion?.schemaDefinition) return [];
@@ -234,47 +238,33 @@ function AcquireApplyInner() {
       throw new Error("Slug de formulaire public requis pour une candidature.");
     }
     const consents = buildPublicFormConsents(payload, values);
-    const res = await fetch("/api/acquisition-public/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        publicFormSlug: formSlug.trim(),
-        email,
-        answers: { ...values, website: website || "" },
-        displayName: pickDisplayName(values),
-        companyName: pickCompanyName(values),
-        productId: payload?.schema?.productId ?? null,
-        commercialPlanId: commercialPlanId ?? payload?.schema?.commercialPlanId ?? null,
-        planPresentationId,
-        consents,
-        honeypot: website || "",
-        submittedAtMs: openedAtMs.current,
-        challengeId: challenge?.challengeId,
-        challengeToken: challenge?.challengeToken,
-        challengeAnswer: challengeAnswer.trim(),
-        metadata: {
-          productSlug: slug,
-          formSlug: formSlug.trim(),
-          source: "public_apply",
-        },
-        submit: true,
-      }),
+    const result = await postPublicAcquisitionApplication({
+      publicFormSlug: formSlug.trim(),
+      email,
+      answers: { ...values, website: website || "" },
+      displayName: pickDisplayName(values),
+      companyName: pickCompanyName(values),
+      productId: payload?.schema?.productId ?? null,
+      commercialPlanId: commercialPlanId ?? payload?.schema?.commercialPlanId ?? null,
+      planPresentationId,
+      consents,
+      honeypot: website || "",
+      submittedAtMs: openedAtMs.current,
+      challengeId: challenge?.challengeId,
+      challengeToken: challenge?.challengeToken,
+      challengeAnswer: challengeAnswer.trim(),
+      metadata: {
+        productSlug: slug,
+        formSlug: formSlug.trim(),
+        source: "public_apply",
+      },
+      submit: true,
     });
-    const json = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string };
-      message?: string;
-      data?: { status?: string; application?: { id?: string } };
-      status?: string;
-    };
-    if (!res.ok) {
-      throw new Error(json.error?.message ?? json.message ?? `HTTP ${res.status}`);
-    }
-    const status = json.data?.status ?? json.status;
     setSubmitState("ok");
     setSubmitMessage(
-      status === "SUBMITTED"
-        ? "Candidature soumise. Le backend a enregistré lead, dossier et réponses."
-        : "Dossier candidature créé (brouillon). Complétez via le portail si nécessaire.",
+      result.status === "SUBMITTED"
+        ? `Candidature soumise (dossier ${result.applicationId}).`
+        : `Dossier créé en brouillon (${result.applicationId}). Finalisez via le portail si besoin.`,
     );
     void fetch("/api/acquisition-public/analytics/events", {
       method: "POST",
@@ -284,17 +274,31 @@ function AcquireApplyInner() {
         properties: {
           productSlug: slug,
           formSlug: formSlug.trim(),
-          status: status ?? "UNKNOWN",
+          status: result.status,
+          applicationId: result.applicationId,
         },
       }),
     }).catch(() => undefined);
   }
+
+  const hasFileUploadFields = useMemo(
+    () =>
+      fields.some((f) => {
+        const t = (f.type || "").toLowerCase();
+        return t === "file_upload" || t === "file" || t === "upload";
+      }),
+    [fields],
+  );
 
   function validate(): boolean {
     const next: Record<string, string> = {};
     for (const field of fields) {
       const raw = (values[field.key] ?? "").trim();
       const type = (field.type || "text").toLowerCase();
+      const isFileUpload =
+        type === "file_upload" || type === "file" || type === "upload";
+      // Pas d’upload public : ne pas inventer de chemin fichier ni exiger une valeur.
+      if (isFileUpload) continue;
       if (field.required && type === "checkbox") {
         if (raw !== "true" && raw !== "1" && raw !== "on") {
           next[field.key] = "Requis";
@@ -357,34 +361,24 @@ function AcquireApplyInner() {
       }
 
       const consents = buildPublicFormConsents(payload, values);
-      const res = await fetch("/api/acquisition-public/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          sourceType: "FORM",
-          sourceRef: slug,
-          formPublicationId: payload?.publication?.id ?? null,
-          payload: { ...values, website: website || "" },
-          attribution: { productSlug: slug, formSlug: formSlug || null },
-          consents,
-          honeypot: website || "",
-          submittedAtMs: openedAtMs.current,
-          challengeId: challenge.challengeId,
-          challengeToken: challenge.challengeToken,
-          challengeAnswer: challengeAnswer.trim(),
-        }),
+      const lead = await postPublicAcquisitionLead({
+        email,
+        sourceType: "FORM",
+        sourceRef: slug,
+        formPublicationId: payload?.publication?.id ?? null,
+        payload: { ...values, website: website || "" },
+        attribution: { productSlug: slug, formSlug: formSlug || null },
+        consents,
+        honeypot: website || "",
+        submittedAtMs: openedAtMs.current,
+        challengeId: challenge.challengeId,
+        challengeToken: challenge.challengeToken,
+        challengeAnswer: challengeAnswer.trim(),
       });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as {
-          error?: { message?: string };
-        };
-        throw new Error(json.error?.message ?? `HTTP ${res.status}`);
-      }
       setSubmitState("ok");
       setLeadCaptured(true);
       setSubmitMessage(
-        "Lead capturé. Répondez au nouveau défi anti-bot puis « Soumettre candidature » si besoin.",
+        `Lead capturé (${lead.leadId}). Répondez au nouveau défi puis « Soumettre candidature » si besoin.`,
       );
       void refreshChallenge();
       void fetch("/api/acquisition-public/analytics/events", {
@@ -441,6 +435,18 @@ function AcquireApplyInner() {
           Produit <code className="text-white/90">{slug}</code>. Validation côté client
           uniquement pour l&apos;UX — le backend reste la source de vérité.
         </p>
+        {planPresentationId ? (
+          <p className="type-xs text-white/55">
+            Plan sélectionné :{" "}
+            <code className="text-white/80">{planPresentationId}</code>
+            {commercialPlanId ? (
+              <>
+                {" "}
+                · offre <code className="text-white/80">{commercialPlanId}</code>
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </section>
 
       <section className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-6">
@@ -466,6 +472,17 @@ function AcquireApplyInner() {
 
         {formSlug && payload && fields.length > 0 ? (
           <form className="space-y-4" onSubmit={onSubmit} noValidate>
+            {hasFileUploadFields ? (
+              <p
+                className="type-sm text-[var(--text-secondary)]"
+                data-testid="acquire-apply-file-upload-policy"
+                role="note"
+              >
+                Ce formulaire public n’accepte pas de pièces jointes. L’envoi porte sur
+                les champs hors fichiers ; les documents se déposent après candidature
+                via le portail authentifié.
+              </p>
+            ) : null}
             {fields.map((field) => {
               const type = (field.type || "text").toLowerCase();
               const id = `f-${field.key}`;
@@ -550,6 +567,31 @@ function AcquireApplyInner() {
                         <p className="type-xs text-[var(--danger)]">{error}</p>
                       ) : null}
                     </div>
+                  </div>
+                );
+              }
+
+              if (type === "file_upload" || type === "file" || type === "upload") {
+                return (
+                  <div
+                    key={field.key}
+                    className="space-y-1 rounded border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-3"
+                    data-testid={`acquire-apply-file-upload-notice-${field.key}`}
+                  >
+                    <p className="type-xs font-medium text-[var(--text-secondary)]">
+                      {field.label ?? field.key}
+                      {field.required ? " *" : ""}
+                    </p>
+                    <p className="type-xs text-[var(--text-muted)]" role="note">
+                      Champ en lecture seule — dépôt désactivé ici. Les documents se
+                      déposent après candidature via le portail authentifié
+                      {field.required
+                        ? " (requis côté schéma ; hors périmètre de cet envoi)."
+                        : "."}
+                    </p>
+                    {error ? (
+                      <p className="type-xs text-[var(--danger)]">{error}</p>
+                    ) : null}
                   </div>
                 );
               }
@@ -744,24 +786,19 @@ function MinimalLeadForm({ productSlug }: { productSlug: string }) {
       return;
     }
     try {
-      const res = await fetch("/api/acquisition-public/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          sourceType: "PUBLIC_LANDING",
-          sourceRef: productSlug,
-          payload: { productSlug, website: website || "" },
-          honeypot: website || "",
-          submittedAtMs: openedAtMs.current,
-          challengeId: challenge.challengeId,
-          challengeToken: challenge.challengeToken,
-          challengeAnswer: challengeAnswer.trim(),
-        }),
+      const lead = await postPublicAcquisitionLead({
+        email: email.trim(),
+        sourceType: "PUBLIC_LANDING",
+        sourceRef: productSlug,
+        payload: { productSlug, website: website || "" },
+        honeypot: website || "",
+        submittedAtMs: openedAtMs.current,
+        challengeId: challenge.challengeId,
+        challengeToken: challenge.challengeToken,
+        challengeAnswer: challengeAnswer.trim(),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setMsg(
-        "Lead capturé. La candidature complète nécessite un compte plateforme authentifié.",
+        `Lead capturé (${lead.leadId}). Chargez un formulaire publié (?form=…) pour une candidature complète.`,
       );
       void fetch("/api/acquisition-public/analytics/events", {
         method: "POST",

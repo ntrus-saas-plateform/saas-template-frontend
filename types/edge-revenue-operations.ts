@@ -206,6 +206,7 @@ export type RevenueForecast = {
   code: string;
   name: string;
   businessUnitId: string | null;
+  verticalId?: string | null;
   horizonStart: string;
   horizonEnd: string;
   currency: string;
@@ -410,6 +411,7 @@ export type CreateRevenueForecastBody = {
   code: string;
   name: string;
   businessUnitId?: string;
+  verticalId?: string;
   horizonStart: string;
   horizonEnd: string;
   currency: string;

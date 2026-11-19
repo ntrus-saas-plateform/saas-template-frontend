@@ -14,6 +14,11 @@ const discoverKeycloakCapabilities = vi.fn();
 const reconcileKeycloakTopology = vi.fn();
 const deprovisionKeycloakTopology = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("@/lib/api/edge", () => ({
   EdgeApiError: class EdgeApiError extends Error {
     status: number;
@@ -294,7 +299,7 @@ describe("EdgeKeycloakModule (P7.7 console)", () => {
 
   it("lists topologies and opens the detail panel with masked client secret", async () => {
     renderModule();
-    fireEvent.click(await screen.findByRole("tab", { name: "Topologies" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Topologies" }));
     await pickTopology(/tenant-1 — DEDICATED_REALM — READY/);
     expect(await screen.findByTestId("kc-topology-detail")).toBeTruthy();
     expect(await screen.findByText(/tenant-1-realm/)).toBeTruthy();
@@ -308,7 +313,7 @@ describe("EdgeKeycloakModule (P7.7 console)", () => {
 
   it("renders health checks and evidence from the detail payload", async () => {
     renderModule();
-    fireEvent.click(await screen.findByRole("tab", { name: "Topologies" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Topologies" }));
     await pickTopology(/tenant-1 — DEDICATED_REALM — READY/);
     expect(await screen.findByText("OIDC_DISCOVERY")).toBeTruthy();
     expect(await screen.findByText("create_realm")).toBeTruthy();
@@ -319,13 +324,13 @@ describe("EdgeKeycloakModule (P7.7 console)", () => {
       (p) => p !== "platform:keycloak:history:read",
     );
     renderModule();
-    expect(await screen.findByRole("tab", { name: "Serveurs Keycloak" })).toBeTruthy();
-    expect(screen.queryByRole("tab", { name: "Historique" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Serveurs Keycloak" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Historique" })).toBeNull();
   });
 
   it("sends reconcile only after explicit user action", async () => {
     renderModule();
-    fireEvent.click(await screen.findByRole("tab", { name: "Topologies" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Topologies" }));
     await pickTopology(/tenant-1 — DEDICATED_REALM — READY/);
     await screen.findByTestId("kc-reconcile");
     expect(reconcileKeycloakTopology).not.toHaveBeenCalled();

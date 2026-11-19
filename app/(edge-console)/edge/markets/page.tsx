@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -13,6 +12,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -23,14 +27,32 @@ function errMessage(err: unknown): string {
   return "Request failed";
 }
 
-const TABS = [
+type TabId = "segments" | "profiles" | "models" | "contracts";
+
+const TABS: { id: TabId; label: string }[] = [
   { id: "segments", label: "Segments" },
   { id: "profiles", label: "Business profiles" },
   { id: "models", label: "Operating models" },
   { id: "contracts", label: "Integration contracts" },
 ];
 
+const MARKET_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const MARKET_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Taxonomy", itemIds: ["segments"] },
+  { title: "Profiles", itemIds: ["profiles", "models"] },
+  { title: "Contracts", itemIds: ["contracts"] },
+];
+
 export default function EdgeMarketsPage() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading markets studio…" />}>
+      <EdgeMarketsStudio />
+    </Suspense>
+  );
+}
+
+function EdgeMarketsStudio() {
   const queryClient = useQueryClient();
   const { permissions, activeVerticalId } = useEdgePlatform();
   const permissionKnown = permissions.length > 0;
@@ -51,7 +73,19 @@ export default function EdgeMarketsPage() {
     !permissionKnown ||
     hasEdgePermission(permissions, "platform:contracts:manage");
 
-  const [tab, setTab] = useState("segments");
+  const [tab, setTab] = useStudioSectionParam<TabId>("segments", MARKET_SECTION_IDS);
+
+  const studioGroups: StudioSectionGroup[] = useMemo(
+    () =>
+      MARKET_STUDIO_GROUPS.map((g) => ({
+        title: g.title,
+        items: g.itemIds.map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+      })),
+    [],
+  );
   const [verticalId, setVerticalId] = useState(activeVerticalId ?? "");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -226,25 +260,23 @@ export default function EdgeMarketsPage() {
   }
 
   return (
-    <div className="space-y-[var(--space-5)]">
-      <header className="space-y-[var(--space-1)]">
-        <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-          Markets & taxonomy
-        </h1>
-        <p className="type-sm text-[var(--text-secondary)]">
-          Segments, business profiles, operating models, and integration
-          contracts.
-        </p>
-      </header>
-
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
-
-      {msg ? <p className="type-sm text-[var(--success)]">{msg}</p> : null}
-      {createError ? (
-        <p role="alert" className="type-sm text-[var(--danger)]">
-          {createError}
-        </p>
-      ) : null}
+    <EdgeStudioShell
+      title="Markets studio"
+      description="Segments, business profiles, operating models, and integration contracts."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      actions={
+        <>
+          {msg ? <p className="type-sm text-[var(--success)]">{msg}</p> : null}
+          {createError ? (
+            <p role="alert" className="type-sm text-[var(--danger)]">
+              {createError}
+            </p>
+          ) : null}
+        </>
+      }
+    >
 
       {tab !== "contracts" ? (
         <label className="block max-w-md space-y-1">
@@ -582,6 +614,6 @@ export default function EdgeMarketsPage() {
           )}
         </section>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

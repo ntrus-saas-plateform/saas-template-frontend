@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,6 +18,11 @@ import {
   formatProductControlDate,
   shortId,
 } from "@/components/edge/product-control/shared";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import {
   canMutateEndpoint,
   productControlApi,
@@ -44,9 +49,57 @@ function unwrapArrayOrList<T>(payload: unknown): T[] {
   return raw?.items ?? [];
 }
 
+type SectionId =
+  | "overview"
+  | "contracts"
+  | "capabilities"
+  | "health"
+  | "exchanges"
+  | "history";
+
+const ENDPOINT_SECTION_IDS: readonly SectionId[] = [
+  "overview",
+  "contracts",
+  "capabilities",
+  "health",
+  "exchanges",
+  "history",
+];
+
+const ENDPOINT_STUDIO_GROUPS: StudioSectionGroup[] = [
+  { title: "Endpoint", items: [{ id: "overview", label: "Overview" }] },
+  {
+    title: "Contract",
+    items: [
+      { id: "contracts", label: "Contracts" },
+      { id: "capabilities", label: "Capabilities" },
+    ],
+  },
+  {
+    title: "Operations",
+    items: [
+      { id: "health", label: "Health checks" },
+      { id: "exchanges", label: "Exchanges" },
+    ],
+  },
+  { title: "Governance", items: [{ id: "history", label: "History" }] },
+];
+
 export default function ProductControlEndpointDetailPage() {
+  return (
+    <Suspense fallback={<ProductControlLoading label="Loading endpoint studio..." />}>
+      <ProductControlEndpointDetailStudio />
+    </Suspense>
+  );
+}
+
+function ProductControlEndpointDetailStudio() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const [section, setSection] = useStudioSectionParam<SectionId>(
+    "overview",
+    ENDPOINT_SECTION_IDS,
+  );
   const { permissions, isLoading: platformLoading } = useEdgePlatform();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -214,27 +267,25 @@ export default function ProductControlEndpointDetailPage() {
   const busy = runAction.isPending;
 
   return (
-    <div className="space-y-[var(--space-6)]">
-      <div className="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
-        <div>
-          <p className="type-xs text-[var(--text-muted)]">
-            <Link
-              href="/edge/provisioning/product-controls"
-              className="text-[var(--primary)] underline"
-            >
-              Product Control
-            </Link>
-          </p>
-          <h1 className="mt-1 type-lg font-semibold text-[var(--text-primary)]">
-            {endpoint.code}
-          </h1>
-          <p className="mt-1 font-mono type-xs text-[var(--text-secondary)]">
-            {endpoint.id}
-          </p>
-        </div>
-        <ProductControlStatusBadge status={endpoint.status} />
-      </div>
+    <div className="space-y-[var(--space-5)]">
+      <p className="type-xs text-[var(--text-muted)]">
+        <Link
+          href="/edge/provisioning/product-controls"
+          className="text-[var(--primary)] underline"
+        >
+          Product Control
+        </Link>
+      </p>
 
+      <EdgeStudioShell
+        title={endpoint.code}
+        description={endpoint.id}
+        groups={ENDPOINT_STUDIO_GROUPS}
+        section={section}
+        onSectionChange={(next) => setSection(next as SectionId)}
+        testId="edge-endpoint-detail-studio"
+        actions={<ProductControlStatusBadge status={endpoint.status} />}
+      >
       {actionError ? (
         <p className="type-sm text-[var(--danger)]" role="alert">
           {actionError}
@@ -247,6 +298,8 @@ export default function ProductControlEndpointDetailPage() {
         </p>
       ) : null}
 
+      {section === "overview" ? (
+        <>
       <div className="flex flex-wrap gap-[var(--space-2)]">
         {canValidate ? (
           <Button
@@ -405,6 +458,15 @@ export default function ProductControlEndpointDetailPage() {
         </ProductControlInfoCard>
       </div>
 
+      <ProductControlInfoCard title="Metadata (redacted)">
+        <pre className="overflow-x-auto whitespace-pre-wrap font-mono type-xs text-[var(--text-secondary)]">
+          {JSON.stringify(safeMeta, null, 2)}
+        </pre>
+      </ProductControlInfoCard>
+        </>
+      ) : null}
+
+      {section === "contracts" ? (
       <section className="space-y-[var(--space-3)]" aria-label="Negotiated contracts">
         <h2 className="type-sm font-semibold">Negotiated contracts</h2>
         {contracts.length === 0 ? (
@@ -433,7 +495,9 @@ export default function ProductControlEndpointDetailPage() {
           </ProductControlTableShell>
         )}
       </section>
+      ) : null}
 
+      {section === "capabilities" ? (
       <section className="space-y-[var(--space-3)]" aria-label="Capabilities">
         <h2 className="type-sm font-semibold">Capabilities</h2>
         {capabilities.length === 0 ? (
@@ -456,7 +520,9 @@ export default function ProductControlEndpointDetailPage() {
           </ProductControlTableShell>
         )}
       </section>
+      ) : null}
 
+      {section === "health" ? (
       <section className="space-y-[var(--space-3)]" aria-label="Recent health checks">
         <h2 className="type-sm font-semibold">Recent health checks</h2>
         {healthChecks.length === 0 ? (
@@ -487,7 +553,9 @@ export default function ProductControlEndpointDetailPage() {
           </ProductControlTableShell>
         )}
       </section>
+      ) : null}
 
+      {section === "exchanges" ? (
       <section className="space-y-[var(--space-3)]" aria-label="Endpoint exchanges">
         <h2 className="type-sm font-semibold">Recent exchanges</h2>
         {exchangesQuery.isLoading ? (
@@ -526,8 +594,10 @@ export default function ProductControlEndpointDetailPage() {
           </ProductControlTableShell>
         )}
       </section>
+      ) : null}
 
-      {canHistory ? (
+      {section === "history" ? (
+      canHistory ? (
         <section className="space-y-[var(--space-3)]" aria-label="History">
           <h2 className="type-sm font-semibold">History</h2>
           {historyQuery.isLoading ? (
@@ -555,13 +625,9 @@ export default function ProductControlEndpointDetailPage() {
             </ProductControlTableShell>
           )}
         </section>
+      ) : null
       ) : null}
-
-      <ProductControlInfoCard title="Metadata (redacted)">
-        <pre className="overflow-x-auto whitespace-pre-wrap font-mono type-xs text-[var(--text-secondary)]">
-          {JSON.stringify(safeMeta, null, 2)}
-        </pre>
-      </ProductControlInfoCard>
+      </EdgeStudioShell>
     </div>
   );
 }

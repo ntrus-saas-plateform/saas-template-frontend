@@ -897,8 +897,15 @@ export const edgeApi = {
       },
     ),
 
-  listAuditEvents: (query = "page=1&limit=50") =>
-    edgeRequest<unknown[]>(`/api/edge-backend/security/events?${query}`),
+  listAuditEvents: (opts?: { query?: string; verticalId?: string }) => {
+    const query = opts?.query ?? "page=1&limit=50";
+    const vertical = opts?.verticalId
+      ? `&verticalId=${encodeURIComponent(opts.verticalId)}`
+      : "";
+    return edgeRequest<unknown[]>(
+      `/api/edge-backend/security/events?${query}${vertical}`,
+    );
+  },
 
   getWorkspaceConfiguration: (verticalId: string) =>
     edgeRequest<unknown>(
@@ -1446,6 +1453,11 @@ export const edgeApi = {
       amount: string;
       currency?: string;
       billingFrequency?: string | null;
+      /**
+       * Défaut backend NEEDS_RESEARCH — le price book reste non publiable
+       * (gate G11#3) tant que les prix ne sont pas recherchés.
+       */
+      priceSource?: "MEASURED" | "ESTIMATED" | "NEEDS_RESEARCH";
     },
   ) =>
     edgeRequest(
@@ -1767,9 +1779,19 @@ export const edgeApi = {
       `/api/edge-backend/commercial/packages/${id}`,
     ),
 
+  getCommercialAddon: (id: string) =>
+    edgeRequest<EdgeCommercialAddon & { capabilities?: unknown[] }>(
+      `/api/edge-backend/commercial/addons/${id}`,
+    ),
+
   addSolutionPackageCapability: (
     packageId: string,
-    body: { capabilityId: string; inclusionType?: string },
+    body: {
+      capabilityId: string;
+      inclusionType?: string;
+      numericLimit?: number;
+      restrictions?: Record<string, unknown>;
+    },
   ) =>
     edgeRequest(`/api/edge-backend/commercial/packages/${packageId}/capabilities`, {
       method: "POST",
@@ -1778,7 +1800,12 @@ export const edgeApi = {
 
   addCommercialPlanCapability: (
     planId: string,
-    body: { capabilityId: string; inclusionType?: string },
+    body: {
+      capabilityId: string;
+      inclusionType?: string;
+      numericLimit?: number;
+      restrictions?: Record<string, unknown>;
+    },
   ) =>
     edgeRequest(`/api/edge-backend/commercial/plans/${planId}/capabilities`, {
       method: "POST",
@@ -1796,7 +1823,12 @@ export const edgeApi = {
 
   addCommercialAddonCapability: (
     addonId: string,
-    body: { capabilityId: string; inclusionType?: string },
+    body: {
+      capabilityId: string;
+      inclusionType?: string;
+      numericLimit?: number;
+      restrictions?: Record<string, unknown>;
+    },
   ) =>
     edgeRequest(`/api/edge-backend/commercial/addons/${addonId}/capabilities`, {
       method: "POST",
@@ -1910,9 +1942,12 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  listMarketingAudiences: (productId?: string) =>
+  listMarketingAudiences: (opts?: { productId?: string; verticalId?: string }) =>
     edgeRequest(
-      `/api/edge-backend/marketing/audiences${toQuery({ productId })}`,
+      `/api/edge-backend/marketing/audiences${toQuery({
+        productId: opts?.productId,
+        verticalId: opts?.verticalId,
+      })}`,
     ),
 
   createMarketingAudience: (body: {
@@ -1932,11 +1967,16 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  listMarketingCampaigns: (opts?: { productId?: string; status?: string }) =>
+  listMarketingCampaigns: (opts?: {
+    productId?: string;
+    status?: string;
+    verticalId?: string;
+  }) =>
     edgeRequest(
       `/api/edge-backend/marketing/campaigns${toQuery({
         productId: opts?.productId,
         status: opts?.status,
+        verticalId: opts?.verticalId,
       })}`,
     ),
 
@@ -1985,8 +2025,13 @@ export const edgeApi = {
       body: JSON.stringify({}),
     }),
 
-  listMarketingForms: (productId?: string) =>
-    edgeRequest(`/api/edge-backend/marketing/forms${toQuery({ productId })}`),
+  listMarketingForms: (opts?: { productId?: string; verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/marketing/forms${toQuery({
+        productId: opts?.productId,
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   createMarketingForm: (body: {
     code: string;
@@ -1996,6 +2041,8 @@ export const edgeApi = {
     productId?: string | null;
     campaignId?: string | null;
     fields?: unknown[];
+    requiredConsents?: unknown[];
+    metadata?: Record<string, unknown>;
   }) =>
     edgeRequest("/api/edge-backend/marketing/forms", {
       method: "POST",
@@ -2027,11 +2074,16 @@ export const edgeApi = {
         : undefined,
     }),
 
-  listMarketingLeads: (opts?: { status?: string; productId?: string }) =>
+  listMarketingLeads: (opts?: {
+    status?: string;
+    productId?: string;
+    verticalId?: string;
+  }) =>
     edgeRequest(
       `/api/edge-backend/marketing/leads${toQuery({
         status: opts?.status,
         productId: opts?.productId,
+        verticalId: opts?.verticalId,
       })}`,
     ),
 
@@ -2218,8 +2270,12 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  listMarketingJourneys: () =>
-    edgeRequest("/api/edge-backend/marketing/journeys"),
+  listMarketingJourneys: (opts?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/marketing/journeys${toQuery({
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   createMarketingJourney: (body: {
     code: string;
@@ -2281,14 +2337,20 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  listMarketingAnalyticsSnapshots: (scopeType?: string) =>
+  listMarketingAnalyticsSnapshots: (params?: { scopeType?: string; verticalId?: string }) =>
     edgeRequest(
-      `/api/edge-backend/marketing/analytics/snapshots${toQuery({ scopeType })}`,
+      `/api/edge-backend/marketing/analytics/snapshots${toQuery({
+        scopeType: params?.scopeType,
+        verticalId: params?.verticalId,
+      })}`,
     ),
 
-  getMarketingAnalyticsSummary: (scopeType?: string) =>
+  getMarketingAnalyticsSummary: (params?: { scopeType?: string; verticalId?: string }) =>
     edgeRequest(
-      `/api/edge-backend/marketing/analytics/summary${toQuery({ scopeType })}`,
+      `/api/edge-backend/marketing/analytics/summary${toQuery({
+        scopeType: params?.scopeType,
+        verticalId: params?.verticalId,
+      })}`,
     ),
 
   createMarketingAnalyticsSnapshot: (body: {
@@ -2323,7 +2385,10 @@ export const edgeApi = {
     }),
 
   // --- P4 Sales ---
-  getSalesOverview: () => edgeRequest("/api/edge-backend/sales/overview"),
+  getSalesOverview: (params?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/overview${toQuery({ verticalId: params?.verticalId })}`,
+    ),
 
   listSalesAccounts: (opts?: {
     status?: string;
@@ -2721,16 +2786,22 @@ export const edgeApi = {
   getSalesForecast: (opts?: {
     model?: string;
     productId?: string;
+    verticalId?: string;
   }) =>
     edgeRequest(
       `/api/edge-backend/sales/forecast${toQuery({
         model: opts?.model,
         productId: opts?.productId,
+        verticalId: opts?.verticalId,
       })}`,
     ),
 
-  getSalesPerformance: () =>
-    edgeRequest("/api/edge-backend/sales/analytics/performance"),
+  getSalesPerformance: (params?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/analytics/performance${toQuery({
+        verticalId: params?.verticalId,
+      })}`,
+    ),
 
   listSalesProposals: (opportunityId?: string) =>
     edgeRequest(
@@ -2826,11 +2897,23 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  listSalesVisibilityGrants: (subjectType: string, subjectId: string) =>
+  listSalesVisibilityGrants: (
+    subjectType: string,
+    subjectId: string,
+    verticalId?: string,
+  ) =>
     edgeRequest(
       `/api/edge-backend/sales/visibility/grants${toQuery({
         subjectType,
         subjectId,
+        verticalId,
+      })}`,
+    ),
+
+  listAllSalesVisibilityGrants: (opts?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/visibility/grants${toQuery({
+        verticalId: opts?.verticalId,
       })}`,
     ),
 
@@ -2877,20 +2960,26 @@ export const edgeApi = {
     q: string;
     visibilityMode?: string;
     limit?: number;
+    verticalId?: string;
   }) =>
     edgeRequest(
       `/api/edge-backend/sales/search${toQuery({
         q: opts.q,
         visibilityMode: opts.visibilityMode,
         limit: opts.limit,
+        verticalId: opts.verticalId,
       })}`,
     ),
 
   getSalesAccountHierarchy: (id: string) =>
     edgeRequest(`/api/edge-backend/sales/accounts/${id}/hierarchy`),
 
-  listSalesQuestionnaires: () =>
-    edgeRequest("/api/edge-backend/sales/questionnaires"),
+  listSalesQuestionnaires: (opts?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/questionnaires${toQuery({
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   createSalesQuestionnaire: (body: {
     code: string;
@@ -2921,11 +3010,20 @@ export const edgeApi = {
   exportSalesEntities: (body: {
     entityType: string;
     format?: "JSON" | "CSV";
+    verticalId?: string;
+    filters?: Record<string, unknown>;
   }) =>
     edgeRequest("/api/edge-backend/sales/exports", {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  listSalesExportJobs: (opts?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/exports${toQuery({
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   generateSalesProposalDocument: (id: string) =>
     edgeRequest(`/api/edge-backend/sales/proposals/${id}/document`, {
@@ -2957,11 +3055,27 @@ export const edgeApi = {
     periodType: string;
     periodKey: string;
     model?: string;
+    verticalId?: string;
   }) =>
     edgeRequest("/api/edge-backend/sales/forecast/snapshots", {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  listSalesForecastSnapshots: (opts?: {
+    periodType?: string;
+    periodKey?: string;
+    model?: string;
+    verticalId?: string;
+  }) =>
+    edgeRequest(
+      `/api/edge-backend/sales/forecast/snapshots${toQuery({
+        periodType: opts?.periodType,
+        periodKey: opts?.periodKey,
+        model: opts?.model,
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   addSalesAccountRelationship: (
     accountId: string,
@@ -3228,15 +3342,21 @@ export const edgeApi = {
     edgeRequest(`/api/edge-backend/sales/views/${id}`, { method: "DELETE" }),
 
   // --- P5 Subscriptions ---
-  getSubscriptionOverview: () =>
-    edgeRequest("/api/edge-backend/subscriptions/overview"),
+  getSubscriptionOverview: (params?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/overview${toQuery({ verticalId: params?.verticalId })}`,
+    ),
 
-  getSubscriptionAnalytics: () =>
-    edgeRequest("/api/edge-backend/subscriptions/analytics"),
+  getSubscriptionAnalytics: (params?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/subscriptions/analytics${toQuery({ verticalId: params?.verticalId })}`,
+    ),
 
   listSubscriptions: (opts?: {
     accountId?: string;
     productId?: string;
+    /** Workspace switch scope — produits de cette verticale uniquement. */
+    verticalId?: string;
     status?: string;
     limit?: number;
     offset?: number;
@@ -3245,6 +3365,7 @@ export const edgeApi = {
       `/api/edge-backend/subscriptions${toQuery({
         accountId: opts?.accountId,
         productId: opts?.productId,
+        verticalId: opts?.verticalId,
         status: opts?.status,
         limit: opts?.limit,
         offset: opts?.offset,
@@ -3668,11 +3789,18 @@ export const edgeApi = {
     ),
 
   // --- P6 Billing ---
-  getBillingOverview: () =>
-    edgeRequest("/api/edge-backend/billing/overview"),
+  getBillingOverview: (params?: { verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/billing/overview${toQuery({ verticalId: params?.verticalId })}`,
+    ),
 
-  getBillingAnalytics: () =>
-    edgeRequest("/api/edge-backend/billing/analytics"),
+  getBillingAnalytics: (params?: { currency?: string; verticalId?: string }) =>
+    edgeRequest(
+      `/api/edge-backend/billing/analytics${toQuery({
+        currency: params?.currency,
+        verticalId: params?.verticalId,
+      })}`,
+    ),
 
   listBillingAccounts: () =>
     edgeRequest<unknown[]>("/api/edge-backend/billing/accounts"),
@@ -3766,12 +3894,15 @@ export const edgeApi = {
   listBillingInvoices: (params?: {
     billingAccountId?: string;
     status?: string;
+    /** Workspace switch scope — factures des abonnements de cette verticale. */
+    verticalId?: string;
     limit?: number;
   }) =>
     edgeRequest<unknown[]>(
       `/api/edge-backend/billing/invoices${toQuery({
         billingAccountId: params?.billingAccountId,
         status: params?.status,
+        verticalId: params?.verticalId,
         limit: params?.limit,
       })}`,
     ),
@@ -3885,12 +4016,14 @@ export const edgeApi = {
     currency?: string;
     periodStart?: string;
     periodEnd?: string;
+    verticalId?: string;
   }) =>
     edgeRequest<{ data: Record<string, unknown> }>(
       `/api/edge-backend/billing/cash-truth${toQuery({
         currency: params?.currency,
         periodStart: params?.periodStart,
         periodEnd: params?.periodEnd,
+        verticalId: params?.verticalId,
       })}`,
     ),
 
@@ -4186,6 +4319,8 @@ export const edgeApi = {
     status?: string;
     accountId?: string;
     productId?: string;
+    /** Workspace switch scope — produits de cette verticale uniquement. */
+    verticalId?: string;
     subscriptionId?: string;
     environmentSlot?: string;
     from?: string;
@@ -4198,6 +4333,7 @@ export const edgeApi = {
         status: opts?.status,
         accountId: opts?.accountId,
         productId: opts?.productId,
+        verticalId: opts?.verticalId,
         subscriptionId: opts?.subscriptionId,
         environmentSlot: opts?.environmentSlot,
         from: opts?.from,
@@ -5210,12 +5346,6 @@ export const edgeApi = {
       `/api/edge-backend/resources/${id}/backups`,
       { method: "POST", body: JSON.stringify(body ?? {}) },
     ),
-
-  restoreResourceBackup: (id: string, body: Record<string, unknown>) =>
-    edgeRequest<unknown>(`/api/edge-backend/resources/${id}/restore`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
 
   deprovisionResource: (id: string, body?: Record<string, unknown>) =>
     edgeRequest<InfrastructureResourceRecord>(
@@ -6743,6 +6873,8 @@ export const edgeApi = {
   listTenants: (opts?: {
     q?: string;
     productId?: string;
+    /** Workspace switch scope — produits de cette verticale uniquement. */
+    verticalId?: string;
     accountId?: string;
     subscriptionId?: string;
     region?: string;
@@ -6763,6 +6895,7 @@ export const edgeApi = {
       `/api/edge-backend/tenants${toQuery({
         q: opts?.q,
         productId: opts?.productId,
+        verticalId: opts?.verticalId,
         accountId: opts?.accountId,
         subscriptionId: opts?.subscriptionId,
         region: opts?.region,
@@ -6791,14 +6924,18 @@ export const edgeApi = {
       `/api/edge-backend/tenants/${id}/360`,
     ),
 
-  getTenantPortfolioAnalytics: () =>
+  getTenantPortfolioAnalytics: (params?: { verticalId?: string }) =>
     edgeRequest<TenantPortfolioMetrics>(
-      `/api/edge-backend/tenant-management/analytics/portfolio`,
+      `/api/edge-backend/tenant-management/analytics/portfolio${toQuery({
+        verticalId: params?.verticalId,
+      })}`,
     ),
 
-  getTenantsAnalyticsPortfolio: () =>
+  getTenantsAnalyticsPortfolio: (params?: { verticalId?: string }) =>
     edgeRequest<TenantPortfolioMetrics>(
-      `/api/edge-backend/tenants/analytics/portfolio`,
+      `/api/edge-backend/tenants/analytics/portfolio${toQuery({
+        verticalId: params?.verticalId,
+      })}`,
     ),
 
   registerTenant: (body: {
@@ -7415,12 +7552,20 @@ export const edgeApi = {
       { method: "DELETE" },
     ),
 
-  getOperationsOverview: () =>
-    edgeRequest<OperationsOverview>(`/api/edge-backend/operations/overview`),
+  getOperationsOverview: (opts?: { verticalId?: string }) =>
+    edgeRequest<OperationsOverview>(
+      `/api/edge-backend/operations/overview${toQuery({
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   /** Mandate alias of overview. */
-  getOperationsHealth: () =>
-    edgeRequest<OperationsOverview>(`/api/edge-backend/operations/health`),
+  getOperationsHealth: (opts?: { verticalId?: string }) =>
+    edgeRequest<OperationsOverview>(
+      `/api/edge-backend/operations/health${toQuery({
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   recordServiceHealthSnapshot: (body: RecordHealthSnapshotBody) =>
     edgeRequest<unknown>(`/api/edge-backend/operations/health/snapshots`, {
@@ -7870,13 +8015,21 @@ export const edgeApi = {
       { method: "POST", body: JSON.stringify(body ?? {}) },
     ),
 
-  getOperationsAnalytics: () =>
-    edgeRequest<OperationsAnalytics>(`/api/edge-backend/operations/analytics`),
+  getOperationsAnalytics: (opts?: { verticalId?: string }) =>
+    edgeRequest<OperationsAnalytics>(
+      `/api/edge-backend/operations/analytics${toQuery({
+        verticalId: opts?.verticalId,
+      })}`,
+    ),
 
   // --- P10 Acquisition --------------------------------------------------------
 
-  getAcquisitionOverview: () =>
-    edgeRequest<AcquisitionOverview>(`/api/edge-backend/acquisition/overview`),
+  getAcquisitionOverview: (params?: { verticalId?: string }) =>
+    edgeRequest<AcquisitionOverview>(
+      `/api/edge-backend/acquisition/overview${toQuery({
+        verticalId: params?.verticalId,
+      })}`,
+    ),
 
   listAcquisitionProducts: (params?: AcquisitionListFilter) =>
     edgeRequest<AcquisitionListPage<ProductPresentation>>(
@@ -8323,11 +8476,13 @@ export const edgeApi = {
 
   getAcquisitionConversionFunnel: (params?: {
     prospectId?: string;
+    verticalId?: string;
     limit?: number;
   }) =>
     edgeRequest<ConversionFunnel>(
       `/api/edge-backend/acquisition/analytics/funnel${toQuery({
         prospectId: params?.prospectId,
+        verticalId: params?.verticalId,
         limit: params?.limit,
       })}`,
     ),
@@ -8435,11 +8590,16 @@ export const edgeApi = {
 
   // --- P11 Revenue Operations -------------------------------------------------
 
-  getRevenueOverview: (params?: { businessUnitId?: string; asOf?: string }) =>
+  getRevenueOverview: (params?: {
+    businessUnitId?: string;
+    asOf?: string;
+    verticalId?: string;
+  }) =>
     edgeRequest<RevenueOverview>(
       `/api/edge-backend/revenue/overview${toQuery({
         businessUnitId: params?.businessUnitId,
         asOf: params?.asOf,
+        verticalId: params?.verticalId,
       })}`,
     ),
 
@@ -8510,20 +8670,27 @@ export const edgeApi = {
     businessUnitId?: string;
     cohortId?: string;
     asOf?: string;
+    verticalId?: string;
   }) =>
     edgeRequest<RetentionOverview>(
       `/api/edge-backend/revenue/retention${toQuery({
         businessUnitId: params?.businessUnitId,
         cohortId: params?.cohortId,
         asOf: params?.asOf,
+        verticalId: params?.verticalId,
       })}`,
     ),
 
-  getRenewalIntelligence: (params?: { withinDays?: number; limit?: number }) =>
+  getRenewalIntelligence: (params?: {
+    withinDays?: number;
+    limit?: number;
+    verticalId?: string;
+  }) =>
     edgeRequest(
       `/api/edge-backend/revenue/renewals/intelligence${toQuery({
         withinDays: params?.withinDays,
         limit: params?.limit,
+        verticalId: params?.verticalId,
       })}`,
     ),
 
@@ -8588,11 +8755,16 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  listBusinessTargets: (params?: { limit?: number; offset?: number }) =>
+  listBusinessTargets: (params?: {
+    limit?: number;
+    offset?: number;
+    verticalId?: string;
+  }) =>
     edgeRequest(
       `/api/edge-backend/business/targets${toQuery({
         limit: params?.limit,
         offset: params?.offset,
+        verticalId: params?.verticalId,
       })}`,
     ),
 
@@ -8631,6 +8803,14 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
+  listRevenueForecasts: (params?: { verticalId?: string; status?: string }) =>
+    edgeRequest<RevenueForecast[]>(
+      `/api/edge-backend/revenue/forecasts${toQuery({
+        verticalId: params?.verticalId,
+        status: params?.status,
+      })}`,
+    ),
+
   createRevenueForecastScenario: (
     forecastId: string,
     body: CreateForecastScenarioBody,
@@ -8667,32 +8847,25 @@ export const edgeApi = {
       body: JSON.stringify(body),
     }),
 
-  /** Alias path when BFF exposes commission under /commission/* */
-  createCommissionPlanAlias: (body: CreateCommissionPlanBody) =>
-    edgeRequest<CommissionPlan>(`/api/edge-backend/commission/plans`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
   calculateCommission: (body: CalculateCommissionBody) =>
     edgeRequest<CommissionCalculation>(
       `/api/edge-backend/revenue/commission/calculations`,
       { method: "POST", body: JSON.stringify(body) },
     ),
 
-  calculateCommissionAlias: (body: CalculateCommissionBody) =>
-    edgeRequest<CommissionCalculation>(`/api/edge-backend/commission/calculations`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+  approveCommissionCalculation: (
+    id: string,
+    body: { notes?: string; expectedVersion?: number },
+  ) =>
+    edgeRequest<CommissionCalculation>(
+      `/api/edge-backend/commission/calculations/${encodeURIComponent(id)}/approve`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
 
   listCommissionPlans: () =>
     edgeRequest<CommissionPlansReadPlaceholder>(
       `/api/edge-backend/revenue/commission/plans`,
     ),
-
-  listCommissionPlansAlias: () =>
-    edgeRequest<CommissionPlansReadPlaceholder>(`/api/edge-backend/commission/plans`),
 
   listBusinessAudit: (params?: {
     aggregateType?: string;

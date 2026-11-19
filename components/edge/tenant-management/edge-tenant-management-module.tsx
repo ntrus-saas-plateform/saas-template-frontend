@@ -4,7 +4,7 @@
  * P8 — Edge Admin Console: Tenant Management Center.
  * Portfolio metrics, registry search, governance queues — API state only.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
@@ -21,6 +20,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -99,12 +103,32 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
 
 const READ_PERMS = TABS.map((t) => t.permission);
 
+const TM_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const TM_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Registry", itemIds: ["registry"] },
+  {
+    title: "Lifecycle",
+    itemIds: ["lifecycle", "exceptions", "migrations", "recoveries", "terminations"],
+  },
+  { title: "Governance", itemIds: ["reconciliation", "bulk"] },
+  { title: "Analytics", itemIds: ["analytics"] },
+];
+
 const PENDING_GOVERNANCE = ["WAITING_APPROVAL", "PENDING", "REQUESTED"];
 
 export function EdgeTenantManagementModule() {
-  const { permissions } = useEdgePlatform();
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading tenant management studio…" />}>
+      <EdgeTenantManagementStudio />
+    </Suspense>
+  );
+}
+
+function EdgeTenantManagementStudio() {
+  const { permissions, activeVerticalId } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("registry");
+  const [tab, setTab] = useStudioSectionParam<TabId>("registry", TM_SECTION_IDS);
 
   const [searchQ, setSearchQ] = useState("");
   const [adminFilter, setAdminFilter] = useState("");
@@ -237,19 +261,21 @@ export function EdgeTenantManagementModule() {
   const canBulk = hasEdgePermission(permissions, "platform:tenant_management:bulk:execute");
 
   const portfolioQ = useQuery({
-    queryKey: ["tm", "portfolio"],
-    queryFn: () => edgeApi.getTenantPortfolioAnalytics(),
+    queryKey: ["tm", "portfolio", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getTenantPortfolioAnalytics({ verticalId: activeVerticalId ?? undefined }),
     enabled: canAnalytics,
   });
 
   const tenantsQ = useQuery({
-    queryKey: ["tm", "tenants", appliedFilters],
+    queryKey: ["tm", "tenants", appliedFilters, activeVerticalId],
     queryFn: () =>
       edgeApi.listTenants({
         q: appliedFilters.q || undefined,
         administrativeStatus: appliedFilters.admin || undefined,
         technicalStatus: appliedFilters.tech || undefined,
         productId: appliedFilters.productId || undefined,
+        verticalId: activeVerticalId ?? undefined,
         region: appliedFilters.region || undefined,
         sortBy: appliedFilters.sortBy,
         sortDir: appliedFilters.sortDir,
@@ -587,6 +613,23 @@ export function EdgeTenantManagementModule() {
     [permissions],
   );
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(visibleTabs.map((t) => t.id));
+    return TM_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [visibleTabs]);
+
+  const activeTab = visibleTabs.some((t) => t.id === tab)
+    ? tab
+    : (visibleTabs[0]?.id ?? "registry");
+
   if (!hasAnyEdgePermission(permissions, READ_PERMS)) {
     return <EdgeForbiddenState />;
   }
@@ -651,13 +694,21 @@ export function EdgeTenantManagementModule() {
     executeBulk.error;
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="tm-module">
-      {actionError ? (
-        <Alert tone="error" title="Action refusée">
-          {(actionError as Error).message}
-        </Alert>
-      ) : null}
-
+    <EdgeStudioShell
+      title="Tenant management studio"
+      description="Portfolio registry, lifecycle queues, governance and analytics — API state only."
+      groups={studioGroups}
+      section={activeTab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="tm-module"
+      actions={
+        actionError ? (
+          <Alert tone="error" title="Action refusée">
+            {(actionError as Error).message}
+          </Alert>
+        ) : null
+      }
+    >
       {canAnalytics ? (
         <section data-testid="tm-portfolio-metrics">
           {portfolioQ.isLoading ? (
@@ -699,13 +750,7 @@ export function EdgeTenantManagementModule() {
         </section>
       ) : null}
 
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
-      {tab === "registry" && (
+      {activeTab === "registry" && (
         <EdgePermissionGate permission="platform:tenant_management:search">
           <div className="flex flex-col gap-[var(--space-4)]">
             <form
@@ -979,7 +1024,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "lifecycle" && (
+      {activeTab === "lifecycle" && (
         <EdgePermissionGate permission="platform:tenant_management:lifecycle:request">
           {lifecycleQ.isLoading ? (
             <EdgeLoadingState label="Loading lifecycle requests…" />
@@ -1022,7 +1067,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "exceptions" && (
+      {activeTab === "exceptions" && (
         <EdgePermissionGate permission="platform:tenant_management:exception:request">
           <Card>
             <CardHeader title="Request exception" />
@@ -1193,7 +1238,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "migrations" && (
+      {activeTab === "migrations" && (
         <EdgePermissionGate permission="platform:tenant_management:migration:request">
           <Card>
             <CardHeader title="Request migration" />
@@ -1287,7 +1332,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "recoveries" && (
+      {activeTab === "recoveries" && (
         <EdgePermissionGate permission="platform:tenant_management:recovery:request">
           <Card>
             <CardHeader title="Request recovery" />
@@ -1395,7 +1440,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "terminations" && (
+      {activeTab === "terminations" && (
         <EdgePermissionGate permission="platform:tenant_management:termination:request">
           <Card>
             <CardHeader title="Request termination" />
@@ -1480,7 +1525,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "reconciliation" && (
+      {activeTab === "reconciliation" && (
         <EdgePermissionGate permission="platform:tenant_management:reconciliation:execute">
           <Card>
             <CardHeader title="Run reconciliation" />
@@ -1591,7 +1636,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "bulk" && (
+      {activeTab === "bulk" && (
         <EdgePermissionGate permission="platform:tenant_management:bulk:execute">
           <Card data-testid="tm-bulk-form">
             <CardHeader title="Bulk operation (preview → execute)" />
@@ -1717,7 +1762,7 @@ export function EdgeTenantManagementModule() {
         </EdgePermissionGate>
       )}
 
-      {tab === "analytics" && (
+      {activeTab === "analytics" && (
         <EdgePermissionGate permission="platform:tenant_management:analytics:read">
           {portfolioQ.isLoading ? (
             <EdgeLoadingState label="Loading analytics…" />
@@ -1786,6 +1831,6 @@ export function EdgeTenantManagementModule() {
           )}
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

@@ -9,18 +9,11 @@ export const metadata: Metadata = {
 
 /**
  * Edge Admin Console — Revenue Operations (P11).
+ * Header chrome lives in EdgeStudioShell inside the module.
  */
 export default function EdgeRevenuePage() {
   return (
-    <div className="space-y-6 p-6" data-testid="edge-revenue-page">
-      <div>
-        <h1 className="text-2xl font-semibold">Revenue</h1>
-        <p className="text-sm text-muted-foreground">
-          Business &amp; revenue operations. Metrics come from stored snapshots
-          only — never fabricated. Contracted ≠ invoiced ≠ collected; GRR
-          excludes expansion.
-        </p>
-      </div>
+    <div className="p-6" data-testid="edge-revenue-page">
       <EdgeRevenueModule />
     </div>
   );

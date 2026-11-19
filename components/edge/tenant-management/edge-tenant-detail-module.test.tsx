@@ -5,6 +5,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const getTenant360 = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
+
 vi.mock("@/lib/api/edge", () => ({
   EdgeApiError: class EdgeApiError extends Error {
     status: number;

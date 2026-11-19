@@ -38,7 +38,7 @@ export default function InfrastructureResourceDetailPage() {
   if (q.isError || !q.data) {
     return <InfraError message={infrastructureErrMessage(q.error)} />;
   }
-  const r = q.data;
+  const r = q.data.data;
 
   return (
     <div className="flex flex-col gap-[var(--space-6)] p-[var(--space-6)]">
@@ -83,11 +83,11 @@ export default function InfrastructureResourceDetailPage() {
       </EdgePermissionGate>
       <section>
         <h2 className="type-md font-semibold mb-2">Backups</h2>
-        {(backupsQ.data?.items ?? []).length === 0 ? (
+        {(backupsQ.data?.data.items ?? []).length === 0 ? (
           <p className="type-sm text-[var(--text-muted)]">No backups</p>
         ) : (
           <ul className="type-sm space-y-1">
-            {(backupsQ.data?.items ?? []).map((b) => (
+            {(backupsQ.data?.data.items ?? []).map((b) => (
               <li key={b.id}>
                 {b.status} · integrity={String(b.integrityVerified)} ·{" "}
                 {formatInfraDate(b.startedAt)}
@@ -99,7 +99,7 @@ export default function InfrastructureResourceDetailPage() {
       <section>
         <h2 className="type-md font-semibold mb-2">History</h2>
         <ul className="type-sm space-y-1">
-          {(historyQ.data?.items ?? []).map((h) => (
+          {(historyQ.data?.data.items ?? []).map((h) => (
             <li key={h.id}>
               {formatInfraDate(h.createdAt)} — {h.action}
             </li>

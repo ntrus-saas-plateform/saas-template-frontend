@@ -38,6 +38,12 @@ vi.mock("@/providers/edge-platform-provider", () => ({
   }),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge/revenue",
+}));
+
 vi.mock("@/lib/api/edge", () => ({
   edgeApi: edgeApiMocks,
 }));
@@ -51,6 +57,10 @@ function renderModule() {
       <EdgeRevenueModule />
     </QueryClientProvider>,
   );
+}
+
+function clickSection(name: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
 }
 
 describe("EdgeRevenueModule", () => {
@@ -156,21 +166,21 @@ describe("EdgeRevenueModule", () => {
     });
   });
 
-  it("renders revenue tabs", async () => {
+  it("renders revenue studio sections", async () => {
     renderModule();
     const module = await screen.findByTestId("edge-revenue-module");
-    const tablist = within(module).getByRole("tablist");
-    expect(within(tablist).getByRole("tab", { name: "Overview" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Metrics" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "MRR" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Cash" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Retention" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Renewals" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Forecasts" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Assurance" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Commissions" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Alerts" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Reports" })).toBeInTheDocument();
+    const nav = within(module).getByTestId("edge-studio-section-nav");
+    expect(within(nav).getByRole("button", { name: "Overview" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Metrics" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "MRR" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Cash" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Retention" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Renewals" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Forecasts" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Assurance" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Commissions" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Alerts" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Reports" })).toBeInTheDocument();
   });
 
   it("F-P11-010: business:read alone does not unlock Overview (needs revenue:read)", async () => {
@@ -237,7 +247,7 @@ describe("EdgeRevenueModule", () => {
   it("lists metric definitions and publish affordance", async () => {
     renderModule();
     await screen.findByTestId("edge-revenue-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Metrics" }));
+    clickSection("Metrics");
     expect(await screen.findByTestId("rev-metrics-table")).toBeInTheDocument();
     expect(screen.getByText("MRR_ENDING")).toBeInTheDocument();
     expect(screen.getByTestId("publish-metric-MRR_ENDING")).toBeInTheDocument();
@@ -252,7 +262,7 @@ describe("EdgeRevenueModule", () => {
   it("retention tab surfaces UNAVAILABLE without inventing GRR", async () => {
     renderModule();
     await screen.findByTestId("edge-revenue-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Retention" }));
+    clickSection("Retention");
     expect(await screen.findByText(/Retention unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/not invented/i)).toBeInTheDocument();
   });

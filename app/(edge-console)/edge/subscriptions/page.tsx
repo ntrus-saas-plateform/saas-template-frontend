@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -105,10 +110,49 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
   },
 ];
 
+const SUBSCRIPTIONS_SECTION_IDS = TABS.map((t) => t.id) as Tab[];
+
+const SUBSCRIPTIONS_STUDIO_GROUPS: {
+  title: string;
+  itemIds: Tab[];
+}[] = [
+  { title: "Registry", itemIds: ["overview", "registry", "analytics"] },
+  {
+    title: "Lifecycle",
+    itemIds: [
+      "changes",
+      "renewals",
+      "trials",
+      "suspension",
+      "enterprise",
+      "policies",
+    ],
+  },
+  {
+    title: "Entitlements & provisioning",
+    itemIds: ["entitlements", "provisioning"],
+  },
+  { title: "Billing link", itemIds: ["billing"] },
+];
+
 export default function EdgeSubscriptionsPage() {
-  const { permissions, isLoading: platformLoading } = useEdgePlatform();
+  return (
+    <Suspense
+      fallback={<EdgeLoadingState label="Loading subscriptions studio…" />}
+    >
+      <EdgeSubscriptionsStudio />
+    </Suspense>
+  );
+}
+
+function EdgeSubscriptionsStudio() {
+  const { permissions, isLoading: platformLoading, activeVerticalId } =
+    useEdgePlatform();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useStudioSectionParam<Tab>(
+    "overview",
+    SUBSCRIPTIONS_SECTION_IDS,
+  );
   const [draftForm, setDraftForm] = useState({
     accountId: "",
     productId: "",
@@ -161,8 +205,9 @@ export default function EdgeSubscriptionsPage() {
   );
 
   const overviewQuery = useQuery({
-    queryKey: ["edge", "subscriptions", "overview"],
-    queryFn: () => edgeApi.getSubscriptionOverview(),
+    queryKey: ["edge", "subscriptions", "overview", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getSubscriptionOverview({ verticalId: activeVerticalId ?? undefined }),
     enabled:
       (tab === "overview" || tab === "policies") && canReadAny,
   });
@@ -175,17 +220,19 @@ export default function EdgeSubscriptionsPage() {
   });
 
   const analyticsQuery = useQuery({
-    queryKey: ["edge", "subscriptions", "analytics"],
-    queryFn: () => edgeApi.getSubscriptionAnalytics(),
+    queryKey: ["edge", "subscriptions", "analytics", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getSubscriptionAnalytics({ verticalId: activeVerticalId ?? undefined }),
     enabled: tab === "analytics" && canReadAny,
   });
 
   const listQuery = useQuery({
-    queryKey: ["edge", "subscriptions", "list", registryStatus],
+    queryKey: ["edge", "subscriptions", "list", registryStatus, activeVerticalId],
     queryFn: () =>
       edgeApi.listSubscriptions({
         limit: 50,
         status: registryStatus || undefined,
+        verticalId: activeVerticalId ?? undefined,
       }),
     enabled:
       (tab === "registry" ||
@@ -450,6 +497,17 @@ export default function EdgeSubscriptionsPage() {
       .filter((o): o is { id: string; label: string } => Boolean(o));
   }, [accountsQuery.data]);
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return SUBSCRIPTIONS_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .map((id) => TABS.find((t) => t.id === id))
+        .filter((t): t is (typeof TABS)[number] => Boolean(t))
+        .filter((t) => hasEdgePermission(permissions, t.permission))
+        .map((t) => ({ id: t.id, label: t.label })),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (platformLoading) {
     return <EdgeLoadingState label="Loading subscriptions…" />;
   }
@@ -465,40 +523,24 @@ export default function EdgeSubscriptionsPage() {
     | undefined;
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            Subscription &amp; Contract Lifecycle
-          </p>
+    <EdgeStudioShell
+      title="Subscriptions studio"
+      description="Contract registry, activation gates, entitlements, and renewals. P4 handoff feeds drafts; activation requires commercial validation plus provisioning and billing confirmation where applicable — not payment capture in this console."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as Tab)}
+      actions={
+        <>
           <LiveCompleteAdapterStatusBadge />
-        </div>
-        <h1 className="font-display text-3xl tracking-tight">
-          Okapi Edge Subscriptions
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Contract registry, activation gates, entitlements, and renewals. P4
-          handoff feeds drafts; activation requires commercial validation plus
-          provisioning and billing confirmation where applicable — not payment
-          capture in this console.
-        </p>
-      </header>
-
-      <nav className="flex flex-wrap gap-2 border-b border-border/60 pb-3">
-        {TABS.map((t) =>
-          hasEdgePermission(permissions, t.permission) ? (
-            <Button
-              key={t.id}
-              size="sm"
-              variant={tab === t.id ? "default" : "ghost"}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ) : null,
-        )}
-      </nav>
-
+          <Link
+            href="/edge/billing"
+            className="type-sm text-[var(--primary)] underline-offset-2 hover:underline"
+          >
+            Billing →
+          </Link>
+        </>
+      }
+    >
       {tab === "overview" ? (
         <EdgePermissionGate permission="platform:subscriptions:read_analytics">
           {overviewQuery.isLoading ? (
@@ -1326,7 +1368,7 @@ export default function EdgeSubscriptionsPage() {
           )}
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }
 

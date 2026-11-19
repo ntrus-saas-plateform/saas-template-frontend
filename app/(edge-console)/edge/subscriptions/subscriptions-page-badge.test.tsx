@@ -6,6 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const getLiveCompleteLabStatus = vi.fn();
 const getSubscriptionOverview = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("@/lib/api/edge", () => ({
   EdgeApiError: class EdgeApiError extends Error {
     status: number;
@@ -61,11 +66,13 @@ describe("subscriptions page adapter badge smoke", () => {
 
   it("renders LIVE badge from lab status API", async () => {
     getLiveCompleteLabStatus.mockResolvedValue({
-      paymentAdapter: "sandbox",
-      provisioningAdapter: "durable",
-      bbControlConfigured: true,
-      mode: "LIVE",
-      note: "ready",
+      data: {
+        paymentAdapter: "sandbox",
+        provisioningAdapter: "durable",
+        bbControlConfigured: true,
+        mode: "LIVE",
+        note: "ready",
+      },
     });
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -75,7 +82,7 @@ describe("subscriptions page adapter badge smoke", () => {
         <EdgeSubscriptionsPage />
       </QueryClientProvider>,
     );
-    expect(screen.getByText("Okapi Edge Subscriptions")).toBeTruthy();
+    expect(screen.getByText("Subscriptions studio")).toBeTruthy();
     expect(await screen.findByText("LIVE")).toBeTruthy();
   });
 });

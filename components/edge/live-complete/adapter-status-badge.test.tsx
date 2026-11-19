@@ -9,6 +9,11 @@ import {
 
 const getLiveCompleteLabStatus = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("@/lib/api/edge", () => ({
   edgeApi: {
     getLiveCompleteLabStatus: (...args: unknown[]) =>
@@ -47,11 +52,13 @@ describe("AdapterStatusBadge", () => {
 describe("LiveCompleteAdapterStatusBadge", () => {
   it("shows LIVE when API returns LIVE", async () => {
     getLiveCompleteLabStatus.mockResolvedValueOnce({
-      paymentAdapter: "sandbox",
-      provisioningAdapter: "durable",
-      bbControlConfigured: true,
-      mode: "LIVE",
-      note: "All good",
+      data: {
+        paymentAdapter: "sandbox",
+        provisioningAdapter: "durable",
+        bbControlConfigured: true,
+        mode: "LIVE",
+        note: "All good",
+      },
     });
     wrap(<LiveCompleteAdapterStatusBadge />);
     expect(await screen.findByText("LIVE")).toBeTruthy();

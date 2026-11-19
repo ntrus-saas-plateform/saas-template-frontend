@@ -7,7 +7,7 @@
  * NEVER invents SUSPENDED/DEPROVISIONED — status badges reflect API state only.
  * Technical lifecycle ≠ commercial Subscription status.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -23,6 +22,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -42,6 +46,13 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "History",
     permission: "platform:lifecycle:history:read",
   },
+];
+
+const LC_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const LC_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Records", itemIds: ["records"] },
+  { title: "Audit", itemIds: ["history"] },
 ];
 
 function statusTone(
@@ -83,9 +94,17 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 export function EdgeLifecycleModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading lifecycle studio…" />}>
+      <EdgeLifecycleStudio />
+    </Suspense>
+  );
+}
+
+function EdgeLifecycleStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("records");
+  const [tab, setTab] = useStudioSectionParam<TabId>("records", LC_SECTION_IDS);
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [historyRecordId, setHistoryRecordId] = useState("");
 
@@ -198,10 +217,22 @@ export function EdgeLifecycleModule() {
     },
   });
 
-  const visibleTabs = useMemo(
-    () => TABS.filter((t) => hasEdgePermission(permissions, t.permission)),
-    [permissions],
-  );
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(
+      TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map(
+        (t) => t.id,
+      ),
+    );
+    return LC_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
 
   if (!hasAnyEdgePermission(permissions, ["platform:lifecycle:read"])) {
     return <EdgeForbiddenState />;
@@ -264,18 +295,20 @@ export function EdgeLifecycleModule() {
     deprovisionRecord.error;
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="lc-module">
+    <EdgeStudioShell
+      title="Lifecycle studio"
+      description="Technical suspend / resume / deprovision via P7.4 — never invents SUSPENDED/DEPROVISIONED."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="lc-module"
+    >
       {actionError ? (
         <Alert tone="error" title="Action refusée">
           {(actionError as Error).message}
         </Alert>
       ) : null}
 
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
 
       {tab === "records" && (
         <EdgePermissionGate permission="platform:lifecycle:read">
@@ -662,6 +695,6 @@ export function EdgeLifecycleModule() {
           </div>
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useEffect,
   useMemo,
   useState,
@@ -12,6 +13,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
+import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   CapacityFreshnessBadge,
@@ -27,6 +29,11 @@ import {
   formatPlacementDate,
   shortId,
 } from "@/components/edge/placement/shared";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi } from "@/lib/api/edge";
 import {
   CAPACITY_INVENTORY_STATUS_OPTIONS,
@@ -91,6 +98,14 @@ const TABS: { id: TabId; label: string; permissions: string[] }[] = [
 
 const LIMIT = 20;
 
+const CAPACITY_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const CAPACITY_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Overview", itemIds: ["overview"] },
+  { title: "Requests", itemIds: ["requests"] },
+  { title: "Capacity", itemIds: ["capacity", "policies"] },
+];
+
 function newIdempotencyKey() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -98,6 +113,14 @@ function newIdempotencyKey() {
 }
 
 export default function PlacementCapacityPage() {
+  return (
+    <Suspense fallback={<PlacementLoading />}>
+      <PlacementCapacityStudio />
+    </Suspense>
+  );
+}
+
+function PlacementCapacityStudio() {
   const { permissions, isLoading: platformLoading } = useEdgePlatform();
   const queryClient = useQueryClient();
 
@@ -107,7 +130,10 @@ export default function PlacementCapacityPage() {
     [permissions],
   );
 
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useStudioSectionParam<TabId>(
+    "overview",
+    CAPACITY_SECTION_IDS,
+  );
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0);
@@ -126,7 +152,7 @@ export default function PlacementCapacityPage() {
     ) {
       setTab(allowed);
     }
-  }, [permissions, tab]);
+  }, [permissions, tab, setTab]);
 
   const canRequest = hasEdgePermission(permissions, "platform:placement:request");
   const canEvaluate = hasEdgePermission(
@@ -228,6 +254,38 @@ export default function PlacementCapacityPage() {
     queryFn: () => edgeApi.listRegistryProducts({ limit: 100 }),
     enabled: canRequest && tab === "requests",
   });
+
+  const provisioningRequestsQuery = useQuery({
+    queryKey: ["edge", "provisioning-requests", "placement-select"],
+    queryFn: async () => {
+      const res = await edgeApi.listProvisioningRequests({ limit: 100 });
+      return res.data ?? res;
+    },
+    enabled: canRequest && tab === "requests",
+    retry: false,
+  });
+
+  const provisioningRequestOptions = useMemo(() => {
+    const raw = provisioningRequestsQuery.data as
+      | { items?: unknown[] }
+      | unknown[]
+      | undefined;
+    const items = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.items)
+        ? raw.items
+        : [];
+    return items
+      .map((row) => {
+        const r = row as Record<string, unknown>;
+        const id = typeof r.id === "string" ? r.id : "";
+        if (!id) return null;
+        const status = typeof r.status === "string" ? r.status : "";
+        const label = status ? `${id.slice(0, 8)}… · ${status}` : id;
+        return { id, label };
+      })
+      .filter((o): o is { id: string; label: string } => Boolean(o));
+  }, [provisioningRequestsQuery.data]);
 
   const [requestForm, setRequestForm] = useState({
     provisioningRequestId: "",
@@ -422,6 +480,23 @@ export default function PlacementCapacityPage() {
     setFormError(null);
   };
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return CAPACITY_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const t = TABS.find((x) => x.id === id);
+          return t
+            ? hasAnyEdgePermission(permissions, t.permissions)
+            : false;
+        })
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (platformLoading) return <PlacementLoading />;
   if (!canReadAny) {
     return (
@@ -454,41 +529,25 @@ export default function PlacementCapacityPage() {
   }>;
 
   return (
-    <div className="space-y-[var(--space-6)] p-[var(--space-4)] md:p-[var(--space-6)]">
-      <header className="space-y-[var(--space-2)]">
-        <p className="type-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          Ecosystem Management · P7.3 Placement
-        </p>
-        <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-          Placement & Capacity
-        </h1>
-        <p className="max-w-3xl type-sm text-[var(--text-secondary)]">
-          Evaluate placement requests against registry snapshots and live
-          capacity inventory. Confirm holds capacity; no free-form tenant-id
-          auth substitute.
-        </p>
-      </header>
-
-      <nav className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-3">
-        {TABS.map((t) =>
-          hasAnyEdgePermission(permissions, t.permissions) ? (
-            <Button
-              key={t.id}
-              size="sm"
-              variant={tab === t.id ? "primary" : "ghost"}
-              onClick={() => switchTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ) : null,
-        )}
-      </nav>
-
-      {formError ? (
-        <p className="type-sm text-[var(--danger)]" role="alert">
-          {formError}
-        </p>
-      ) : null}
+    <EdgeStudioShell
+      title="Placement & capacity studio"
+      description="Evaluate placement requests against registry snapshots and live capacity inventory. Confirm holds capacity; no free-form tenant-id auth substitute."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => switchTab(id as TabId)}
+      className="p-[var(--space-4)] md:p-[var(--space-6)]"
+      actions={
+        formError ? (
+          <p className="type-sm text-[var(--danger)]" role="alert">
+            {formError}
+          </p>
+        ) : (
+          <p className="type-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            Ecosystem Management · P7.3 Placement
+          </p>
+        )
+      }
+    >
 
       {tab === "overview" ? (
         <OverviewTab
@@ -520,6 +579,7 @@ export default function PlacementCapacityPage() {
             canCancel={canCancel}
             requestForm={requestForm}
             setRequestForm={setRequestForm}
+            provisioningRequestOptions={provisioningRequestOptions}
             registryProducts={registryProducts}
             versions={versions}
             contracts={contracts}
@@ -676,7 +736,7 @@ export default function PlacementCapacityPage() {
           />
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }
 
@@ -853,6 +913,7 @@ function RequestsTab({
   canCancel,
   requestForm,
   setRequestForm,
+  provisioningRequestOptions,
   registryProducts,
   versions,
   contracts,
@@ -891,6 +952,7 @@ function RequestsTab({
     idempotencyKey: string;
   };
   setRequestForm: Dispatch<SetStateAction<typeof requestForm>>;
+  provisioningRequestOptions: { id: string; label: string }[];
   registryProducts: ProductRegistryRecord[];
   versions: ProductTechnicalVersion[];
   contracts: ProductControlContract[];
@@ -929,18 +991,19 @@ function RequestsTab({
             Commercial identity comes from the provisioning authorization view.
             Do not supply a free-form tenant-id.
           </p>
-          <input
-            className={fieldControlClass}
+          <ListOrUuidField
             required
-            placeholder="Provisioning request ID (UUID)"
+            aria-label="Provisioning request ID"
             value={requestForm.provisioningRequestId}
-            onChange={(e) =>
+            onChange={(v) =>
               setRequestForm((prev) => ({
                 ...prev,
-                provisioningRequestId: e.target.value,
+                provisioningRequestId: v,
               }))
             }
-            aria-label="Provisioning request ID"
+            options={provisioningRequestOptions}
+            placeholder="Select provisioning request…"
+            fallbackPlaceholder="Provisioning request ID (UUID)"
           />
           <input
             className={fieldControlClass}

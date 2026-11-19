@@ -5,7 +5,6 @@
  * context (workspace + crumbs) | jump search | create · env · health · inbox · help · account
  */
 import {
-  useEffect,
   useMemo,
   useState,
   type ComponentProps,
@@ -269,9 +268,10 @@ export function EdgeTopBar({
   ]);
 
   const healthQ = useQuery({
-    queryKey: ["edge", "header", "ops-health"],
+    queryKey: ["edge", "header", "ops-health", activeVerticalId ?? "all"],
     enabled: canOpsOverview,
-    queryFn: () => edgeApi.getOperationsHealth(),
+    queryFn: () =>
+      edgeApi.getOperationsHealth({ verticalId: activeVerticalId ?? undefined }),
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
@@ -312,10 +312,12 @@ export function EdgeTopBar({
     activeWorkspace?.vertical?.name ??
     activeWorkspace?.vertical?.code ??
     null;
-  const [modKey, setModKey] = useState("Ctrl");
-  useEffect(() => {
-    if (/Mac|iPhone|iPad/i.test(navigator.platform)) setModKey("⌘");
-  }, []);
+  const [modKey] = useState(() =>
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/i.test(navigator.platform)
+      ? "⌘"
+      : "Ctrl",
+  );
 
   const copyEmail = async () => {
     if (!email) return;

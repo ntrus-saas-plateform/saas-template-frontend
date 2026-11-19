@@ -2,27 +2,33 @@
 
 /**
  * P11 — Edge Admin Console: SaaS Business & Revenue Operations.
- * Tabbed control plane — API state only; never invent financial amounts.
+ * Studio control plane — API state only; never invent financial amounts.
  * contracted ≠ invoiced ≠ collected; GRR excludes expansion.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import {
   EdgeEmptyState,
   EdgeErrorState,
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi } from "@/lib/api/edge";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
 import type {
+  CommissionCalculation,
   DataQuality,
   MetricDefinition,
+  RevenueForecast,
   RevenueOverview,
   RevenueOverviewMetric,
 } from "@/types/edge-revenue-operations";
@@ -52,6 +58,18 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
   { id: "commissions", label: "Commissions", permission: "platform:commission:read" },
   { id: "alerts", label: "Alerts", permission: "platform:business:read" },
   { id: "reports", label: "Reports", permission: "platform:business:governance:manage" },
+];
+
+const REV_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const REV_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Overview", itemIds: ["overview", "metrics"] },
+  {
+    title: "Revenue",
+    itemIds: ["mrr", "cash", "retention", "renewals", "forecasts"],
+  },
+  { title: "Assurance", itemIds: ["assurance", "commissions"] },
+  { title: "Ops", itemIds: ["alerts", "reports"] },
 ];
 
 const READ_ANY = [
@@ -217,7 +235,15 @@ function MetricRow({ m }: { m: RevenueOverviewMetric }) {
 }
 
 export function EdgeRevenueModule() {
-  const { permissions } = useEdgePlatform();
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading revenue studio…" />}>
+      <EdgeRevenueStudio />
+    </Suspense>
+  );
+}
+
+function EdgeRevenueStudio() {
+  const { permissions, activeVerticalId } = useEdgePlatform();
   const qc = useQueryClient();
   const canRead = hasAnyEdgePermission(permissions, READ_ANY);
   const canManageMetrics = hasEdgePermission(
@@ -230,6 +256,10 @@ export function EdgeRevenueModule() {
     permissions,
     "platform:commission:calculate",
   );
+  const canCommissionApprove = hasEdgePermission(
+    permissions,
+    "platform:commission:approve",
+  );
 
   // F-P11-010: Overview requires platform:revenue:read (aligned with BE) — no business:read bypass.
   const visibleTabs = useMemo(
@@ -237,14 +267,15 @@ export function EdgeRevenueModule() {
     [permissions],
   );
 
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useStudioSectionParam<TabId>("overview", REV_SECTION_IDS);
   const activeTab = visibleTabs.some((t) => t.id === tab)
     ? tab
     : (visibleTabs[0]?.id ?? "overview");
 
   const overviewQuery = useQuery({
-    queryKey: ["edge", "revenue", "overview"],
-    queryFn: () => edgeApi.getRevenueOverview(),
+    queryKey: ["edge", "revenue", "overview", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getRevenueOverview({ verticalId: activeVerticalId ?? undefined }),
     enabled: canRead && (activeTab === "overview" || activeTab === "metrics"),
   });
 
@@ -255,13 +286,17 @@ export function EdgeRevenueModule() {
   });
 
   const retentionQuery = useQuery({
-    queryKey: ["edge", "revenue", "retention"],
+    queryKey: ["edge", "revenue", "retention", activeVerticalId],
     queryFn: async () => {
       try {
-        return await edgeApi.getRevenueRetentionOverview();
+        return await edgeApi.getRevenueRetentionOverview({
+          verticalId: activeVerticalId ?? undefined,
+        });
       } catch (err) {
         // Fallback: derive GRR/NRR cells from revenue overview (no invented numbers)
-        const ov = await edgeApi.getRevenueOverview();
+        const ov = await edgeApi.getRevenueOverview({
+          verticalId: activeVerticalId ?? undefined,
+        });
         const overview = unwrapData<RevenueOverview>(ov) ?? (ov as { data?: RevenueOverview }).data;
         const metrics = overview?.metrics ?? [];
         const grr = metrics.find((m) => m.metricCode === "GRR") ?? null;
@@ -300,10 +335,26 @@ export function EdgeRevenueModule() {
   });
 
   const renewalsQuery = useQuery({
-    queryKey: ["edge", "revenue", "renewals"],
-    queryFn: () => edgeApi.getRenewalIntelligence({ withinDays: 90, limit: 50 }),
+    queryKey: ["edge", "revenue", "renewals", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getRenewalIntelligence({
+        withinDays: 90,
+        limit: 50,
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled: canRead && activeTab === "renewals",
   });
+
+  const forecastsQuery = useQuery({
+    queryKey: ["edge", "revenue", "forecasts", activeVerticalId],
+    queryFn: () =>
+      edgeApi.listRevenueForecasts({
+        verticalId: activeVerticalId ?? undefined,
+      }),
+    enabled: canRead && canForecast && activeTab === "forecasts",
+  });
+  const forecastItems: RevenueForecast[] =
+    unwrapData<RevenueForecast[]>(forecastsQuery.data) ?? [];
 
   const alertsQuery = useQuery({
     queryKey: ["edge", "business", "alerts"],
@@ -404,6 +455,7 @@ export function EdgeRevenueModule() {
         horizonStart: forecastStart,
         horizonEnd: forecastEnd,
         currency: forecastCurrency,
+        verticalId: activeVerticalId ?? undefined,
       }),
     onSuccess: (res) => {
       const f = unwrapData<{ id: string; code: string; status: string }>(res);
@@ -412,6 +464,7 @@ export function EdgeRevenueModule() {
           ? `Forecast ${f.code} created (${f.status}) — full models deferred.`
           : "Forecast created.",
       );
+      void qc.invalidateQueries({ queryKey: ["edge", "revenue", "forecasts"] });
     },
     onError: (e) => setForecastMsg(errMsg(e)),
   });
@@ -444,6 +497,16 @@ export function EdgeRevenueModule() {
   const [planName, setPlanName] = useState("");
   const [planFrom, setPlanFrom] = useState("");
   const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const [calcPlanId, setCalcPlanId] = useState("");
+  const [calcKey, setCalcKey] = useState("");
+  const [calcStart, setCalcStart] = useState("");
+  const [calcEnd, setCalcEnd] = useState("");
+  const [calcBasis, setCalcBasis] = useState("");
+  const [calculation, setCalculation] = useState<CommissionCalculation | null>(
+    null,
+  );
+  const [calcMsg, setCalcMsg] = useState<string | null>(null);
+  const [approveMsg, setApproveMsg] = useState<string | null>(null);
 
   const [churnStart, setChurnStart] = useState("");
   const [churnEnd, setChurnEnd] = useState("");
@@ -540,6 +603,57 @@ export function EdgeRevenueModule() {
     onError: (e) => setPlanMsg(errMsg(e)),
   });
 
+  const calculateMutation = useMutation({
+    mutationFn: () =>
+      edgeApi.calculateCommission({
+        planId: calcPlanId.trim(),
+        calculationKey: calcKey.trim(),
+        periodStart: calcStart,
+        periodEnd: calcEnd,
+        basisAmount: calcBasis ? Number(calcBasis) : null,
+      }),
+    onSuccess: (res) => {
+      const c = unwrapData<CommissionCalculation>(res);
+      setCalculation(c);
+      setCalcMsg(
+        c
+          ? `Snapshot ${c.id.slice(0, 8)} — ${c.status} (${c.dataQuality}).`
+          : "Calculation recorded.",
+      );
+      setApproveMsg(null);
+    },
+    onError: (e) => setCalcMsg(errMsg(e)),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: () => {
+      if (!calculation) throw new Error("No calculation selected.");
+      return edgeApi.approveCommissionCalculation(calculation.id, {
+        expectedVersion: calculation.version,
+      });
+    },
+    onSuccess: (res) => {
+      const c = unwrapData<CommissionCalculation>(res);
+      if (c) setCalculation(c);
+      setApproveMsg(c ? `Calculation ${c.status.toLowerCase()}.` : "Approved.");
+      void qc.invalidateQueries({ queryKey: ["edge", "revenue", "commission"] });
+    },
+    onError: (e) => setApproveMsg(errMsg(e)),
+  });
+
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(visibleTabs.map((t) => t.id));
+    return REV_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [visibleTabs]);
+
   if (!canRead) {
     return (
       <EdgeForbiddenState description="Requires platform:revenue:read (or a scoped revenue/business permission for other tabs)." />
@@ -558,18 +672,14 @@ export function EdgeRevenueModule() {
   const metricDefs = unwrapPage<MetricDefinition>(metricsQuery.data);
 
   return (
-    <div className="space-y-4" data-testid="edge-revenue-module">
-      <p className="type-sm text-[var(--text-secondary)]">
-        Analytics &amp; workflows only — no invoice/payment/subscription writes.
-        Contracted ≠ invoiced ≠ collected. GRR excludes expansion.
-      </p>
-
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={activeTab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
+    <EdgeStudioShell
+      title="Revenue studio"
+      description="Analytics & workflows only — no invoice/payment/subscription writes. Contracted ≠ invoiced ≠ collected. GRR excludes expansion."
+      groups={studioGroups}
+      section={activeTab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="edge-revenue-module"
+    >
       {activeTab === "overview" ? (
         <section className="space-y-3" data-testid="rev-overview">
           <h2 className="type-md font-semibold">Revenue overview</h2>
@@ -1051,11 +1161,31 @@ export function EdgeRevenueModule() {
           )}
           {forecastMsg ? (
             <p className="type-sm text-[var(--text-secondary)]">{forecastMsg}</p>
-          ) : (
+          ) : null}
+          {forecastsQuery.isLoading ? (
+            <EdgeLoadingState label="Loading forecasts..." />
+          ) : forecastItems.length === 0 ? (
             <EdgeEmptyState
-              title="No forecast workflow UI yet"
-              description="Create a DRAFT forecast via API. Publish/approve and rich models are deferred."
+              title="No forecasts yet"
+              description="Create a DRAFT forecast below. Publish/approve and rich models are deferred."
             />
+          ) : (
+            <ul className="space-y-2" data-testid="forecasts-list">
+              {forecastItems.map((f) => (
+                <li
+                  key={f.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] px-3 py-2"
+                >
+                  <span className="type-sm font-medium">
+                    {f.code} — {f.name}
+                  </span>
+                  <span className="type-xs text-[var(--text-tertiary)]">
+                    {f.status} · {f.currency} ·{" "}
+                    {String(f.verticalId ?? "platform-wide")}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       ) : null}
@@ -1243,6 +1373,117 @@ export function EdgeRevenueModule() {
               </Button>
             </div>
           ) : null}
+          {canCommissionCalc ? (
+            <div
+              className="space-y-[var(--space-2)] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-[var(--space-3)]"
+              data-testid="commission-calc-panel"
+            >
+              <p className="type-sm font-semibold">Calculate snapshot</p>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  className={fieldControlClass}
+                  placeholder="Plan id (uuid)"
+                  aria-label="Calculation plan id"
+                  value={calcPlanId}
+                  onChange={(e) => setCalcPlanId(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  placeholder="Calculation key"
+                  aria-label="Calculation key"
+                  value={calcKey}
+                  onChange={(e) => setCalcKey(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  aria-label="Calculation period start"
+                  value={calcStart}
+                  onChange={(e) => setCalcStart(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  aria-label="Calculation period end"
+                  value={calcEnd}
+                  onChange={(e) => setCalcEnd(e.target.value)}
+                />
+                <input
+                  className={fieldControlClass}
+                  type="number"
+                  placeholder="Basis amount (optional)"
+                  aria-label="Basis amount"
+                  value={calcBasis}
+                  onChange={(e) => setCalcBasis(e.target.value)}
+                />
+                <Button
+                  disabled={
+                    !calcPlanId.trim() ||
+                    !calcKey.trim() ||
+                    !calcStart ||
+                    !calcEnd ||
+                    calculateMutation.isPending
+                  }
+                  onClick={() => calculateMutation.mutate()}
+                  data-testid="calculate-commission"
+                >
+                  {calculateMutation.isPending ? "Calculating..." : "Calculate"}
+                </Button>
+              </div>
+              {calcMsg ? (
+                <p className="type-sm text-[var(--text-secondary)]">{calcMsg}</p>
+              ) : null}
+              {calculation ? (
+                <div
+                  className="space-y-[var(--space-2)] rounded-[var(--radius-sm)] border border-[var(--border)] p-[var(--space-3)]"
+                  data-testid="commission-calc-result"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      tone={
+                        calculation.status === "APPROVED"
+                          ? "success"
+                          : calculation.status === "REJECTED" ||
+                              calculation.status === "SUPERSEDED"
+                            ? "danger"
+                            : "info"
+                      }
+                    >
+                      {calculation.status}
+                    </Badge>
+                    <span className="type-sm font-mono">
+                      {calculation.totalAmount != null
+                        ? `${calculation.totalAmount} ${calculation.currency}`
+                        : "Amount unavailable — no basis (never invented)"}
+                    </span>
+                    <span className="type-xs text-[var(--text-muted)]">
+                      quality {calculation.dataQuality} · v
+                      {calculation.version}
+                    </span>
+                  </div>
+                  {canCommissionApprove &&
+                  (calculation.status === "CALCULATED" ||
+                    calculation.status === "PENDING_APPROVAL") ? (
+                    <Button
+                      variant="outline"
+                      disabled={approveMutation.isPending}
+                      onClick={() => approveMutation.mutate()}
+                      data-testid="approve-commission"
+                    >
+                      {approveMutation.isPending
+                        ? "Approving..."
+                        : "Approve (SoD)"}
+                    </Button>
+                  ) : null}
+                  {approveMsg ? (
+                    <p className="type-sm text-[var(--text-secondary)]">
+                      {approveMsg}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {planMsg ? (
             <p className="type-sm text-[var(--text-secondary)]">{planMsg}</p>
           ) : null}
@@ -1384,6 +1625,6 @@ export function EdgeRevenueModule() {
           </QueryShell>
         </section>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

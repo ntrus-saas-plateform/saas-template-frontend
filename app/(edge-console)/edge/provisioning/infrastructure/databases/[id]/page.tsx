@@ -41,7 +41,7 @@ export default function DatabaseDetailPage() {
   if (q.isError || !q.data) {
     return <InfraError message={infrastructureErrMessage(q.error)} />;
   }
-  const d = q.data;
+  const d = q.data.data;
 
   return (
     <div className="flex flex-col gap-[var(--space-6)] p-[var(--space-6)]">
@@ -127,7 +127,7 @@ export default function DatabaseDetailPage() {
           <InfraLoading />
         ) : (
           <ul className="type-sm space-y-1">
-            {(historyQ.data?.items ?? []).map((h) => (
+            {(historyQ.data?.data.items ?? []).map((h) => (
               <li key={h.id}>
                 {formatInfraDate(h.createdAt)} — {h.action} {h.fromStatus}→{h.toStatus}
               </li>

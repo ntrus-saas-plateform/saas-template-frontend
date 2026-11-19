@@ -40,7 +40,7 @@ export default defineConfig({
               storageState,
             },
             testMatch:
-              /edge-(marketing|commercial|sales|subscriptions|billing)-scenarios\.spec\.ts/,
+              /edge-(marketing|commercial|sales|subscriptions|billing)-scenarios\.spec\.ts|edge-studio-smoke\.spec\.ts/,
             dependencies: ["edge-auth-setup"],
           },
         ]

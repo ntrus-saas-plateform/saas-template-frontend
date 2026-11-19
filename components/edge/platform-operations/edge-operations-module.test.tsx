@@ -56,6 +56,11 @@ const edgeApiMocks = vi.hoisted(() => ({
   createAutomation: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("@/providers/edge-platform-provider", () => ({
   useEdgePlatform: () => ({
     permissions: [
@@ -188,18 +193,18 @@ describe("EdgeOperationsModule", () => {
   it("renders operation center tabs", async () => {
     renderModule();
     const module = await screen.findByTestId("edge-operations-module");
-    const tablist = within(module).getByRole("tablist");
-    expect(within(tablist).getByRole("tab", { name: "Overview" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Services" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Alerts" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Incidents" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Automation" })).toBeInTheDocument();
+    const nav = within(module).getByTestId("edge-studio-section-nav");
+    expect(within(nav).getByRole("button", { name: "Overview" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Services" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Alerts" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Incidents" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Automation" })).toBeInTheDocument();
   });
 
   it("switches to Services tab and shows empty catalog", async () => {
     renderModule();
     await screen.findByTestId("edge-operations-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Services" }));
+    fireEvent.click(screen.getByRole("button", { name: "Services" }));
     expect(
       await screen.findByText(/No platform services registered/i),
     ).toBeInTheDocument();
@@ -209,7 +214,7 @@ describe("EdgeOperationsModule", () => {
   it("switches to Alerts tab and shows empty state", async () => {
     renderModule();
     await screen.findByTestId("edge-operations-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Alerts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Alerts" }));
     expect(await screen.findByText(/No alerts/i)).toBeInTheDocument();
     expect(edgeApiMocks.listOperationalAlerts).toHaveBeenCalled();
   });
@@ -217,7 +222,7 @@ describe("EdgeOperationsModule", () => {
   it("switches to Automation tab and loads automations", async () => {
     renderModule();
     await screen.findByTestId("edge-operations-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Automation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Automation" }));
     expect(await screen.findByText(/No automations/i)).toBeInTheDocument();
     expect(edgeApiMocks.listAutomations).toHaveBeenCalled();
   });
@@ -225,7 +230,7 @@ describe("EdgeOperationsModule", () => {
   it("switches to Releases tab and loads real release registry", async () => {
     renderModule();
     await screen.findByTestId("edge-operations-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Releases" }));
+    fireEvent.click(screen.getByRole("button", { name: "Releases" }));
     expect(await screen.findByText(/No releases/i)).toBeInTheDocument();
     expect(edgeApiMocks.listReleases).toHaveBeenCalled();
     expect(edgeApiMocks.listChanges).not.toHaveBeenCalled();
@@ -234,7 +239,7 @@ describe("EdgeOperationsModule", () => {
   it("switches to Notifications tab and loads deliveries", async () => {
     renderModule();
     await screen.findByTestId("edge-operations-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Notifications" }));
+    fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
     expect(await screen.findByText(/No notification deliveries/i)).toBeInTheDocument();
     expect(edgeApiMocks.listNotificationDeliveries).toHaveBeenCalled();
   });
@@ -242,7 +247,7 @@ describe("EdgeOperationsModule", () => {
   it("loads monitoring probes under Alerts without inventing CONNECTED status", async () => {
     renderModule();
     await screen.findByTestId("edge-operations-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Alerts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Alerts" }));
     expect(await screen.findByText(/No probe results/i)).toBeInTheDocument();
     expect(edgeApiMocks.listMonitoringProbes).toHaveBeenCalled();
     expect(screen.queryByTestId("ops-probes-table")).not.toBeInTheDocument();

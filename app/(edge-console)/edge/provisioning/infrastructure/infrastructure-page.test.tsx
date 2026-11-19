@@ -12,6 +12,11 @@ const listDatabaseResources = vi.fn();
 const listRegistryProducts = vi.fn();
 const reconcileInfrastructureResource = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
@@ -113,7 +118,7 @@ describe("InfrastructurePage", () => {
   it("renders overview counts", async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Providers")).toBeTruthy());
-    expect(screen.getByText("Infrastructure & Database Management")).toBeTruthy();
+    expect(screen.getByText("Infrastructure studio")).toBeTruthy();
   });
 
   it("lists resources and allows reconcile", async () => {

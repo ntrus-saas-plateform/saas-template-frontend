@@ -60,7 +60,8 @@ function errMessage(err: unknown): string {
 }
 
 export default function ProvisioningRequestsPage() {
-  const { permissions, isLoading: platformLoading } = useEdgePlatform();
+  const { permissions, isLoading: platformLoading, activeVerticalId } =
+    useEdgePlatform();
   const canRead = hasEdgePermission(
     permissions,
     "platform:provisioning_requests:read",
@@ -84,12 +85,14 @@ export default function ProvisioningRequestsPage() {
       "edge",
       "provisioning-requests",
       { status, accountId, productId, subscriptionId, environmentSlot, offset },
+      activeVerticalId,
     ],
     queryFn: () =>
       edgeApi.listProvisioningRequests({
         status: status || undefined,
         accountId: accountId || undefined,
         productId: productId || undefined,
+        verticalId: activeVerticalId ?? undefined,
         subscriptionId: subscriptionId || undefined,
         environmentSlot: environmentSlot || undefined,
         limit,

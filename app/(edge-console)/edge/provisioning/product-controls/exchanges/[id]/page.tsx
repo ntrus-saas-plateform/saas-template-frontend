@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +17,11 @@ import {
   shortId,
 } from "@/components/edge/product-control/shared";
 import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
+import {
   needsReconciliation,
   productControlApi,
   productControlErrMessage,
@@ -27,9 +32,35 @@ import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
 import type { ControlExchangeRecord } from "@/types/edge-product-control";
 
+type SectionId = "overview" | "payloads";
+
+const EXCHANGE_SECTION_IDS: readonly SectionId[] = ["overview", "payloads"];
+
+const EXCHANGE_STUDIO_GROUPS: StudioSectionGroup[] = [
+  {
+    title: "Exchange",
+    items: [
+      { id: "overview", label: "Overview" },
+      { id: "payloads", label: "Payloads" },
+    ],
+  },
+];
+
 export default function ProductControlExchangeDetailPage() {
+  return (
+    <Suspense fallback={<ProductControlLoading label="Loading exchange studio..." />}>
+      <ProductControlExchangeDetailStudio />
+    </Suspense>
+  );
+}
+
+function ProductControlExchangeDetailStudio() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const [section, setSection] = useStudioSectionParam<SectionId>(
+    "overview",
+    EXCHANGE_SECTION_IDS,
+  );
   const { permissions, isLoading: platformLoading } = useEdgePlatform();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -100,27 +131,25 @@ export default function ProductControlExchangeDetailPage() {
   const safeDiagnostics = redactProductControlMetadata(exchange.diagnostics);
 
   return (
-    <div className="space-y-[var(--space-6)]">
-      <div className="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
-        <div>
-          <p className="type-xs text-[var(--text-muted)]">
-            <Link
-              href="/edge/provisioning/product-controls"
-              className="text-[var(--primary)] underline"
-            >
-              Product Control
-            </Link>
-          </p>
-          <h1 className="mt-1 type-lg font-semibold text-[var(--text-primary)]">
-            Control exchange
-          </h1>
-          <p className="mt-1 font-mono type-xs text-[var(--text-secondary)]">
-            {exchange.id}
-          </p>
-        </div>
-        <ProductControlStatusBadge status={exchange.status} />
-      </div>
+    <div className="space-y-[var(--space-5)]">
+      <p className="type-xs text-[var(--text-muted)]">
+        <Link
+          href="/edge/provisioning/product-controls"
+          className="text-[var(--primary)] underline"
+        >
+          Product Control
+        </Link>
+      </p>
 
+      <EdgeStudioShell
+        title="Control exchange"
+        description={exchange.id}
+        groups={EXCHANGE_STUDIO_GROUPS}
+        section={section}
+        onSectionChange={(next) => setSection(next as SectionId)}
+        testId="edge-exchange-detail-studio"
+        actions={<ProductControlStatusBadge status={exchange.status} />}
+      >
       {actionError ? (
         <p className="type-sm text-[var(--danger)]" role="alert">
           {actionError}
@@ -137,6 +166,8 @@ export default function ProductControlExchangeDetailPage() {
         </Button>
       ) : null}
 
+      {section === "overview" ? (
+        <>
       <div className="grid gap-[var(--space-4)] lg:grid-cols-2">
         <ProductControlInfoCard title="Exchange">
           <ProductControlRow
@@ -239,7 +270,11 @@ export default function ProductControlExchangeDetailPage() {
           />
         </ProductControlInfoCard>
       </div>
+        </>
+      ) : null}
 
+      {section === "payloads" ? (
+        <>
       <ProductControlInfoCard title="Request payload (redacted)">
         <pre className="overflow-x-auto whitespace-pre-wrap font-mono type-xs text-[var(--text-secondary)]">
           {JSON.stringify(safeRequest, null, 2)}
@@ -257,6 +292,9 @@ export default function ProductControlExchangeDetailPage() {
           {JSON.stringify(safeDiagnostics, null, 2)}
         </pre>
       </ProductControlInfoCard>
+        </>
+      ) : null}
+      </EdgeStudioShell>
     </div>
   );
 }

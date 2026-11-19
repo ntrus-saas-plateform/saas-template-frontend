@@ -8,7 +8,7 @@ import { EdgeErrorState, EdgeLoadingState } from "@/components/edge/states";
 import { useEdgeSession } from "@/providers/edge-session-provider";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
 
-function EdgeSignInCard({
+export function EdgeSignInCard({
   alert,
   onLogin,
 }: {

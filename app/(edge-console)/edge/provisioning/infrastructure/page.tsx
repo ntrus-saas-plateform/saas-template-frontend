@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,11 @@ import {
   InfraTableShell,
   formatInfraDate,
 } from "@/components/edge/infrastructure/shared";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi } from "@/lib/api/edge";
 import {
   DATABASE_ENGINE_OPTIONS,
@@ -62,10 +67,27 @@ const TABS: { id: TabId; label: string; permissions: string[] }[] = [
   { id: "backups", label: "Backup & Restore", permissions: ["platform:database:backup"] },
 ];
 
+const INFRA_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const INFRA_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Overview", itemIds: ["overview"] },
+  { title: "Registry", itemIds: ["providers", "plans"] },
+  { title: "Resources", itemIds: ["resources", "databases"] },
+  { title: "Actions", itemIds: ["backups"] },
+];
+
 export default function InfrastructurePage() {
+  return (
+    <Suspense fallback={<InfraLoading />}>
+      <InfrastructureStudio />
+    </Suspense>
+  );
+}
+
+function InfrastructureStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useStudioSectionParam<TabId>("overview", INFRA_SECTION_IDS);
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
@@ -205,6 +227,23 @@ export default function InfrastructurePage() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["infra"] }),
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return INFRA_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const t = TABS.find((x) => x.id === id);
+          return t
+            ? hasAnyEdgePermission(permissions, t.permissions)
+            : false;
+        })
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (!hasAnyEdgePermission(permissions, ["platform:infrastructure:read", "platform:database:read"])) {
     return <InfraForbidden />;
   }
@@ -215,34 +254,17 @@ export default function InfrastructurePage() {
   }
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)] p-[var(--space-6)]">
-      <header>
-        <h1 className="type-xl font-semibold">Infrastructure & Database Management</h1>
-        <p className="type-sm text-[var(--text-muted)] mt-1">
-          Resource plans, local-managed provisioning, dedicated tenant databases, backups and
-          reconciliation. Secrets are never displayed.
-        </p>
-      </header>
-
-      <div className="flex flex-wrap gap-[var(--space-2)]">
-        {TABS.map((t) => {
-          if (!hasAnyEdgePermission(permissions, t.permissions)) return null;
-          return (
-            <Button
-              key={t.id}
-              type="button"
-              variant={tab === t.id ? "default" : "outline"}
-              onClick={() => {
-                setTab(t.id);
-                setOffset(0);
-              }}
-            >
-              {t.label}
-            </Button>
-          );
-        })}
-      </div>
-
+    <EdgeStudioShell
+      title="Infrastructure studio"
+      description="Resource plans, local-managed provisioning, dedicated tenant databases, backups and reconciliation. Secrets are never displayed."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => {
+        setTab(id as TabId);
+        setOffset(0);
+      }}
+      className="p-[var(--space-6)]"
+    >
       {tab === "overview" && (
         <EdgePermissionGate permission="platform:infrastructure:read">
           {providersQ.isLoading || plansQ.isLoading ? (
@@ -695,6 +717,6 @@ export default function InfrastructurePage() {
           )}
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

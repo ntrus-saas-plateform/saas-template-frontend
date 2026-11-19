@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -30,6 +35,32 @@ type Tab =
   | "enterprise"
   | "personas"
   | "configurator";
+
+/** Capabilité liée renvoyée par GET plan/package/addon (restrictions = quotas JSONB). */
+type OfferCapabilityRow = {
+  capabilityId: string;
+  capabilityCode?: string;
+  inclusionType?: string;
+  restrictions?: Record<string, unknown> | null;
+};
+
+/** Entry de price book telle que renvoyée par GET price-books/:id/entries. */
+type PriceEntryRow = {
+  id: string;
+  amount: string;
+  currency: string;
+  commercialItemType?: string;
+  conditions?: Record<string, unknown> | null;
+};
+
+const INCLUSION_TYPES = [
+  "INCLUDED",
+  "OPTIONAL",
+  "RESTRICTED",
+  "NOT_INCLUDED",
+  "ADD_ON_REQUIRED",
+  "ENTERPRISE_NEGOTIATED",
+] as const;
 
 const TABS: { id: Tab; label: string; permission: string }[] = [
   { id: "catalog", label: "Catalog", permission: "platform:commercial:catalog:read" },
@@ -49,7 +80,24 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
   },
 ];
 
+const COMMERCIAL_SECTION_IDS = TABS.map((t) => t.id) as Tab[];
+
+const COMMERCIAL_STUDIO_GROUPS: { title: string; itemIds: Tab[] }[] = [
+  { title: "Catalog offers", itemIds: ["catalog", "addons", "configurator"] },
+  { title: "Markets/ICP", itemIds: ["markets", "segments", "icps"] },
+  { title: "Packages/Plans", itemIds: ["packages", "plans", "pricing", "enterprise"] },
+  { title: "Research", itemIds: ["personas"] },
+];
+
 export default function EdgeCommercialPage() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading commercial studio…" />}>
+      <EdgeCommercialStudio />
+    </Suspense>
+  );
+}
+
+function EdgeCommercialStudio() {
   const queryClient = useQueryClient();
   const { permissions, activeVerticalId } = useEdgePlatform();
   const permissionKnown = permissions.length > 0;
@@ -57,7 +105,10 @@ export default function EdgeCommercialPage() {
     !permissionKnown ||
     TABS.some((t) => hasEdgePermission(permissions, t.permission));
 
-  const [tab, setTab] = useState<Tab>("catalog");
+  const [tab, setTab] = useStudioSectionParam<Tab>(
+    "catalog",
+    COMMERCIAL_SECTION_IDS,
+  );
   const [productId, setProductId] = useState("");
   const [catalogView, setCatalogView] = useState("GLOBAL");
   const [formError, setFormError] = useState<string | null>(null);
@@ -78,6 +129,8 @@ export default function EdgeCommercialPage() {
     offerType: "package" as "package" | "plan" | "addon",
     offerId: "",
     capabilityId: "",
+    inclusionType: "INCLUDED",
+    numericLimit: "",
   });
 
   const [planCode, setPlanCode] = useState("");
@@ -100,6 +153,9 @@ export default function EdgeCommercialPage() {
 
   const [entryPlanId, setEntryPlanId] = useState("");
   const [entryAmount, setEntryAmount] = useState("");
+  const [entryPriceSource, setEntryPriceSource] = useState<
+    "MEASURED" | "ESTIMATED" | "NEEDS_RESEARCH"
+  >("NEEDS_RESEARCH");
   const [selectedBookId, setSelectedBookId] = useState("");
 
   const [bookCode, setBookCode] = useState("");
@@ -113,6 +169,16 @@ export default function EdgeCommercialPage() {
   const [previewResult, setPreviewResult] = useState<string | null>(null);
   const [configPlanId, setConfigPlanId] = useState("");
   const [configResult, setConfigResult] = useState<string | null>(null);
+  const [wizardProductCode, setWizardProductCode] = useState<
+    "SYNTIX_PHARMA" | "OKAPI_RESTAURANT"
+  >("SYNTIX_PHARMA");
+  const [wizardSites, setWizardSites] = useState("");
+  const [wizardUsers, setWizardUsers] = useState("");
+  const [wizardNeeds, setWizardNeeds] = useState("");
+  const [wizardMode, setWizardMode] = useState<"MANUAL" | "RULE_BASED" | "GUIDED">(
+    "GUIDED",
+  );
+  const [wizardResult, setWizardResult] = useState<string | null>(null);
 
   const productsQuery = useQuery({
     queryKey: ["edge", "products", "commercial"],
@@ -328,12 +394,53 @@ export default function EdgeCommercialPage() {
     [capabilitiesQuery.data],
   );
 
+  // Caps déjà liées à l'offre sélectionnée — montre capabilityCode + numericLimit (quota).
+  const offerCapabilitiesQuery = useQuery({
+    queryKey: [
+      "edge",
+      "commercial",
+      "offer-capabilities",
+      capabilityTarget.offerType,
+      capabilityTarget.offerId,
+    ],
+    enabled:
+      anyAllowed &&
+      tab === "packages" &&
+      capabilityTarget.offerId.trim().length > 0,
+    queryFn: async (): Promise<OfferCapabilityRow[]> => {
+      const { data } =
+        capabilityTarget.offerType === "plan"
+          ? await edgeApi.getCommercialPlan(capabilityTarget.offerId)
+          : capabilityTarget.offerType === "addon"
+            ? await edgeApi.getCommercialAddon(capabilityTarget.offerId)
+            : await edgeApi.getSolutionPackage(capabilityTarget.offerId);
+      return ((data as { capabilities?: OfferCapabilityRow[] })?.capabilities ??
+        []) as OfferCapabilityRow[];
+    },
+  });
+
   const booksQuery = useQuery({
     queryKey: ["edge", "commercial", "price-books", productId || "all"],
     enabled: anyAllowed && tab === "pricing",
     queryFn: async () => {
       const { data } = await edgeApi.listPriceBooks(productId || undefined);
       return data ?? [];
+    },
+  });
+
+  // Entries du book sélectionné — montre amount + priceSource (gate G11#3 :
+  // un book reste DRAFT tant que ses prix sont NEEDS_RESEARCH).
+  const bookEntriesQuery = useQuery({
+    queryKey: [
+      "edge",
+      "commercial",
+      "price-book-entries",
+      selectedBookId,
+    ],
+    enabled: anyAllowed && tab === "pricing" && selectedBookId !== "",
+    queryFn: async (): Promise<PriceEntryRow[]> => {
+      const { data } = await edgeApi.listPriceBookEntries(selectedBookId);
+      return (data ?? []) as PriceEntryRow[];
     },
   });
 
@@ -516,12 +623,16 @@ export default function EdgeCommercialPage() {
         commercialItemType: "PLAN",
         commercialItemId: entryPlanId,
         amount: entryAmount.trim(),
+        priceSource: entryPriceSource,
       }),
     onSuccess: async () => {
       setEntryAmount("");
       setFormError(null);
       await queryClient.invalidateQueries({
         queryKey: ["edge", "commercial", "price-books"],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["edge", "commercial", "price-book-entries"],
       });
     },
     onError: (err) => {
@@ -785,6 +896,67 @@ export default function EdgeCommercialPage() {
     },
   });
 
+  const runOfferWizard = useMutation({
+    mutationFn: async () => {
+      const sitesTrim = wizardSites.trim();
+      const usersTrim = wizardUsers.trim();
+      const needs = wizardNeeds
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean);
+      return edgeApi.runCommercialOfferWizard({
+        productCode: wizardProductCode,
+        sites: sitesTrim === "" ? null : Number(sitesTrim),
+        users: usersTrim === "" ? null : Number(usersTrim),
+        needs: needs.length > 0 ? needs : undefined,
+        mode: wizardMode,
+      });
+    },
+    onSuccess: (res) => {
+      const data = (res.data ?? {}) as {
+        resolvedProfileCode?: string | null;
+        recommendedPlanCode?: string | null;
+        recommendedPackageCode?: string | null;
+        eligibilityLabel?: string;
+        decision?: string;
+        grantsEntitlements?: boolean;
+        unsatisfied?: string[];
+      };
+      const decision = data.decision ?? data.eligibilityLabel ?? "?";
+      const grants =
+        data.grantsEntitlements === false
+          ? "false"
+          : data.grantsEntitlements === true
+            ? "true"
+            : "?";
+      const unsatisfiedCount = Array.isArray(data.unsatisfied)
+        ? data.unsatisfied.length
+        : 0;
+      setWizardResult(
+        [
+          `Profile: ${data.resolvedProfileCode ?? "—"}`,
+          `Plan: ${data.recommendedPlanCode ?? "—"}`,
+          data.recommendedPackageCode
+            ? `Package: ${data.recommendedPackageCode}`
+            : null,
+          `Decision: ${decision}`,
+          `grantsEntitlements: ${grants}`,
+          `Unsatisfied: ${unsatisfiedCount}`,
+          "No subscription created",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      );
+      setFormError(null);
+    },
+    onError: (err) => {
+      setWizardResult(null);
+      setFormError(
+        err instanceof EdgeApiError ? err.message : "Offer wizard failed",
+      );
+    },
+  });
+
   const previewPrice = useMutation({
     mutationFn: async () =>
       edgeApi.previewCommercialPrice({
@@ -815,6 +987,20 @@ export default function EdgeCommercialPage() {
     [productsQuery.data],
   );
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return COMMERCIAL_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .map((id) => TABS.find((t) => t.id === id))
+        .filter((t): t is (typeof TABS)[number] => Boolean(t))
+        .filter(
+          (t) =>
+            !permissionKnown || hasEdgePermission(permissions, t.permission),
+        )
+        .map((t) => ({ id: t.id, label: t.label })),
+    })).filter((g) => g.items.length > 0);
+  }, [permissionKnown, permissions]);
+
   if (!anyAllowed) {
     return (
       <EdgeForbiddenState description="Requires commercial catalog permissions." />
@@ -822,44 +1008,23 @@ export default function EdgeCommercialPage() {
   }
 
   return (
-    <div className="space-y-[var(--space-5)]">
-      <header className="space-y-[var(--space-1)]">
-        <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-          Commercial catalog
-        </h1>
-        <p className="type-sm text-[var(--text-secondary)]">
-          Market intelligence, ICPs, solution packages, plans, add-ons and
-          price books — governed against P1 products and capabilities. No
-          invented prices or market sizes.
-        </p>
-      </header>
-
-      <div className="flex flex-wrap gap-[var(--space-2)]">
-        {TABS.map((t) => {
-          const allowed =
-            !permissionKnown ||
-            hasEdgePermission(permissions, t.permission);
-          return (
-            <button
-              key={t.id}
-              type="button"
-              disabled={!allowed}
-              onClick={() => {
-                setTab(t.id);
-                setFormError(null);
-              }}
-              className={`min-h-[var(--touch-min)] rounded-[var(--radius-sm)] px-[var(--space-3)] type-sm ${
-                tab === t.id
-                  ? "bg-[var(--primary)] text-[var(--on-primary)] font-semibold"
-                  : "bg-[var(--surface-muted)] text-[var(--text-secondary)]"
-              } disabled:opacity-40`}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
+    <EdgeStudioShell
+      title="Commercial studio"
+      description="Market intelligence, ICPs, solution packages, plans, add-ons and price books — governed against P1 products and capabilities. No invented prices or market sizes."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => {
+        setTab(id as Tab);
+        setFormError(null);
+      }}
+      actions={
+        formError ? (
+          <p className="type-sm text-[var(--danger)]" role="alert">
+            {formError}
+          </p>
+        ) : null
+      }
+    >
       {(tab === "catalog" ||
         tab === "segments" ||
         tab === "icps" ||
@@ -888,12 +1053,6 @@ export default function EdgeCommercialPage() {
           </select>
         </label>
       )}
-
-      {formError ? (
-        <p className="type-sm text-[var(--danger)]" role="alert">
-          {formError}
-        </p>
-      ) : null}
 
       {tab === "catalog" ? (
         <section className="space-y-[var(--space-4)]">
@@ -1462,9 +1621,27 @@ export default function EdgeCommercialPage() {
                     : capabilityTarget.offerType === "addon"
                       ? edgeApi.addCommercialAddonCapability
                       : edgeApi.addSolutionPackageCapability;
+                const parsedLimit = Number(capabilityTarget.numericLimit);
+                const numericLimit =
+                  capabilityTarget.numericLimit.trim() !== "" &&
+                  Number.isFinite(parsedLimit) &&
+                  parsedLimit >= 0
+                    ? Math.floor(parsedLimit)
+                    : undefined;
                 void fn(capabilityTarget.offerId, {
                   capabilityId: capabilityTarget.capabilityId,
-                }).then(() => setCapabilityTarget((c) => ({ ...c, capabilityId: "" })));
+                  inclusionType: capabilityTarget.inclusionType,
+                  ...(numericLimit != null ? { numericLimit } : {}),
+                }).then(() => {
+                  setCapabilityTarget((c) => ({
+                    ...c,
+                    capabilityId: "",
+                    numericLimit: "",
+                  }));
+                  void queryClient.invalidateQueries({
+                    queryKey: ["edge", "commercial", "offer-capabilities"],
+                  });
+                });
               }}
             >
               <select
@@ -1504,10 +1681,80 @@ export default function EdgeCommercialPage() {
                 required
                 aria-label="Capability"
               />
+              <select
+                className={fieldControlClass}
+                value={capabilityTarget.inclusionType}
+                onChange={(e) =>
+                  setCapabilityTarget((c) => ({
+                    ...c,
+                    inclusionType: e.target.value,
+                  }))
+                }
+                aria-label="Inclusion type"
+              >
+                {INCLUSION_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className={fieldControlClass}
+                placeholder="Quota numeric limit (optionnel)"
+                value={capabilityTarget.numericLimit}
+                onChange={(e) =>
+                  setCapabilityTarget((c) => ({
+                    ...c,
+                    numericLimit: e.target.value,
+                  }))
+                }
+                aria-label="Numeric limit"
+              />
               <Button type="submit" size="sm">
                 Link capability
               </Button>
             </form>
+            {capabilityTarget.offerId.trim() !== "" ? (
+              <div className="mt-3 rounded-xl border border-[var(--border)] p-4">
+                <h3 className="type-sm font-semibold mb-2">
+                  Linked capabilities & quotas
+                </h3>
+                {offerCapabilitiesQuery.isLoading ? (
+                  <EdgeLoadingState />
+                ) : offerCapabilitiesQuery.isError ? (
+                  <EdgeErrorState description="Unable to load linked capabilities." />
+                ) : (offerCapabilitiesQuery.data?.length ?? 0) === 0 ? (
+                  <p className="type-xs text-[var(--text-muted)]">
+                    No capability linked yet.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-[var(--border)]">
+                    {offerCapabilitiesQuery.data?.map((row) => {
+                      const limit = row.restrictions?.numericLimit;
+                      return (
+                        <li
+                          key={row.capabilityId}
+                          className="flex flex-wrap items-center justify-between gap-2 py-[var(--space-2)]"
+                        >
+                          <span className="type-sm font-medium">
+                            {row.capabilityCode ?? row.capabilityId}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <Badge>{row.inclusionType ?? "INCLUDED"}</Badge>
+                            {limit != null ? (
+                              <Badge tone="info">quota ≤ {String(limit)}</Badge>
+                            ) : null}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </EdgePermissionGate>
         </section>
       ) : null}
@@ -1786,10 +2033,80 @@ export default function EdgeCommercialPage() {
                 onChange={(e) => setEntryAmount(e.target.value)}
                 required
               />
+              <select
+                className={fieldControlClass}
+                value={entryPriceSource}
+                onChange={(e) =>
+                  setEntryPriceSource(
+                    e.target.value as
+                      | "MEASURED"
+                      | "ESTIMATED"
+                      | "NEEDS_RESEARCH",
+                  )
+                }
+                aria-label="Price source"
+              >
+                <option value="NEEDS_RESEARCH">NEEDS_RESEARCH (default)</option>
+                <option value="ESTIMATED">ESTIMATED</option>
+                <option value="MEASURED">MEASURED</option>
+              </select>
+              <p className="type-xs text-[var(--text-muted)]">
+                NEEDS_RESEARCH keeps the price book non-publishable until
+                prices are researched (gate G11).
+              </p>
               <Button type="submit" disabled={addEntry.isPending}>
                 Add entry
               </Button>
             </form>
+            {selectedBookId !== "" ? (
+              <div className="mt-3 max-w-xl rounded-xl border border-[var(--border)] p-4">
+                <h3 className="type-sm font-semibold mb-2">
+                  Entries & price sources
+                </h3>
+                {bookEntriesQuery.isLoading ? (
+                  <EdgeLoadingState />
+                ) : bookEntriesQuery.isError ? (
+                  <EdgeErrorState description="Unable to load entries." />
+                ) : (bookEntriesQuery.data?.length ?? 0) === 0 ? (
+                  <p className="type-xs text-[var(--text-muted)]">
+                    No entry yet — publish is blocked until entries exist.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-[var(--border)]">
+                    {bookEntriesQuery.data?.map((row) => {
+                      const source = String(
+                        (row.conditions as { priceSource?: unknown } | null)
+                          ?.priceSource ?? "NEEDS_RESEARCH",
+                      ).toUpperCase();
+                      return (
+                        <li
+                          key={row.id}
+                          className="flex flex-wrap items-center justify-between gap-2 py-[var(--space-2)]"
+                        >
+                          <span className="type-sm font-medium">
+                            {row.amount} {row.currency}
+                            {row.commercialItemType
+                              ? ` · ${row.commercialItemType}`
+                              : ""}
+                          </span>
+                          <Badge
+                            tone={
+                              source === "MEASURED"
+                                ? "success"
+                                : source === "ESTIMATED"
+                                  ? "warning"
+                                  : "danger"
+                            }
+                          >
+                            {source}
+                          </Badge>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </EdgePermissionGate>
 
           {booksQuery.isLoading ? (
@@ -2260,7 +2577,7 @@ export default function EdgeCommercialPage() {
       ) : null}
 
       {tab === "configurator" ? (
-        <section className="space-y-[var(--space-4)]">
+        <section className="space-y-[var(--space-5)]">
           <p className="type-sm text-[var(--text-secondary)]">
             Deterministic eligibility check. Never grants entitlements or
             creates subscriptions.
@@ -2276,6 +2593,7 @@ export default function EdgeCommercialPage() {
               configureOffer.mutate();
             }}
           >
+            <h2 className="type-md font-semibold">Manual configure</h2>
             <input
               className={fieldControlClass}
               placeholder="Plan ID"
@@ -2290,8 +2608,80 @@ export default function EdgeCommercialPage() {
               <p className="type-sm text-[var(--text-primary)]">{configResult}</p>
             ) : null}
           </form>
+
+          <form
+            className="grid max-w-xl gap-[var(--space-3)] border-t border-[var(--border)] pt-[var(--space-4)]"
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              runOfferWizard.mutate();
+            }}
+          >
+            <h2 className="type-md font-semibold">Guided offer wizard</h2>
+            <p className="type-xs text-[var(--text-muted)]">
+              Recommendation only — does not grant entitlements or create a
+              subscription.
+            </p>
+            <label className="block space-y-1 type-sm text-[var(--text-secondary)]">
+              <span className="block type-xs uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Product code
+              </span>
+              <select
+                className={fieldControlClass}
+                value={wizardProductCode}
+                onChange={(e) =>
+                  setWizardProductCode(
+                    e.target.value as "SYNTIX_PHARMA" | "OKAPI_RESTAURANT",
+                  )
+                }
+              >
+                <option value="SYNTIX_PHARMA">SYNTIX_PHARMA</option>
+                <option value="OKAPI_RESTAURANT">OKAPI_RESTAURANT</option>
+              </select>
+            </label>
+            <input
+              className={fieldControlClass}
+              placeholder="Sites (optional)"
+              type="number"
+              min={0}
+              value={wizardSites}
+              onChange={(e) => setWizardSites(e.target.value)}
+            />
+            <input
+              className={fieldControlClass}
+              placeholder="Users (optional)"
+              type="number"
+              min={0}
+              value={wizardUsers}
+              onChange={(e) => setWizardUsers(e.target.value)}
+            />
+            <input
+              className={fieldControlClass}
+              placeholder="Needs (comma-separated, e.g. delivery, analytics)"
+              value={wizardNeeds}
+              onChange={(e) => setWizardNeeds(e.target.value)}
+            />
+            <select
+              className={fieldControlClass}
+              value={wizardMode}
+              onChange={(e) =>
+                setWizardMode(
+                  e.target.value as "MANUAL" | "RULE_BASED" | "GUIDED",
+                )
+              }
+            >
+              <option value="GUIDED">GUIDED</option>
+              <option value="RULE_BASED">RULE_BASED</option>
+              <option value="MANUAL">MANUAL</option>
+            </select>
+            <Button type="submit" disabled={runOfferWizard.isPending}>
+              Run wizard
+            </Button>
+            {wizardResult ? (
+              <p className="type-sm text-[var(--text-primary)]">{wizardResult}</p>
+            ) : null}
+          </form>
         </section>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

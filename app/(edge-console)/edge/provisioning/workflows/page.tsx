@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useEffect,
   useMemo,
   useState,
@@ -25,6 +26,11 @@ import {
   formatWorkflowDate,
   shortId,
 } from "@/components/edge/workflow/shared";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import {
   WORKFLOW_DEFINITION_STATUS_OPTIONS,
   WORKFLOW_INSTANCE_STATUS_OPTIONS,
@@ -92,6 +98,14 @@ const TABS: { id: TabId; label: string; permissions: string[] }[] = [
 
 const LIMIT = 20;
 
+const WF_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const WF_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Overview", itemIds: ["dashboard"] },
+  { title: "Definitions", itemIds: ["definitions"] },
+  { title: "Runtime", itemIds: ["instances", "tasks", "workers"] },
+];
+
 function unwrapArrayOrList<T>(payload: unknown): T[] {
   const raw = unwrapEdgeData<T[] | { items?: T[] }>(payload);
   if (Array.isArray(raw)) return raw;
@@ -99,6 +113,14 @@ function unwrapArrayOrList<T>(payload: unknown): T[] {
 }
 
 export default function WorkflowOperationsPage() {
+  return (
+    <Suspense fallback={<WorkflowLoading />}>
+      <WorkflowOperationsStudio />
+    </Suspense>
+  );
+}
+
+function WorkflowOperationsStudio() {
   const { permissions, isLoading: platformLoading } = useEdgePlatform();
   const queryClient = useQueryClient();
 
@@ -107,7 +129,7 @@ export default function WorkflowOperationsPage() {
     [permissions],
   );
 
-  const [tab, setTab] = useState<TabId>("dashboard");
+  const [tab, setTab] = useStudioSectionParam<TabId>("dashboard", WF_SECTION_IDS);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0);
@@ -385,6 +407,23 @@ export default function WorkflowOperationsPage() {
     onError: (err) => setFormError(workflowErrMessage(err)),
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return WF_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const t = TABS.find((x) => x.id === id);
+          return t
+            ? hasAnyEdgePermission(permissions, t.permissions)
+            : false;
+        })
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (platformLoading) return <WorkflowLoading />;
   if (!canReadAny) {
     return (
@@ -413,47 +452,26 @@ export default function WorkflowOperationsPage() {
   };
 
   return (
-    <div className="space-y-[var(--space-6)]">
-      <div>
-        <h1 className="type-lg font-semibold text-[var(--text-primary)]">
-          Workflow Operations
-        </h1>
-        <p className="mt-1 type-sm text-[var(--text-secondary)]">
-          Durable orchestration — definitions, instances, human tasks and
-          workers. No live P7.5+ provisioning side effects.
-        </p>
-      </div>
-
-      <div
-        className="flex flex-wrap gap-[var(--space-2)]"
-        aria-label="Workflow sections"
-      >
-        {TABS.filter((t) =>
-          hasAnyEdgePermission(permissions, t.permissions),
-        ).map((t) => (
-          <Button
-            key={t.id}
-            type="button"
-            variant={tab === t.id ? "primary" : "outline"}
-            onClick={() => {
-              setTab(t.id);
-              setQ("");
-              setStatus("");
-              resetOffset();
-              setFormError(null);
-            }}
-          >
-            {t.label}
-          </Button>
-        ))}
-      </div>
-
-      {formError ? (
-        <p className="type-sm text-[var(--danger)]" role="alert">
-          {formError}
-        </p>
-      ) : null}
-
+    <EdgeStudioShell
+      title="Workflow studio"
+      description="Durable orchestration — definitions, instances, human tasks and workers. No live P7.5+ provisioning side effects."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => {
+        setTab(id as TabId);
+        setQ("");
+        setStatus("");
+        resetOffset();
+        setFormError(null);
+      }}
+      actions={
+        formError ? (
+          <p className="type-sm text-[var(--danger)]" role="alert">
+            {formError}
+          </p>
+        ) : null
+      }
+    >
       {tab === "dashboard" ? (
         <section className="space-y-[var(--space-4)]" aria-label="Dashboard">
           {instancesDashQuery.isLoading ? (
@@ -1228,6 +1246,6 @@ export default function WorkflowOperationsPage() {
           </div>
         </section>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

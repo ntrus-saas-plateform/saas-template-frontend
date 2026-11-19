@@ -51,7 +51,8 @@ export function InfraPagination({
 }
 
 export function InfraStatusBadge({ status }: { status: string }) {
-  return <Badge tone={infraStatusTone(status)}>{status}</Badge>;
+  const tone = infraStatusTone(status);
+  return <Badge tone={tone === "neutral" ? "default" : tone}>{status}</Badge>;
 }
 
 export function InfraTableShell({
@@ -145,7 +146,7 @@ export function InfraEmpty({ title = "No resources" }: { title?: string }) {
   return <EdgeEmptyState title={title} />;
 }
 export function InfraError({ message }: { message: string }) {
-  return <EdgeErrorState message={message} />;
+  return <EdgeErrorState description={message} />;
 }
 export function InfraForbidden() {
   return <EdgeForbiddenState />;

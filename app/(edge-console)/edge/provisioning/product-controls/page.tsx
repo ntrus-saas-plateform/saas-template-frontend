@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useEffect,
   useMemo,
   useState,
@@ -24,6 +25,11 @@ import {
   formatProductControlDate,
   shortId,
 } from "@/components/edge/product-control/shared";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi } from "@/lib/api/edge";
 import {
   CONTROL_EXCHANGE_STATUS_OPTIONS,
@@ -83,7 +89,23 @@ const TABS: { id: TabId; label: string; permissions: string[] }[] = [
 
 const LIMIT = 20;
 
+const PC_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const PC_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Overview", itemIds: ["overview"] },
+  { title: "Control plane", itemIds: ["endpoints", "exchanges"] },
+  { title: "Credentials", itemIds: ["credentials"] },
+];
+
 export default function ProductControlPage() {
+  return (
+    <Suspense fallback={<ProductControlLoading />}>
+      <ProductControlStudio />
+    </Suspense>
+  );
+}
+
+function ProductControlStudio() {
   const { permissions, isLoading: platformLoading } = useEdgePlatform();
   const queryClient = useQueryClient();
 
@@ -92,7 +114,7 @@ export default function ProductControlPage() {
     [permissions],
   );
 
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useStudioSectionParam<TabId>("overview", PC_SECTION_IDS);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0);
@@ -297,6 +319,23 @@ export default function ProductControlPage() {
     createEndpoint.mutate();
   };
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return PC_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const t = TABS.find((x) => x.id === id);
+          return t
+            ? hasAnyEdgePermission(permissions, t.permissions)
+            : false;
+        })
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (platformLoading) return <ProductControlLoading />;
   if (!canReadAny) {
     return (
@@ -314,72 +353,41 @@ export default function ProductControlPage() {
           : null;
 
   return (
-    <div className="space-y-[var(--space-6)]">
-      <div>
-        <h1 className="type-lg font-semibold text-[var(--text-primary)]">
-          BB · Product Control
-        </h1>
-        <p className="mt-1 max-w-3xl type-sm text-[var(--text-secondary)]">
-          Hub Edge pour piloter le Business Backend via{" "}
-          <code className="type-xs">/control/v1</code> — endpoints, handshake,
-          exchanges et credentials. Le registre des backends et les bindings
-          produit sont dans{" "}
-          <Link
-            href="/edge/backends"
-            className="font-semibold text-[var(--primary)]"
-          >
-            Business Backends
-          </Link>{" "}
-          et le{" "}
-          <Link
-            href="/edge/catalog"
-            className="font-semibold text-[var(--primary)]"
-          >
-            Catalog
-          </Link>
-          .
-        </p>
-        <p className="mt-1 type-sm text-[var(--text-secondary)]">
-          Endpoint registry, exchanges, health and credential bindings — secrets
-          never displayed.
-        </p>
-      </div>
-
-      <div
-        className="flex flex-wrap gap-[var(--space-2)]"
-        role="tablist"
-        aria-label="Product Control tabs"
-      >
-        {TABS.map((t) => {
-          const allowed = hasAnyEdgePermission(permissions, t.permissions);
-          return (
-            <Button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              variant={tab === t.id ? "default" : "outline"}
-              disabled={!allowed}
-              onClick={() => {
-                setTab(t.id);
-                setQ("");
-                setStatus("");
-                setOffset(0);
-                setFormError(null);
-              }}
+    <EdgeStudioShell
+      title="BB · Product Control studio"
+      description="Hub Edge pour piloter le Business Backend via /control/v1 — endpoints, handshake, exchanges et credentials. Secrets never displayed."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => {
+        setTab(id as TabId);
+        setQ("");
+        setStatus("");
+        setOffset(0);
+        setFormError(null);
+      }}
+      actions={
+        formError ? (
+          <p className="type-sm text-[var(--danger)]" role="alert">
+            {formError}
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-[var(--space-2)] type-sm">
+            <Link
+              href="/edge/backends"
+              className="font-semibold text-[var(--primary)]"
             >
-              {t.label}
-            </Button>
-          );
-        })}
-      </div>
-
-      {formError ? (
-        <p className="type-sm text-[var(--danger)]" role="alert">
-          {formError}
-        </p>
-      ) : null}
-
+              Business Backends
+            </Link>
+            <Link
+              href="/edge/catalog"
+              className="font-semibold text-[var(--primary)]"
+            >
+              Catalog
+            </Link>
+          </div>
+        )
+      }
+    >
       {tab === "overview" ? (
         <section className="space-y-[var(--space-4)]" aria-label="Overview">
           {endpointsQuery.isLoading || exchangesQuery.isLoading ? (
@@ -872,6 +880,6 @@ export default function ProductControlPage() {
       {activeQuery?.isFetching && !activeQuery.isLoading ? (
         <p className="type-xs text-[var(--text-muted)]">Refreshing…</p>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

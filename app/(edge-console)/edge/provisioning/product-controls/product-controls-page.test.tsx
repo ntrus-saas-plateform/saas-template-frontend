@@ -13,6 +13,11 @@ const listRegistryProducts = vi.fn();
 const listRegistryPlatforms = vi.fn();
 const listRegistryEnvironments = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -344,7 +349,7 @@ describe("ProductControlPage", () => {
 
   it("lists endpoints and registers via registry selects", async () => {
     renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: "Endpoints" }));
+    fireEvent.click(screen.getByRole("button", { name: "Endpoints" }));
     expect(await screen.findByText("Register endpoint")).toBeTruthy();
     expect(await screen.findByText("bb-pc-prod")).toBeTruthy();
     expect(screen.queryByText("vault://edge/pc/prod")).toBeNull();
@@ -386,7 +391,7 @@ describe("ProductControlPage", () => {
 
   it("lists exchanges and can reconcile", async () => {
     renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: "Exchanges" }));
+    fireEvent.click(screen.getByRole("button", { name: "Exchanges" }));
     expect(await screen.findByText("product_control.handshake")).toBeTruthy();
     expect(
       screen.getAllByText("UNKNOWN_OUTCOME").length,
@@ -401,7 +406,7 @@ describe("ProductControlPage", () => {
 
   it("lists credentials without revealing secret refs", async () => {
     renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: "Credentials" }));
+    fireEvent.click(screen.getByRole("button", { name: "Credentials" }));
     expect(await screen.findByText("OAUTH2_CC")).toBeTruthy();
     expect(screen.getByText("•••••••• (ref present)")).toBeTruthy();
     expect(screen.queryByText("vault://edge/pc/prod")).toBeNull();

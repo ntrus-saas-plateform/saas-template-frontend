@@ -54,7 +54,7 @@ function statusTone(
 
 export default function EdgeCatalogPage() {
   const router = useRouter();
-  const { permissions } = useEdgePlatform();
+  const { permissions, activeVerticalId } = useEdgePlatform();
   const permissionKnown = permissions.length > 0;
   const allowed =
     !permissionKnown ||
@@ -62,13 +62,15 @@ export default function EdgeCatalogPage() {
   const canCreate = hasEdgePermission(permissions, "platform:products:create");
   const [status, setStatus] = useState<EdgeProductLifecycleStatus | "">("");
   const [availableOnly, setAvailableOnly] = useState(false);
+  const [allVerticals, setAllVerticals] = useState(false);
 
   const query = useQuery({
-    queryKey: ["edge", "products", status || "all"],
+    queryKey: ["edge", "products", status || "all", allVerticals ? "all" : (activeVerticalId ?? "none")],
     enabled: allowed,
     queryFn: async () => {
       const { data } = await edgeApi.listProducts({
         status: status || undefined,
+        verticalId: allVerticals ? undefined : (activeVerticalId ?? undefined),
         limit: 100,
       });
       return data ?? [];
@@ -134,6 +136,17 @@ export default function EdgeCatalogPage() {
           />
           Available only (public discovery)
         </label>
+        {activeVerticalId ? (
+          <label className="flex cursor-pointer items-center gap-2 type-sm text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--primary)]"
+              checked={allVerticals}
+              onChange={(e) => setAllVerticals(e.target.checked)}
+            />
+            All verticals (bypass workspace switch)
+          </label>
+        ) : null}
       </div>
 
       {query.isLoading ? <EdgeLoadingState /> : null}

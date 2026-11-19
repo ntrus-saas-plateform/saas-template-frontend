@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,11 @@ import {
   emptyStudio,
   type StudioDocument,
 } from "@/components/edge/marketing-studio-editor";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -107,6 +112,29 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
   },
 ];
 
+const MARKETING_SECTION_IDS = TABS.map((t) => t.id) as Tab[];
+
+const MARKETING_STUDIO_GROUPS: {
+  title: string;
+  itemIds: Tab[];
+}[] = [
+  { title: "Overview", itemIds: ["overview"] },
+  {
+    title: "Campaigns",
+    itemIds: ["campaigns", "strategies", "audiences", "budgets", "channels"],
+  },
+  {
+    title: "Leads & consent",
+    itemIds: ["leads", "forms", "suppressions"],
+  },
+  { title: "Journeys", itemIds: ["journeys"] },
+  {
+    title: "Content",
+    itemIds: ["content", "templates", "landing"],
+  },
+  { title: "Attribution", itemIds: ["attribution"] },
+];
+
 type Row = {
   id: string;
   code?: string;
@@ -122,14 +150,25 @@ type Row = {
 };
 
 export default function EdgeMarketingPage() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading marketing studio…" />}>
+      <EdgeMarketingStudio />
+    </Suspense>
+  );
+}
+
+function EdgeMarketingStudio() {
   const queryClient = useQueryClient();
-  const { permissions } = useEdgePlatform();
+  const { permissions, activeVerticalId } = useEdgePlatform();
   const permissionKnown = permissions.length > 0;
   const anyAllowed =
     !permissionKnown ||
     TABS.some((t) => hasEdgePermission(permissions, t.permission));
 
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useStudioSectionParam<Tab>(
+    "overview",
+    MARKETING_SECTION_IDS,
+  );
   const [productId, setProductId] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -198,49 +237,85 @@ export default function EdgeMarketingPage() {
   });
 
   const strategiesQuery = useQuery({
-    queryKey: ["edge", "marketing", "strategies", productId || "all"],
+    queryKey: [
+      "edge",
+      "marketing",
+      "strategies",
+      productId || "all",
+      activeVerticalId ?? "all",
+    ],
     enabled: anyAllowed && (tab === "strategies" || tab === "overview"),
     queryFn: async () => {
       const { data } = await edgeApi.listMarketingStrategies({
         productId: productId || undefined,
+        verticalId: activeVerticalId ?? undefined,
       });
       return (data as Row[]) ?? [];
     },
   });
 
   const audiencesQuery = useQuery({
-    queryKey: ["edge", "marketing", "audiences", productId || "all"],
+    queryKey: [
+      "edge",
+      "marketing",
+      "audiences",
+      productId || "all",
+      activeVerticalId ?? "all",
+    ],
     enabled: anyAllowed && (tab === "audiences" || tab === "overview"),
     queryFn: async () => {
-      const { data } = await edgeApi.listMarketingAudiences(
-        productId || undefined,
-      );
+      const { data } = await edgeApi.listMarketingAudiences({
+        productId: productId || undefined,
+        verticalId: activeVerticalId ?? undefined,
+      });
       return (data as Row[]) ?? [];
     },
   });
 
   const campaignsQuery = useQuery({
-    queryKey: ["edge", "marketing", "campaigns", productId || "all"],
+    queryKey: [
+      "edge",
+      "marketing",
+      "campaigns",
+      productId || "all",
+      activeVerticalId ?? "all",
+    ],
     enabled: anyAllowed && (tab === "campaigns" || tab === "overview"),
     queryFn: async () => {
       const { data } = await edgeApi.listMarketingCampaigns({
         productId: productId || undefined,
+        verticalId: activeVerticalId ?? undefined,
       });
       return (data as Row[]) ?? [];
     },
   });
 
   const formsQuery = useQuery({
-    queryKey: ["edge", "marketing", "forms", productId || "all"],
+    queryKey: [
+      "edge",
+      "marketing",
+      "forms",
+      productId || "all",
+      activeVerticalId ?? "all",
+    ],
     enabled: anyAllowed && tab === "forms",
     queryFn: async () => {
-      const { data } = await edgeApi.listMarketingForms(productId || undefined);
+      const { data } = await edgeApi.listMarketingForms({
+        productId: productId || undefined,
+        verticalId: activeVerticalId ?? undefined,
+      });
       return (data as Row[]) ?? [];
     },
   });
 
   const leadsQuery = useQuery({
-    queryKey: ["edge", "marketing", "leads", productId || "all"],
+    queryKey: [
+      "edge",
+      "marketing",
+      "leads",
+      productId || "all",
+      activeVerticalId ?? "all",
+    ],
     enabled:
       anyAllowed &&
       (tab === "leads" ||
@@ -251,6 +326,7 @@ export default function EdgeMarketingPage() {
     queryFn: async () => {
       const { data } = await edgeApi.listMarketingLeads({
         productId: productId || undefined,
+        verticalId: activeVerticalId ?? undefined,
       });
       return (data as Row[]) ?? [];
     },
@@ -380,10 +456,12 @@ export default function EdgeMarketingPage() {
   });
 
   const journeysQuery = useQuery({
-    queryKey: ["edge", "marketing", "journeys"],
+    queryKey: ["edge", "marketing", "journeys", activeVerticalId ?? "all"],
     enabled: anyAllowed && tab === "journeys",
     queryFn: async () => {
-      const { data } = await edgeApi.listMarketingJourneys();
+      const { data } = await edgeApi.listMarketingJourneys({
+        verticalId: activeVerticalId ?? undefined,
+      });
       return (data as (Row & { triggerType?: string })[]) ?? [];
     },
   });
@@ -429,10 +507,12 @@ export default function EdgeMarketingPage() {
   });
 
   const snapshotsQuery = useQuery({
-    queryKey: ["edge", "marketing", "snapshots"],
+    queryKey: ["edge", "marketing", "snapshots", activeVerticalId],
     enabled: anyAllowed && tab === "attribution",
     queryFn: async () => {
-      const { data } = await edgeApi.listMarketingAnalyticsSnapshots();
+      const { data } = await edgeApi.listMarketingAnalyticsSnapshots({
+        verticalId: activeVerticalId ?? undefined,
+      });
       return (
         (data as {
           id: string;
@@ -447,10 +527,12 @@ export default function EdgeMarketingPage() {
   });
 
   const analyticsSummaryQuery = useQuery({
-    queryKey: ["edge", "marketing", "analytics-summary"],
+    queryKey: ["edge", "marketing", "analytics-summary", activeVerticalId],
     enabled: anyAllowed && tab === "attribution",
     queryFn: async () => {
-      const { data } = await edgeApi.getMarketingAnalyticsSummary();
+      const { data } = await edgeApi.getMarketingAnalyticsSummary({
+        verticalId: activeVerticalId ?? undefined,
+      });
       return data as {
         snapshotCount: number;
         qualityCounts: {
@@ -534,8 +616,10 @@ export default function EdgeMarketingPage() {
   });
 
   const createForm = useMutation({
-    mutationFn: async () =>
-      edgeApi.createMarketingForm({
+    mutationFn: async () => {
+      const leadCapture =
+        formType === "CONTACT" || formType === "DEMO_REQUEST";
+      return edgeApi.createMarketingForm({
         code: formCode.trim(),
         name: formName.trim(),
         formType,
@@ -545,7 +629,17 @@ export default function EdgeMarketingPage() {
           { name: "email", required: true },
           { name: "fullName", required: false },
         ],
-      }),
+        ...(leadCapture
+          ? {
+              metadata: {
+                publicSubmitMode: "LEAD",
+                formIntent: "LEAD",
+                formType,
+              },
+            }
+          : {}),
+      });
+    },
     onSuccess: async () => {
       setFormCode("");
       setFormName("");
@@ -781,14 +875,19 @@ export default function EdgeMarketingPage() {
     },
   });
 
-  const visibleTabs = useMemo(
-    () =>
-      TABS.filter(
-        (t) =>
-          !permissionKnown || hasEdgePermission(permissions, t.permission),
-      ),
-    [permissionKnown, permissions],
-  );
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return MARKETING_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .map((id) => TABS.find((t) => t.id === id))
+        .filter((t): t is (typeof TABS)[number] => Boolean(t))
+        .filter(
+          (t) =>
+            !permissionKnown || hasEdgePermission(permissions, t.permission),
+        )
+        .map((t) => ({ id: t.id, label: t.label })),
+    })).filter((g) => g.items.length > 0);
+  }, [permissionKnown, permissions]);
 
   if (!anyAllowed) {
     return (
@@ -797,51 +896,35 @@ export default function EdgeMarketingPage() {
   }
 
   return (
-    <div className="space-y-[var(--space-6)]">
-      <header className="space-y-[var(--space-2)]">
-        <h1 className="type-xl font-semibold tracking-tight">Marketing</h1>
-        <p className="type-sm text-[var(--text-secondary)] max-w-3xl">
-          Okapi Edge acquisition plane — strategies, audiences, campaigns,
-          forms and leads. Does not create tenants or subscriptions. Metrics
-          distinguish measured, estimated and unavailable values.
-        </p>
-      </header>
-
-      <div className="flex flex-wrap gap-[var(--space-2)]">
-        <select
-          className={fieldControlClass}
-          value={productId}
-          onChange={(e) => setProductId(e.target.value)}
-        >
-          <option value="">All products</option>
-          {(productsQuery.data ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.code})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <nav className="flex flex-wrap gap-[var(--space-2)] border-b border-[var(--border)] pb-[var(--space-2)]">
-        {visibleTabs.map((t) => (
-          <Button
-            key={t.id}
-            type="button"
-            size="sm"
-            variant={tab === t.id ? "default" : "outline"}
-            onClick={() => setTab(t.id)}
+    <EdgeStudioShell
+      title="Marketing studio"
+      description="Okapi Edge acquisition plane — strategies, audiences, campaigns, forms and leads. Does not create tenants or subscriptions. Metrics distinguish measured, estimated and unavailable values."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as Tab)}
+      actions={
+        <>
+          <select
+            className={fieldControlClass}
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+            aria-label="Filter by product"
           >
-            {t.label}
-          </Button>
-        ))}
-      </nav>
-
-      {formError ? (
-        <p className="type-sm text-[var(--danger)]" role="alert">
-          {formError}
-        </p>
-      ) : null}
-
+            <option value="">All products</option>
+            {(productsQuery.data ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.code})
+              </option>
+            ))}
+          </select>
+          {formError ? (
+            <p className="type-sm text-[var(--danger)]" role="alert">
+              {formError}
+            </p>
+          ) : null}
+        </>
+      }
+    >
       {tab === "overview" ? (
         <section className="grid gap-[var(--space-4)] md:grid-cols-2">
           <p className="type-sm text-[var(--text-secondary)] md:col-span-2">
@@ -2310,6 +2393,6 @@ export default function EdgeMarketingPage() {
           )}
         </section>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

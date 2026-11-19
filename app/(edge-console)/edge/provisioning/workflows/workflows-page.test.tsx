@@ -19,6 +19,11 @@ const listWorkflowWorkers = vi.fn();
 const listWorkflowDeadLetters = vi.fn();
 const listWorkflowSteps = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -337,7 +342,7 @@ describe("WorkflowOperationsPage", () => {
   it("loads dashboard counts and recent activity", async () => {
     renderPage();
     expect(
-      screen.getByRole("heading", { name: "Workflow Operations" }),
+      screen.getByRole("heading", { name: "Workflow studio" }),
     ).toBeTruthy();
     await waitFor(() => {
       expect(listWorkflowInstances).toHaveBeenCalled();

@@ -25,6 +25,11 @@ const listRegistryDeploymentProfiles = vi.fn();
 const listRegistryPlatforms = vi.fn();
 const listRegistryEnvironments = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -90,6 +95,9 @@ vi.mock("@/lib/api/edge", () => ({
       listRegistryPlatforms(...args),
     listRegistryEnvironments: (...args: unknown[]) =>
       listRegistryEnvironments(...args),
+    listProvisioningRequests: vi.fn().mockResolvedValue({
+      data: { items: [], total: 0 },
+    }),
   },
 }));
 
@@ -346,7 +354,7 @@ describe("PlacementCapacityPage", () => {
   it("renders overview with status counts and recent decisions", async () => {
     renderPage();
     expect(
-      screen.getByRole("heading", { name: "Placement & Capacity" }),
+      screen.getByRole("heading", { name: "Placement & capacity studio" }),
     ).toBeTruthy();
     await waitFor(() => expect(listPlacementRequests).toHaveBeenCalled());
     expect(await screen.findByText("Requires review")).toBeTruthy();

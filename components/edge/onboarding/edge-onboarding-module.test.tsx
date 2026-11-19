@@ -16,6 +16,11 @@ const publishOnboardingTemplate = vi.fn();
 const listOnboardingRuns = vi.fn();
 const listOnboardingEvidence = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("@/lib/api/edge", () => ({
   EdgeApiError: class EdgeApiError extends Error {
     status: number;

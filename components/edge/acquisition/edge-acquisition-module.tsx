@@ -2,15 +2,14 @@
 
 /**
  * P10 — Edge Admin Console: Acquisition CX.
- * Tabbed control plane — API state only; never invent conversion metrics.
+ * Studio control plane — API state only; never invent conversion metrics.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
@@ -19,6 +18,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi } from "@/lib/api/edge";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -67,6 +71,19 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "Analytics",
     permission: "platform:acquisition:analytics:read",
   },
+];
+
+const ACQ_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const ACQ_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Overview", itemIds: ["overview"] },
+  { title: "Catalog", itemIds: ["products", "plans", "forms"] },
+  {
+    title: "Funnel",
+    itemIds: ["prospects", "leads", "applications", "documents"],
+  },
+  { title: "Commerce", itemIds: ["quotes", "checkout"] },
+  { title: "Journeys & analytics", itemIds: ["journeys", "analytics"] },
 ];
 
 const READ_ANY = [
@@ -201,7 +218,15 @@ function QueryShell({
 }
 
 export function EdgeAcquisitionModule() {
-  const { permissions } = useEdgePlatform();
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading acquisition studio…" />}>
+      <EdgeAcquisitionStudio />
+    </Suspense>
+  );
+}
+
+function EdgeAcquisitionStudio() {
+  const { permissions, activeVerticalId } = useEdgePlatform();
   const qc = useQueryClient();
   const canAny = hasAnyEdgePermission(permissions, READ_ANY);
 
@@ -217,10 +242,11 @@ export function EdgeAcquisitionModule() {
     [permissions],
   );
 
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useStudioSectionParam<TabId>("overview", ACQ_SECTION_IDS);
   const activeTab = visibleTabs.some((t) => t.id === tab)
     ? tab
     : (visibleTabs[0]?.id ?? "overview");
+  const [draftPreviewId, setDraftPreviewId] = useState<string | null>(null);
 
   const canRead = hasEdgePermission(permissions, "platform:acquisition:read");
   const canManage = hasEdgePermission(permissions, "platform:acquisition:manage");
@@ -251,8 +277,9 @@ export function EdgeAcquisitionModule() {
   );
 
   const overviewQ = useQuery({
-    queryKey: ["edge", "acquisition", "overview"],
-    queryFn: () => edgeApi.getAcquisitionOverview(),
+    queryKey: ["edge", "acquisition", "overview", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getAcquisitionOverview({ verticalId: activeVerticalId ?? undefined }),
     enabled: canRead && activeTab === "overview",
   });
 
@@ -332,8 +359,12 @@ export function EdgeAcquisitionModule() {
   });
 
   const funnelQ = useQuery({
-    queryKey: ["edge", "acquisition", "funnel"],
-    queryFn: () => edgeApi.getAcquisitionConversionFunnel({ limit: 5000 }),
+    queryKey: ["edge", "acquisition", "funnel", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getAcquisitionConversionFunnel({
+        limit: 5000,
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled: canAnalytics && activeTab === "analytics",
   });
 
@@ -813,6 +844,19 @@ export function EdgeAcquisitionModule() {
       }),
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(visibleTabs.map((t) => t.id));
+    return ACQ_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [visibleTabs]);
+
   if (!canAny) {
     return (
       <EdgeForbiddenState
@@ -876,20 +920,24 @@ export function EdgeAcquisitionModule() {
     recordPayment.error ??
     advanceJourney.error;
 
+  const draftPreview = products.items.find((p) => p.id === draftPreviewId) ?? null;
+
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="edge-acquisition-module">
-      {actionError ? (
-        <p className="type-sm text-[var(--danger)]" role="alert">
-          {errMsg(actionError)}
-        </p>
-      ) : null}
-
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={activeTab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
+    <EdgeStudioShell
+      title="Acquisition studio"
+      description="Customer experience & subscription acquisition. Counts and funnel come from the API only — never fabricated conversion rates."
+      groups={studioGroups}
+      section={activeTab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="edge-acquisition-module"
+      actions={
+        actionError ? (
+          <p className="type-sm text-[var(--danger)]" role="alert">
+            {errMsg(actionError)}
+          </p>
+        ) : null
+      }
+    >
       {activeTab === "overview" && canRead ? (
         <section className="space-y-4" data-testid="acq-overview">
           <h2 className="type-md font-medium">Acquisition overview</h2>
@@ -963,12 +1011,15 @@ export function EdgeAcquisitionModule() {
                           Voir en public
                         </Link>
                       ) : (
-                        <span
-                          className="type-xs text-[var(--text-muted)]"
-                          title="Catalogue public = PUBLISHED seulement (Legal + price MEASURED, doc 46)."
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setDraftPreviewId(p.id)}
+                          title="Aperçu brouillon interne — sans PUBLISH (catalogue public = PUBLISHED seulement)."
                         >
-                          Après PUBLISH
-                        </span>
+                          Prévisualiser
+                        </Button>
                       )}
                     </td>
                   </tr>
@@ -976,6 +1027,58 @@ export function EdgeAcquisitionModule() {
               })}
             </DenseTable>
           </QueryShell>
+          {draftPreview ? (
+            <div
+              className="space-y-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-muted)] p-4"
+              data-testid="acq-draft-preview"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="type-sm font-medium">Aperçu brouillon</h3>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDraftPreviewId(null)}
+                >
+                  Fermer
+                </Button>
+              </div>
+              <p className="type-xs text-[var(--text-muted)]">
+                Prévisualisation console uniquement — pas de publication publique.
+              </p>
+              <dl className="grid gap-2 type-sm md:grid-cols-2">
+                <div>
+                  <dt className="type-xs text-[var(--text-muted)]">Title</dt>
+                  <dd className="font-medium">{draftPreview.title}</dd>
+                </div>
+                <div>
+                  <dt className="type-xs text-[var(--text-muted)]">Slug</dt>
+                  <dd>
+                    <code>{draftPreview.slug}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="type-xs text-[var(--text-muted)]">Status</dt>
+                  <dd>
+                    <Badge tone={statusTone(draftPreview.status)}>
+                      {draftPreview.status}
+                    </Badge>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="type-xs text-[var(--text-muted)]">Locale</dt>
+                  <dd>{draftPreview.locale}</dd>
+                </div>
+              </dl>
+              {draftPreview.summary ? (
+                <p className="type-sm text-[var(--text-secondary)]">
+                  {draftPreview.summary}
+                </p>
+              ) : (
+                <p className="type-sm text-[var(--text-muted)]">Aucun résumé.</p>
+              )}
+            </div>
+          ) : null}
           <EdgePermissionGate permission="platform:acquisition:manage">
             <div className="space-y-3 border-t border-[var(--border)] pt-4">
               <h3 className="type-sm font-medium">Create product presentation</h3>
@@ -1310,10 +1413,16 @@ export function EdgeAcquisitionModule() {
                 </Button>
               </div>
               {draftVersionId ? (
-                <div className="space-y-3">
+                <div className="space-y-3" data-testid="acq-form-draft-preview">
                   <p className="type-sm text-[var(--text-muted)]">
                     Draft version id: <code>{draftVersionId}</code>
                   </p>
+                  <p className="type-xs text-[var(--text-muted)]">
+                    Prévisualisation schéma (brouillon) — PUBLISH reste une action séparée.
+                  </p>
+                  <pre className="max-h-48 overflow-auto rounded-[var(--radius-sm)] bg-[var(--surface-muted)] p-3 type-xs">
+                    {schemaJson}
+                  </pre>
                   {canFormsPublish ? (
                     <div className="space-y-3">
                       <h4 className="type-sm font-medium">Publish (channel + publicSlug)</h4>
@@ -2439,6 +2548,6 @@ export function EdgeAcquisitionModule() {
           )}
         </section>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

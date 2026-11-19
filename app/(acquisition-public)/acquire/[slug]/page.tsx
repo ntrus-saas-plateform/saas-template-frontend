@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { AcquirePlanCheckout } from "@/components/acquisition/acquire-plan-checkout";
+import { buildAcquireApplyHref } from "@/lib/edge/public-acquisition-client";
 import { publicAcquisitionFetch } from "@/lib/edge/public-acquisition-fetch";
 import type {
   PlanPresentation,
@@ -173,6 +174,16 @@ export default async function AcquireProductPage({ params }: Props) {
                     {plan.priceDisplayRef ? ` · ref ${plan.priceDisplayRef}` : ""}
                     {plan.currencyHint ? ` · ${plan.currencyHint}` : ""}
                   </p>
+                  <Link
+                    href={buildAcquireApplyHref(slug, {
+                      defaultFormSlug: page.defaultFormSlug,
+                      planPresentationId: plan.id,
+                      commercialPlanId: plan.commercialPlanId,
+                    })}
+                    className="mt-3 inline-flex h-[var(--control-height)] items-center bg-[var(--primary)] px-4 type-sm font-medium text-[var(--on-primary)]"
+                  >
+                    {plan.ctaLabel?.trim() || "Postuler"}
+                  </Link>
                   {String(plan.status).toUpperCase() === "PUBLISHED" ? (
                     <AcquirePlanCheckout
                       planPresentationId={plan.id}
@@ -246,22 +257,40 @@ export default async function AcquireProductPage({ params }: Props) {
         ) : null}
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href={
-              page.defaultFormSlug
-                ? `/acquire/${encodeURIComponent(slug)}/apply?form=${encodeURIComponent(page.defaultFormSlug)}`
-                : `/acquire/${encodeURIComponent(slug)}/apply`
-            }
-            className="inline-flex h-[var(--control-height)] items-center bg-[var(--primary)] px-5 type-sm font-medium text-[var(--on-primary)]"
-          >
-            {plans[0]?.ctaLabel?.trim() || "Postuler"}
-          </Link>
-          <Link
-            href={`/acquire/${encodeURIComponent(slug)}/configure`}
-            className="inline-flex h-[var(--control-height)] items-center border border-[var(--border)] px-5 type-sm text-[var(--text-secondary)]"
-          >
-            Configurer
-          </Link>
+          {plans.length > 1 ? (
+            <Link
+              href={`/acquire/${encodeURIComponent(slug)}/configure`}
+              className="inline-flex h-[var(--control-height)] items-center bg-[var(--primary)] px-5 type-sm font-medium text-[var(--on-primary)]"
+            >
+              Choisir un plan
+            </Link>
+          ) : plans.length === 1 ? (
+            <Link
+              href={buildAcquireApplyHref(slug, {
+                defaultFormSlug: page.defaultFormSlug,
+                planPresentationId: plans[0].id,
+                commercialPlanId: plans[0].commercialPlanId,
+              })}
+              className="inline-flex h-[var(--control-height)] items-center bg-[var(--primary)] px-5 type-sm font-medium text-[var(--on-primary)]"
+            >
+              {plans[0].ctaLabel?.trim() || "Postuler"}
+            </Link>
+          ) : (
+            <Link
+              href={buildAcquireApplyHref(slug, { defaultFormSlug: page.defaultFormSlug })}
+              className="inline-flex h-[var(--control-height)] items-center bg-[var(--primary)] px-5 type-sm font-medium text-[var(--on-primary)]"
+            >
+              Postuler
+            </Link>
+          )}
+          {plans.length === 1 ? (
+            <Link
+              href={`/acquire/${encodeURIComponent(slug)}/configure`}
+              className="inline-flex h-[var(--control-height)] items-center border border-[var(--border)] px-5 type-sm text-[var(--text-secondary)]"
+            >
+              Configuration et checkout
+            </Link>
+          ) : null}
           <Link
             href="/acquire"
             className="inline-flex h-[var(--control-height)] items-center border border-[var(--border)] px-5 type-sm text-[var(--text-secondary)]"

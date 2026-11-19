@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 /**
  * P0 console surface smoke (anonymous + CSRF contracts).
  * Authenticated catalog/tenants/BB handshake remains gated by EDGE_E2E_AUTH + seed:edge-e2e.
+ * Studio section deep-links: see also e2e/edge-studio-smoke.spec.ts (wired into test:e2e:p0).
  */
 test.describe("Okapi Edge P0 console smoke", () => {
   for (const path of [
@@ -13,6 +14,9 @@ test.describe("Okapi Edge P0 console smoke", () => {
     "/edge/provisioning/product-controls",
     "/edge/administrators",
     "/edge/security",
+    "/edge/sales?section=pipeline",
+    "/edge/operations?section=incidents",
+    "/edge/billing?section=accounts",
   ] as const) {
     test(`anonymous ${path} shows Edge sign-in gate`, async ({ page }) => {
       await page.goto(path);
@@ -23,6 +27,7 @@ test.describe("Okapi Edge P0 console smoke", () => {
         page.getByRole("button", { name: /sign in to okapi edge/i }),
       ).toBeVisible();
       await expect(page.getByText(/current organization/i)).toHaveCount(0);
+      await expect(page.getByTestId("edge-studio-shell")).toHaveCount(0);
     });
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -132,10 +137,42 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
   },
 ];
 
+const SALES_SECTION_IDS = TABS.map((t) => t.id) as Tab[];
+
+const SALES_STUDIO_GROUPS: {
+  title: string;
+  itemIds: Tab[];
+}[] = [
+  {
+    title: "Pipeline",
+    itemIds: ["overview", "pipeline", "opportunities", "activities", "tasks"],
+  },
+  { title: "CRM", itemIds: ["accounts", "contacts", "leads"] },
+  {
+    title: "Quotes & orders",
+    itemIds: ["quotes", "proposals", "dealdesk", "contracts", "orders"],
+  },
+  { title: "Consulting", itemIds: ["consulting"] },
+  { title: "Governance", itemIds: ["governance", "performance"] },
+  { title: "Organization", itemIds: ["teams", "partners"] },
+];
+
 export default function EdgeSalesPage() {
-  const { permissions, isLoading: platformLoading } = useEdgePlatform();
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading sales studio…" />}>
+      <EdgeSalesStudio />
+    </Suspense>
+  );
+}
+
+function EdgeSalesStudio() {
+  const { permissions, isLoading: platformLoading, activeVerticalId } =
+    useEdgePlatform();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useStudioSectionParam<Tab>(
+    "overview",
+    SALES_SECTION_IDS,
+  );
   const [accountForm, setAccountForm] = useState({
     legalName: "",
     country: "",
@@ -249,8 +286,9 @@ export default function EdgeSalesPage() {
   );
 
   const overviewQuery = useQuery({
-    queryKey: ["edge", "sales", "overview"],
-    queryFn: () => edgeApi.getSalesOverview(),
+    queryKey: ["edge", "sales", "overview", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getSalesOverview({ verticalId: activeVerticalId ?? undefined }),
     enabled: tab === "overview" && canReadAny,
   });
 
@@ -415,20 +453,30 @@ export default function EdgeSalesPage() {
   });
 
   const performanceQuery = useQuery({
-    queryKey: ["edge", "sales", "performance"],
-    queryFn: () => edgeApi.getSalesPerformance(),
+    queryKey: ["edge", "sales", "performance", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getSalesPerformance({ verticalId: activeVerticalId ?? undefined }),
     enabled: tab === "performance" && canReadAny,
   });
 
   const forecastQuery = useQuery({
-    queryKey: ["edge", "sales", "forecast"],
-    queryFn: () => edgeApi.getSalesForecast({ model: "WEIGHTED" }),
+    queryKey: ["edge", "sales", "forecast", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getSalesForecast({
+        model: "WEIGHTED",
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled: tab === "performance" && canReadAny,
   });
 
   const searchQuery = useQuery({
-    queryKey: ["edge", "sales", "search", searchQ],
-    queryFn: () => edgeApi.searchSales({ q: searchQ, limit: 20 }),
+    queryKey: ["edge", "sales", "search", searchQ, activeVerticalId],
+    queryFn: () =>
+      edgeApi.searchSales({
+        q: searchQ,
+        limit: 20,
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled: searchQ.trim().length >= 2 && canReadAny,
   });
 
@@ -439,8 +487,11 @@ export default function EdgeSalesPage() {
   });
 
   const questionnairesQuery = useQuery({
-    queryKey: ["edge", "sales", "questionnaires"],
-    queryFn: () => edgeApi.listSalesQuestionnaires(),
+    queryKey: ["edge", "sales", "questionnaires", activeVerticalId],
+    queryFn: () =>
+      edgeApi.listSalesQuestionnaires({
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled: tab === "consulting" && canReadAny,
   });
 
@@ -1025,6 +1076,18 @@ export default function EdgeSalesPage() {
     return [];
   }, [visibilitySubjectType, accountPickOptions, opportunityPickOptions]);
 
+  // Hooks must run before any conditional early return (rules-of-hooks).
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return SALES_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .map((id) => TABS.find((t) => t.id === id))
+        .filter((t): t is (typeof TABS)[number] => Boolean(t))
+        .filter((t) => hasEdgePermission(permissions, t.permission))
+        .map((t) => ({ id: t.id, label: t.label })),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (platformLoading) return <EdgeLoadingState label="Loading sales…" />;
   if (!canReadAny) return <EdgeForbiddenState />;
 
@@ -1093,66 +1156,46 @@ export default function EdgeSalesPage() {
     | undefined;
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          Sales &amp; Commercial Operations
-        </p>
-        <h1 className="font-display text-3xl tracking-tight">Okapi Edge Sales</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          End-to-end commercial cycle: CRM, pipeline, quotes, deal desk,
-          contracts, orders and handoff. Accounts are not tenants; provisioning
-          stays outside P4.
-        </p>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <input
-            className={fieldControlClass + " min-w-[16rem] flex-1"}
-            placeholder="Global search (accounts, contacts, opportunities…)"
-            value={searchQ}
-            onChange={(e) => setSearchQ(e.target.value)}
-          />
-        </div>
-        {searchQ.trim().length >= 2 ? (
-          <ul className="mt-2 max-h-48 overflow-auto rounded-xl border border-border/70 text-sm">
-            {searchQuery.isLoading ? (
-              <li className="p-3 text-muted-foreground">Searching…</li>
-            ) : !((searchQuery.data?.data as unknown[] | undefined) ?? [])
-                .length ? (
-              <li className="p-3 text-muted-foreground">No matches</li>
-            ) : (
-              (
-                (searchQuery.data?.data as Record<string, unknown>[] | undefined) ??
-                []
-              ).map((hit) => (
-                <li
-                  key={`${String(hit.entityType)}-${String(hit.id)}`}
-                  className="border-b border-border/50 p-3"
-                >
-                  <span className="font-medium">{String(hit.title)}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {String(hit.entityType)} · {String(hit.subtitle ?? "")}
-                  </span>
-                </li>
-              ))
-            )}
-          </ul>
-        ) : null}
-      </header>
-
-      <nav className="flex flex-wrap gap-2 border-b border-border/60 pb-3">
-        {TABS.map((t) =>
-          hasEdgePermission(permissions, t.permission) ? (
-            <Button
-              key={t.id}
-              size="sm"
-              variant={tab === t.id ? "default" : "ghost"}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ) : null,
-        )}
-      </nav>
+    <EdgeStudioShell
+      title="Sales studio"
+      description="End-to-end commercial cycle: CRM, pipeline, quotes, deal desk, contracts, orders and handoff. Accounts are not tenants; provisioning stays outside P4."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as Tab)}
+      actions={
+        <input
+          className={fieldControlClass + " min-w-[14rem]"}
+          placeholder="Search accounts, contacts, opps…"
+          value={searchQ}
+          onChange={(e) => setSearchQ(e.target.value)}
+          aria-label="Global sales search"
+        />
+      }
+    >
+      {searchQ.trim().length >= 2 ? (
+        <ul className="max-h-48 overflow-auto rounded-[var(--radius-md)] border border-[var(--border)] type-sm">
+          {searchQuery.isLoading ? (
+            <li className="p-3 text-[var(--text-muted)]">Searching…</li>
+          ) : !((searchQuery.data?.data as unknown[] | undefined) ?? []).length ? (
+            <li className="p-3 text-[var(--text-muted)]">No matches</li>
+          ) : (
+            (
+              (searchQuery.data?.data as Record<string, unknown>[] | undefined) ??
+              []
+            ).map((hit) => (
+              <li
+                key={`${String(hit.entityType)}-${String(hit.id)}`}
+                className="border-b border-[var(--border)] p-3 last:border-0"
+              >
+                <span className="font-medium">{String(hit.title)}</span>
+                <span className="ml-2 type-xs text-[var(--text-muted)]">
+                  {String(hit.entityType)} · {String(hit.subtitle ?? "")}
+                </span>
+              </li>
+            ))
+          )}
+        </ul>
+      ) : null}
 
       {tab === "overview" ? (
         overviewQuery.isLoading ? (
@@ -3021,7 +3064,7 @@ export default function EdgeSalesPage() {
           </section>
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }
 

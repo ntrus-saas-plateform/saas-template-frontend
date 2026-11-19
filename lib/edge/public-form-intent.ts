@@ -59,6 +59,11 @@ function modeToIntent(mode: string | null): PublicFormSubmitIntent | null {
   }
   if (mode.includes("APPLICATION")) return "APPLICATION";
   if (mode.includes("LEAD")) return "LEAD";
+  // formType / formIntent marketing (CONTACT, DEMO_REQUEST, …) → capture lead
+  if (LEAD_TOKENS.some((l) => mode === l || mode.includes(l))) return "LEAD";
+  if (APPLICATION_TOKENS.some((a) => mode === a || mode.includes(a))) {
+    return "APPLICATION";
+  }
   return null;
 }
 

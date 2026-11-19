@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import {
   RegistryFilters,
   RegistryPagination,
@@ -99,9 +104,28 @@ const TABS: { id: TabId; label: string; permissions: string[] }[] = [
   },
 ];
 
+const REGISTRY_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const REGISTRY_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Products", itemIds: ["products", "versions"] },
+  { title: "Runtime", itemIds: ["platforms", "environments", "profiles"] },
+  {
+    title: "Governance",
+    itemIds: ["contracts", "compatibility", "history"],
+  },
+];
+
 const LIMIT = 20;
 
 export default function RegistryManagementPage() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading registry studio…" />}>
+      <RegistryManagementStudio />
+    </Suspense>
+  );
+}
+
+function RegistryManagementStudio() {
   const { permissions, isLoading: platformLoading } = useEdgePlatform();
   const queryClient = useQueryClient();
   const canReadAny = useMemo(
@@ -111,7 +135,10 @@ export default function RegistryManagementPage() {
     [permissions],
   );
 
-  const [tab, setTab] = useState<TabId>("products");
+  const [tab, setTab] = useStudioSectionParam<TabId>(
+    "products",
+    REGISTRY_SECTION_IDS,
+  );
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0);
@@ -126,7 +153,7 @@ export default function RegistryManagementPage() {
     )) {
       setTab(allowed);
     }
-  }, [permissions, tab]);
+  }, [permissions, setTab, tab]);
 
   const canManageProducts = hasEdgePermission(
     permissions,
@@ -518,37 +545,37 @@ export default function RegistryManagementPage() {
                   ? REGISTRY_STATUS_OPTIONS.compatibility
                   : [];
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return REGISTRY_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const t = TABS.find((x) => x.id === id);
+          return t
+            ? hasAnyEdgePermission(permissions, t.permissions)
+            : false;
+        })
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   return (
-    <div className="space-y-[var(--space-6)] p-[var(--space-4)] md:p-[var(--space-6)]">
-      <header className="space-y-[var(--space-2)]">
+    <EdgeStudioShell
+      title="Registry studio"
+      description="Product, platform, runtime environment, deployment profile, and control-contract registries. Compatibility evaluation is deterministic — no mock success paths."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => switchTab(id as TabId)}
+      className="p-[var(--space-4)] md:p-[var(--space-6)]"
+      actions={
         <p className="type-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Ecosystem Management · P7.2 Registry
         </p>
-        <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-          Registry Management
-        </h1>
-        <p className="max-w-3xl type-sm text-[var(--text-secondary)]">
-          Product, platform, runtime environment, deployment profile, and
-          control-contract registries. Compatibility evaluation is
-          deterministic — no mock success paths.
-        </p>
-      </header>
-
-      <nav className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-3">
-        {TABS.map((t) =>
-          hasAnyEdgePermission(permissions, t.permissions) ? (
-            <Button
-              key={t.id}
-              size="sm"
-              variant={tab === t.id ? "primary" : "ghost"}
-              onClick={() => switchTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ) : null,
-        )}
-      </nav>
-
+      }
+    >
       {tab !== "history" ? (
         <RegistryFilters
           q={q}
@@ -755,7 +782,7 @@ export default function RegistryManagementPage() {
           />
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }
 

@@ -59,6 +59,12 @@ vi.mock("@/providers/edge-platform-provider", () => ({
   }),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge/acquisition",
+}));
+
 vi.mock("@/lib/api/edge", () => ({
   edgeApi: edgeApiMocks,
 }));
@@ -72,6 +78,10 @@ function renderModule() {
       <EdgeAcquisitionModule />
     </QueryClientProvider>,
   );
+}
+
+function clickSection(name: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
 }
 
 function setInputValue(el: HTMLElement, value: string) {
@@ -142,21 +152,21 @@ describe("EdgeAcquisitionModule", () => {
     expect(within(overview).getByText(/Applications open: 0/i)).toBeInTheDocument();
   });
 
-  it("renders acquisition tabs", async () => {
+  it("renders acquisition studio sections", async () => {
     renderModule();
     const module = await screen.findByTestId("edge-acquisition-module");
-    const tablist = within(module).getByRole("tablist");
-    expect(within(tablist).getByRole("tab", { name: "Overview" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Products" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Forms" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Applications" })).toBeInTheDocument();
-    expect(within(tablist).getByRole("tab", { name: "Analytics" })).toBeInTheDocument();
+    const nav = within(module).getByTestId("edge-studio-section-nav");
+    expect(within(nav).getByRole("button", { name: "Overview" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Products" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Forms" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Applications" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Analytics" })).toBeInTheDocument();
   });
 
   it("switches to Products tab and shows empty state", async () => {
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Products" }));
+    clickSection("Products");
     expect(
       await screen.findByText(/No product presentations/i),
     ).toBeInTheDocument();
@@ -166,7 +176,7 @@ describe("EdgeAcquisitionModule", () => {
   it("switches to Forms tab and shows form builder", async () => {
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Forms" }));
+    clickSection("Forms");
     expect(await screen.findByText(/Form builder/i)).toBeInTheDocument();
     expect(edgeApiMocks.listAcquisitionForms).toHaveBeenCalled();
   });
@@ -174,7 +184,7 @@ describe("EdgeAcquisitionModule", () => {
   it("switches to Applications inbox empty state", async () => {
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Applications" }));
+    clickSection("Applications");
     expect(await screen.findByText(/No applications/i)).toBeInTheDocument();
     expect(edgeApiMocks.listAcquisitionApplications).toHaveBeenCalled();
   });
@@ -216,7 +226,7 @@ describe("EdgeAcquisitionModule", () => {
 
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Applications" }));
+    clickSection("Applications");
     expect(await screen.findByText("APP-1")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     const panel = await screen.findByTestId("acq-draft-resume");
@@ -239,7 +249,7 @@ describe("EdgeAcquisitionModule", () => {
   it("loads analytics funnel without inventing conversion", async () => {
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Analytics" }));
+    clickSection("Analytics");
     expect(await screen.findByText(/Conversion funnel/i)).toBeInTheDocument();
     expect(await screen.findByText(/No analytics events/i)).toBeInTheDocument();
     expect(edgeApiMocks.getAcquisitionConversionFunnel).toHaveBeenCalled();
@@ -248,7 +258,7 @@ describe("EdgeAcquisitionModule", () => {
   it("lists documents via listAcquisitionDocuments", async () => {
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    clickSection("Documents");
     expect(await screen.findByText(/No document references/i)).toBeInTheDocument();
     expect(edgeApiMocks.listAcquisitionDocuments).toHaveBeenCalled();
   });
@@ -258,7 +268,7 @@ describe("EdgeAcquisitionModule", () => {
 
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    clickSection("Documents");
     await screen.findByRole("button", { name: "Register document reference" });
 
     setInputValue(
@@ -328,7 +338,7 @@ describe("EdgeAcquisitionModule", () => {
 
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    clickSection("Documents");
     expect(await screen.findByText("KBIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     await waitFor(() => {
@@ -341,7 +351,7 @@ describe("EdgeAcquisitionModule", () => {
   it("lists quotations via listAcquisitionQuotations", async () => {
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Quotes" }));
+    clickSection("Quotes");
     expect(await screen.findByText(/No quote requests/i)).toBeInTheDocument();
     expect(edgeApiMocks.listAcquisitionQuotations).toHaveBeenCalled();
   });
@@ -349,7 +359,7 @@ describe("EdgeAcquisitionModule", () => {
   it("lists checkouts and handoffs", async () => {
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Checkout" }));
+    clickSection("Checkout");
     expect(await screen.findByText(/No checkout sessions/i)).toBeInTheDocument();
     expect(await screen.findByText(/No handoffs/i)).toBeInTheDocument();
     expect(edgeApiMocks.listAcquisitionCheckouts).toHaveBeenCalled();
@@ -397,7 +407,7 @@ describe("EdgeAcquisitionModule", () => {
 
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Checkout" }));
+    clickSection("Checkout");
     expect(await screen.findByText("PENDING_PAYMENT")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
 
@@ -444,7 +454,7 @@ describe("EdgeAcquisitionModule", () => {
     );
     renderModule();
     await screen.findByTestId("edge-acquisition-module");
-    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    clickSection("Documents");
     expect(await screen.findByText(/Unavailable/i)).toBeInTheDocument();
     expect(await screen.findByText(/documents API down/i)).toBeInTheDocument();
   });

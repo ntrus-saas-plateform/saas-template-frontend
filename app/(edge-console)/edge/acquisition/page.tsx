@@ -9,17 +9,11 @@ export const metadata: Metadata = {
 
 /**
  * Edge Admin Console — Acquisition CX (P10).
+ * Header chrome lives in EdgeStudioShell inside the module.
  */
 export default function EdgeAcquisitionPage() {
   return (
-    <div className="space-y-6 p-6" data-testid="edge-acquisition-page">
-      <div>
-        <h1 className="text-2xl font-semibold">Acquisition</h1>
-        <p className="text-sm text-muted-foreground">
-          Customer experience &amp; subscription acquisition. Counts and funnel
-          come from the API only — never fabricated conversion rates.
-        </p>
-      </div>
+    <div className="p-6" data-testid="edge-acquisition-page">
       <EdgeAcquisitionModule />
     </div>
   );

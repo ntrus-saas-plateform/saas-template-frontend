@@ -6,7 +6,7 @@
  * Observe / remediate via P7.4. UNKNOWN ≠ deleted. Never invent REMEDIATED.
  * Auto-remediate only when eligible + policy + reversible; else approval.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
@@ -23,6 +22,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -44,6 +48,14 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "History",
     permission: "platform:reconciliation:history:read",
   },
+];
+
+const RECON_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const RECON_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Runs", itemIds: ["runs"] },
+  { title: "Policies", itemIds: ["policies"] },
+  { title: "Governance", itemIds: ["history"] },
 ];
 
 function statusTone(
@@ -79,9 +91,17 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 export function EdgeReconciliationModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading reconciliation studio…" />}>
+      <EdgeReconciliationStudio />
+    </Suspense>
+  );
+}
+
+function EdgeReconciliationStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("runs");
+  const [tab, setTab] = useStudioSectionParam<TabId>("runs", RECON_SECTION_IDS);
   const [selectedRunId, setSelectedRunId] = useState("");
   const [historyRunId, setHistoryRunId] = useState("");
   const [runFormOpen, setRunFormOpen] = useState(false);
@@ -275,6 +295,21 @@ export function EdgeReconciliationModule() {
     },
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return RECON_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const x = TABS.find((y) => y.id === id);
+          return x ? hasEdgePermission(permissions, x.permission) : false;
+        })
+        .map((id) => {
+          const x = TABS.find((y) => y.id === id)!;
+          return { id: x.id, label: x.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (!hasAnyEdgePermission(permissions, ["platform:reconciliation:read"])) {
     return <EdgeForbiddenState />;
   }
@@ -290,15 +325,14 @@ export function EdgeReconciliationModule() {
   };
 
   return (
-    <div className="space-y-4" data-testid="recon-module">
-      <Tabs
-        tabs={TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map(
-          (t) => ({ id: t.id, label: t.label }),
-        )}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
+    <EdgeStudioShell
+      title="Reconciliation studio"
+      description="Observe / remediate via P7.4. UNKNOWN ≠ deleted. Never invent REMEDIATED."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="recon-module"
+    >
       {tab === "runs" ? (
         <EdgePermissionGate permission="platform:reconciliation:read">
           {runsQ.isLoading ? (
@@ -713,6 +747,6 @@ export function EdgeReconciliationModule() {
           </div>
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

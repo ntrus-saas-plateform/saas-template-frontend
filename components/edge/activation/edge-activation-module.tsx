@@ -7,7 +7,7 @@
  * NEVER invents ACTIVE — status badges reflect API state only.
  * Technical ACTIVE ≠ commercial Subscription.ACTIVE.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -23,6 +22,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -53,6 +57,13 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "History",
     permission: "platform:activation:history:read",
   },
+];
+
+const ACT_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const ACT_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Readiness", itemIds: ["evaluations", "records"] },
+  { title: "Audit", itemIds: ["history"] },
 ];
 
 function statusTone(
@@ -101,9 +112,17 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 export function EdgeActivationModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading activation studio…" />}>
+      <EdgeActivationStudio />
+    </Suspense>
+  );
+}
+
+function EdgeActivationStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("evaluations");
+  const [tab, setTab] = useStudioSectionParam<TabId>("evaluations", ACT_SECTION_IDS);
   const [selectedEvaluationId, setSelectedEvaluationId] = useState("");
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [historyRecordId, setHistoryRecordId] = useState("");
@@ -260,10 +279,22 @@ export function EdgeActivationModule() {
     },
   });
 
-  const visibleTabs = useMemo(
-    () => TABS.filter((t) => hasEdgePermission(permissions, t.permission)),
-    [permissions],
-  );
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(
+      TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map(
+        (t) => t.id,
+      ),
+    );
+    return ACT_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
 
   if (!hasAnyEdgePermission(permissions, ["platform:activation:read"])) {
     return <EdgeForbiddenState />;
@@ -323,18 +354,20 @@ export function EdgeActivationModule() {
     activateRecord.error;
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="act-module">
+    <EdgeStudioShell
+      title="Activation studio"
+      description="Technical readiness & activation via P7.4 — never invents ACTIVE. Technical ≠ commercial."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="act-module"
+    >
       {actionError ? (
         <Alert tone="error" title="Action refusée">
           {(actionError as Error).message}
         </Alert>
       ) : null}
 
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
 
       {tab === "evaluations" && (
         <EdgePermissionGate permission="platform:activation:read">
@@ -956,6 +989,6 @@ export function EdgeActivationModule() {
           </div>
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

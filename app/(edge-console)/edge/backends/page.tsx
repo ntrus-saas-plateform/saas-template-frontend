@@ -4,13 +4,12 @@
  * Business Backend registry — catalog of BB systems bound to Edge products.
  * Runtime control (handshake, exchanges) lives in Product Control.
  */
-import { useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -18,6 +17,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -28,12 +32,29 @@ function errMessage(err: unknown): string {
   return "Request failed";
 }
 
-const TABS = [
+type TabId = "registry" | "create";
+
+const TABS: { id: TabId; label: string }[] = [
   { id: "registry", label: "Registry" },
   { id: "create", label: "Register BB" },
 ];
 
+const BB_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const BB_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Directory", itemIds: ["registry"] },
+  { title: "Onboarding", itemIds: ["create"] },
+];
+
 export default function EdgeBackendsPage() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading backends studio…" />}>
+      <EdgeBackendsStudio />
+    </Suspense>
+  );
+}
+
+function EdgeBackendsStudio() {
   const { permissions } = useEdgePlatform();
   const permissionKnown = permissions.length > 0;
   const canRead =
@@ -42,7 +63,7 @@ export default function EdgeBackendsPage() {
   const canManage =
     !permissionKnown ||
     hasEdgePermission(permissions, "platform:backends:manage");
-  const [tab, setTab] = useState("registry");
+  const [tab, setTab] = useStudioSectionParam<TabId>("registry", BB_SECTION_IDS);
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -80,6 +101,18 @@ export default function EdgeBackendsPage() {
     onError: (err) => setFormError(errMessage(err)),
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return BB_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => id !== "create" || canManage)
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [canManage]);
+
   if (!canRead) {
     return (
       <EdgeForbiddenState description="Requires platform:backends:read." />
@@ -87,36 +120,26 @@ export default function EdgeBackendsPage() {
   }
 
   return (
-    <div className="space-y-[var(--space-5)]">
-      <header className="flex flex-wrap items-end justify-between gap-[var(--space-3)]">
-        <div className="space-y-[var(--space-1)]">
-          <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-            Business Backends
-          </h1>
-          <p className="max-w-2xl type-sm text-[var(--text-secondary)]">
-            Registry of BB systems that Edge products can bind to. This is not
-            the ERP admin console — for live control-plane operations
-            (endpoints, handshake, exchanges), open Product Control.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-[var(--space-2)]">
-          <Button asChild variant="outline">
+    <EdgeStudioShell
+      title="Business Backends studio"
+      description="Registry of BB systems that Edge products can bind to. Live control-plane operations (endpoints, handshake, exchanges) live in Product Control."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="edge-backends-studio"
+      actions={
+        <>
+          <Button asChild variant="outline" size="sm">
             <Link href="/edge/catalog">Catalog</Link>
           </Button>
-          <Button asChild>
+          <Button asChild size="sm">
             <Link href="/edge/provisioning/product-controls">
-              Open Product Control (BB hub)
+              Product Control
             </Link>
           </Button>
-        </div>
-      </header>
-
-      <Tabs
-        tabs={canManage ? TABS : TABS.filter((t) => t.id !== "create")}
-        value={tab}
-        onChange={setTab}
-      />
-
+        </>
+      }
+    >
       {tab === "registry" ? (
         <section className="space-y-[var(--space-4)]">
           {query.isLoading ? <EdgeLoadingState /> : null}
@@ -232,6 +255,6 @@ export default function EdgeBackendsPage() {
           </form>
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { AcquirePlanCheckout } from "@/components/acquisition/acquire-plan-checkout";
+import { buildAcquireApplyHref } from "@/lib/edge/public-acquisition-client";
 import { publicAcquisitionFetch } from "@/lib/edge/public-acquisition-fetch";
 import type { PlanPresentation, PublicProductPage } from "@/types/edge-acquisition";
 
@@ -57,20 +58,6 @@ async function loadProduct(slug: string): Promise<{
       error: e instanceof Error ? e.message : "Fetch failed",
     };
   }
-}
-
-function applyHref(
-  slug: string,
-  defaultFormSlug: string | null | undefined,
-  plan: PlanPresentation,
-): string {
-  const base = `/acquire/${encodeURIComponent(slug)}/apply`;
-  const qs = new URLSearchParams();
-  if (defaultFormSlug?.trim()) qs.set("form", defaultFormSlug.trim());
-  qs.set("planPresentationId", plan.id);
-  if (plan.commercialPlanId) qs.set("commercialPlanId", plan.commercialPlanId);
-  const q = qs.toString();
-  return q ? `${base}?${q}` : base;
 }
 
 export default async function AcquireConfigurePage({ params }: Props) {
@@ -142,10 +129,14 @@ export default async function AcquireConfigurePage({ params }: Props) {
                   </div>
                   <div className="flex flex-col gap-2 sm:items-end">
                     <Link
-                      href={applyHref(slug, defaultFormSlug, plan)}
+                      href={buildAcquireApplyHref(slug, {
+                        defaultFormSlug,
+                        planPresentationId: plan.id,
+                        commercialPlanId: plan.commercialPlanId,
+                      })}
                       className="inline-flex h-[var(--control-height)] items-center justify-center bg-[var(--primary)] px-4 type-sm font-medium text-[var(--on-primary)]"
                     >
-                      Postuler / candidature
+                      Postuler
                     </Link>
                     {published ? (
                       <AcquirePlanCheckout

@@ -6,7 +6,7 @@
  * Assemble / certify / revoke via P7.4. Cannot CERTIFY if required evidence
  * MISSING/FAILED. Revoke clears CERTIFIED. p714_agents optional for Shared SaaS.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -22,6 +21,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -40,6 +44,13 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "Evidence viewer",
     permission: "platform:certification:history:read",
   },
+];
+
+const CERT_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const CERT_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Registry", itemIds: ["packages"] },
+  { title: "Governance", itemIds: ["evidence"] },
 ];
 
 function statusTone(
@@ -76,9 +87,19 @@ export type EdgeCertificationModuleProps = {
 export function EdgeCertificationModule({
   initialTab = "packages",
 }: EdgeCertificationModuleProps) {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading certification studio…" />}>
+      <EdgeCertificationStudio initialTab={initialTab} />
+    </Suspense>
+  );
+}
+
+function EdgeCertificationStudio({
+  initialTab = "packages",
+}: EdgeCertificationModuleProps) {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>(initialTab);
+  const [tab, setTab] = useStudioSectionParam<TabId>(initialTab, CERT_SECTION_IDS);
   const [selectedId, setSelectedId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ code: "", name: "" });
@@ -174,6 +195,21 @@ export function EdgeCertificationModule({
     },
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return CERT_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => {
+          const x = TABS.find((y) => y.id === id);
+          return x ? hasEdgePermission(permissions, x.permission) : false;
+        })
+        .map((id) => {
+          const x = TABS.find((y) => y.id === id)!;
+          return { id: x.id, label: x.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (!hasAnyEdgePermission(permissions, ["platform:certification:read"])) {
     return <EdgeForbiddenState />;
   }
@@ -184,15 +220,14 @@ export function EdgeCertificationModule({
   };
 
   return (
-    <div className="space-y-4" data-testid="cert-module">
-      <Tabs
-        tabs={TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map(
-          (t) => ({ id: t.id, label: t.label }),
-        )}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
+    <EdgeStudioShell
+      title="Certification studio"
+      description="Assemble / certify / revoke via P7.4. Cannot CERTIFY if required evidence MISSING/FAILED."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="cert-module"
+    >
       {tab === "packages" ? (
         <EdgePermissionGate permission="platform:certification:read">
           {packagesQ.isLoading ? (
@@ -525,6 +560,6 @@ export function EdgeCertificationModule({
           )}
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

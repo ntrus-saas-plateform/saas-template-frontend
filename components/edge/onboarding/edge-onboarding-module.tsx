@@ -7,7 +7,7 @@
  * NEVER invents CLOSED/PASSED — status badges reflect API state only.
  * Operational onboarding ≠ CRM / business invites / Subscription.ACTIVE.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
@@ -24,6 +23,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -46,6 +50,14 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     permission: "platform:onboarding:history:read",
   },
   { id: "cs", label: "CS / Aha", permission: "platform:onboarding:read" },
+];
+
+const OB_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const OB_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Operations", itemIds: ["journeys", "templates"] },
+  { title: "History", itemIds: ["history"] },
+  { title: "Customer success", itemIds: ["cs"] },
 ];
 
 function statusTone(
@@ -83,9 +95,17 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 export function EdgeOnboardingModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading onboarding studio…" />}>
+      <EdgeOnboardingStudio />
+    </Suspense>
+  );
+}
+
+function EdgeOnboardingStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("journeys");
+  const [tab, setTab] = useStudioSectionParam<TabId>("journeys", OB_SECTION_IDS);
   const [selectedJourneyId, setSelectedJourneyId] = useState("");
   const [historyJourneyId, setHistoryJourneyId] = useState("");
 
@@ -347,6 +367,19 @@ export function EdgeOnboardingModule() {
     [permissions],
   );
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(visibleTabs.map((t) => t.id));
+    return OB_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [visibleTabs]);
+
   if (!hasAnyEdgePermission(permissions, ["platform:onboarding:read"])) {
     return <EdgeForbiddenState />;
   }
@@ -409,19 +442,21 @@ export function EdgeOnboardingModule() {
     runExpansion.error;
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="ob-module">
-      {actionError ? (
-        <Alert tone="error" title="Action refusée">
-          {(actionError as Error).message}
-        </Alert>
-      ) : null}
-
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
+    <EdgeStudioShell
+      title="Onboarding studio"
+      description="Templates, journeys, and CS signals — API state only; never invent CLOSED/PASSED."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="ob-module"
+      actions={
+        actionError ? (
+          <Alert tone="error" title="Action refusée">
+            {(actionError as Error).message}
+          </Alert>
+        ) : null
+      }
+    >
       {tab === "journeys" && (
         <EdgePermissionGate permission="platform:onboarding:read">
           {journeysQ.isLoading ? (
@@ -1070,6 +1105,6 @@ export function EdgeOnboardingModule() {
           </div>
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

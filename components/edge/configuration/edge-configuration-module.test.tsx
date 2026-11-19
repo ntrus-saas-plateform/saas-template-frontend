@@ -21,6 +21,11 @@ const createConfigurationBundle = vi.fn();
 const publishConfigurationBundle = vi.fn();
 const assignTenantConfiguration = vi.fn();
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge",
+}));
 vi.mock("@/lib/api/edge", () => ({
   EdgeApiError: class EdgeApiError extends Error {
     status: number;
@@ -224,7 +229,7 @@ describe("EdgeConfigurationModule (P7.8 console)", () => {
       (p) => p !== "platform:configuration:deploy",
     );
     renderModule();
-    fireEvent.click(await screen.findByRole("tab", { name: "Tenant Assignments" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tenant Assignments" }));
     fireEvent.click(await screen.findByLabelText("Choisir un assignment"));
     const option = await screen.findByRole("option", {
       name: /tenant-1 — ASSIGNED/,

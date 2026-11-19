@@ -6,7 +6,7 @@
  * Registry (schemas / templates / bundles), tenant assignments, deploy/rollback
  * via P7.4 workflows. Secrets are never rendered — only vault refs / redacted JSON.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -22,6 +21,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -56,6 +60,14 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "History",
     permission: "platform:configuration:history:read",
   },
+];
+
+const CFG_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const CFG_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Registry", itemIds: ["schemas", "templates", "bundles"] },
+  { title: "Tenants", itemIds: ["assignments"] },
+  { title: "Audit", itemIds: ["history"] },
 ];
 
 function statusTone(
@@ -121,9 +133,17 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 export function EdgeConfigurationModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading configuration studio…" />}>
+      <EdgeConfigurationStudio />
+    </Suspense>
+  );
+}
+
+function EdgeConfigurationStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("schemas");
+  const [tab, setTab] = useStudioSectionParam<TabId>("schemas", CFG_SECTION_IDS);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [historyAssignmentId, setHistoryAssignmentId] = useState("");
   const [schemaFormOpen, setSchemaFormOpen] = useState(false);
@@ -332,10 +352,22 @@ export function EdgeConfigurationModule() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["cfg"] }),
   });
 
-  const visibleTabs = useMemo(
-    () => TABS.filter((t) => hasEdgePermission(permissions, t.permission)),
-    [permissions],
-  );
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(
+      TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map(
+        (t) => t.id,
+      ),
+    );
+    return CFG_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
 
   if (!hasAnyEdgePermission(permissions, ["platform:configuration:read"])) {
     return <EdgeForbiddenState />;
@@ -391,18 +423,20 @@ export function EdgeConfigurationModule() {
     reconcile.error;
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="cfg-module">
+    <EdgeStudioShell
+      title="Configuration studio"
+      description="Schemas, templates, bundles and tenant assignments — secrets never rendered."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="cfg-module"
+    >
       {actionError ? (
         <Alert tone="error" title="Action refusée">
           {(actionError as Error).message}
         </Alert>
       ) : null}
 
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
 
       {tab === "schemas" && (
         <EdgePermissionGate permission="platform:configuration:read">
@@ -1059,6 +1093,6 @@ export function EdgeConfigurationModule() {
           </div>
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

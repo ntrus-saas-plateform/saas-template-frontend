@@ -29,6 +29,8 @@ vi.mock("next/link", () => ({
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/lib/api/edge", () => ({
@@ -245,13 +247,20 @@ describe("ProductControlEndpointDetailPage", () => {
       await screen.findByRole("heading", { name: "bb-pc-prod" }),
     ).toBeTruthy();
     expect(screen.getAllByText("ACTIVE").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("COMPATIBLE")).toBeTruthy();
-    expect(screen.getByText("provision.tenant")).toBeTruthy();
     expect(screen.getAllByText("HEALTHY").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("•••••••• (ref present)")).toBeTruthy();
     expect(screen.queryByText("vault://edge/pc/prod")).toBeNull();
     expect(screen.queryByText("should-not-leak")).toBeNull();
     expect(screen.getByText(/"region": "eu"/)).toBeTruthy();
+    expect(
+      await screen.findByTestId("edge-endpoint-detail-studio"),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Contracts" }));
+    expect(await screen.findByText("COMPATIBLE")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Capabilities" }));
+    expect(await screen.findByText("provision.tenant")).toBeTruthy();
   });
 
   it("runs handshake, discover, health and quarantine actions", async () => {

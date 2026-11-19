@@ -4,13 +4,12 @@
  * P9 — Edge Admin Console: Platform Operations Center.
  * Tabbed control plane — API state only; never invent live health metrics.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { ListOrUuidField } from "@/components/edge/list-or-uuid-field";
 import {
   EdgeEmptyState,
@@ -18,6 +17,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi } from "@/lib/api/edge";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -99,6 +103,29 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     id: "automation",
     label: "Automation",
     permission: "platform:operations:automation:read",
+  },
+];
+
+const OPS_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const OPS_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Overview", itemIds: ["overview"] },
+  {
+    title: "Service health",
+    itemIds: ["services", "alerts", "reliability"],
+  },
+  {
+    title: "Incidents & problems",
+    itemIds: ["incidents", "problems", "recovery"],
+  },
+  {
+    title: "Changes & releases",
+    itemIds: ["changes", "releases", "maintenance", "requests", "tasks"],
+  },
+  { title: "Status", itemIds: ["status", "notifications"] },
+  {
+    title: "Runbooks & on-call",
+    itemIds: ["runbooks", "oncall", "risks", "automation"],
   },
 ];
 
@@ -272,11 +299,11 @@ function canApproveRejectChange(status: string): boolean {
 }
 
 export function EdgeOperationsModule() {
-  const { permissions } = useEdgePlatform();
+  const { permissions, activeVerticalId } = useEdgePlatform();
   const qc = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useStudioSectionParam<TabId>("overview", OPS_SECTION_IDS);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
     null,
   );
@@ -439,14 +466,20 @@ export function EdgeOperationsModule() {
   }
 
   const overviewQ = useQuery({
-    queryKey: ["p9", "overview"],
-    queryFn: () => edgeApi.getOperationsOverview(),
+    queryKey: ["p9", "overview", activeVerticalId ?? "all"],
+    queryFn: () =>
+      edgeApi.getOperationsOverview({
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled: canOverview && tab === "overview",
   });
 
   const analyticsQ = useQuery({
-    queryKey: ["p9", "analytics"],
-    queryFn: () => edgeApi.getOperationsAnalytics(),
+    queryKey: ["p9", "analytics", activeVerticalId ?? "all"],
+    queryFn: () =>
+      edgeApi.getOperationsAnalytics({
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled: canAnalytics && tab === "overview",
   });
 
@@ -484,12 +517,19 @@ export function EdgeOperationsModule() {
     enabled: canIncidentsRead && tab === "incidents" && Boolean(selectedIncidentId),
   });
 
-  useEffect(() => {
-    const fromUrl = searchParams.get("incident")?.trim() || null;
-    if (!fromUrl) return;
-    setTab("incidents");
-    setSelectedIncidentId(fromUrl);
-  }, [searchParams]);
+  // URL → state sync (deep link / back-forward) without setState-in-effect:
+  // adjust state during render when the param changes (React docs pattern).
+  const incidentFromUrl = searchParams.get("incident")?.trim() || null;
+  const [lastIncidentFromUrl, setLastIncidentFromUrl] = useState<string | null>(
+    null,
+  );
+  if (incidentFromUrl !== lastIncidentFromUrl) {
+    setLastIncidentFromUrl(incidentFromUrl);
+    if (incidentFromUrl) {
+      setTab("incidents");
+      setSelectedIncidentId(incidentFromUrl);
+    }
+  }
 
   function openIncident(id: string) {
     setSelectedIncidentId(id);
@@ -904,6 +944,19 @@ export function EdgeOperationsModule() {
         ? (analyticsRaw as { data?: Record<string, unknown> }).data
         : null;
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(visibleTabs.map((t) => t.id));
+    return OPS_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [visibleTabs]);
+
   if (!hasAnyEdgePermission(permissions, READ_PERMS)) {
     return <EdgeForbiddenState />;
   }
@@ -945,19 +998,21 @@ export function EdgeOperationsModule() {
       recoveryEvidenceJustification.trim().length >= 2);
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="edge-operations-module">
-      {actionError ? (
-        <p className="type-sm text-[var(--danger)]" role="alert">
-          {errMsg(actionError)}
-        </p>
-      ) : null}
-
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={activeTab}
-        onChange={(id) => setTab(id as TabId)}
-      />
-
+    <EdgeStudioShell
+      title="Operations studio"
+      description="Platform operations control plane — services, incidents, changes, status and runbooks. Metrics come from API state only."
+      groups={studioGroups}
+      section={activeTab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="edge-operations-module"
+      actions={
+        actionError ? (
+          <p className="type-sm text-[var(--danger)]" role="alert">
+            {errMsg(actionError)}
+          </p>
+        ) : null
+      }
+    >
       {activeTab === "overview" && canOverview ? (
         <section className="space-y-4" data-testid="ops-overview">
           <h2 className="type-md font-medium">Operations overview</h2>
@@ -2893,6 +2948,6 @@ export function EdgeOperationsModule() {
           ) : null}
         </section>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }

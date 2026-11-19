@@ -25,6 +25,12 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/edge/provisioning/registry",
+}));
+
 vi.mock("@/lib/api/edge", () => ({
   EdgeApiError: class EdgeApiError extends Error {
     status: number;
@@ -205,7 +211,7 @@ describe("RegistryManagementPage", () => {
 
   it("loads registry tabs and product list", async () => {
     renderPage();
-    expect(screen.getByRole("heading", { name: "Registry Management" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Registry studio" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Products" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Platforms" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Profiles" })).toBeTruthy();

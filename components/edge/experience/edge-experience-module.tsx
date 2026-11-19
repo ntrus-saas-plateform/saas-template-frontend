@@ -6,7 +6,7 @@
  * Profiles, applications, tenant assignments, domains, provision/deactivate
  * via P7.4 workflows. Secrets are never rendered — only vault refs / redacted JSON.
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -22,6 +21,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -68,6 +72,14 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
     label: "History",
     permission: "platform:experience:history:read",
   },
+];
+
+const XP_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const XP_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Catalog", itemIds: ["profiles", "applications"] },
+  { title: "Tenants", itemIds: ["assignments", "domains"] },
+  { title: "Audit", itemIds: ["history"] },
 ];
 
 const APPLICATION_KINDS = [
@@ -150,9 +162,17 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 export function EdgeExperienceModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading experience studio…" />}>
+      <EdgeExperienceStudio />
+    </Suspense>
+  );
+}
+
+function EdgeExperienceStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("profiles");
+  const [tab, setTab] = useStudioSectionParam<TabId>("profiles", XP_SECTION_IDS);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [historyAssignmentId, setHistoryAssignmentId] = useState("");
   const [domainsAssignmentId, setDomainsAssignmentId] = useState("");
@@ -362,10 +382,22 @@ export function EdgeExperienceModule() {
     },
   });
 
-  const visibleTabs = useMemo(
-    () => TABS.filter((t) => hasEdgePermission(permissions, t.permission)),
-    [permissions],
-  );
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(
+      TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map(
+        (t) => t.id,
+      ),
+    );
+    return XP_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
 
   if (!hasAnyEdgePermission(permissions, ["platform:experience:read"])) {
     return <EdgeForbiddenState />;
@@ -426,18 +458,20 @@ export function EdgeExperienceModule() {
     createDomain.error;
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="exp-module">
+    <EdgeStudioShell
+      title="Experience studio"
+      description="Profiles, applications, assignments and domains via P7.4 — secrets never rendered."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="exp-module"
+    >
       {actionError ? (
         <Alert tone="error" title="Action refusée">
           {(actionError as Error).message}
         </Alert>
       ) : null}
 
-      <Tabs
-        tabs={visibleTabs.map((t) => ({ id: t.id, label: t.label }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
 
       {tab === "profiles" && (
         <EdgePermissionGate permission="platform:experience:read">
@@ -1189,6 +1223,6 @@ export function EdgeExperienceModule() {
           </div>
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }

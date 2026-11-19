@@ -627,7 +627,7 @@ export function UserAdminHub({ identityOrUserId }: { identityOrUserId: string })
               description={
                 membershipsQuery.error instanceof Error
                   ? membershipsQuery.error.message
-                  : undefined
+                  : "Erreur inconnue"
               }
               onRetry={() => void membershipsQuery.refetch()}
             />

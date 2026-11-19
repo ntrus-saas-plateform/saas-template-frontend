@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -72,6 +77,22 @@ const TABS: { id: Tab; label: string; permission: string }[] = [
   },
 ];
 
+const BILLING_SECTION_IDS = TABS.map((t) => t.id) as Tab[];
+
+const BILLING_STUDIO_GROUPS: {
+  title: string;
+  itemIds: Tab[];
+}[] = [
+  { title: "Overview", itemIds: ["overview", "reports"] },
+  { title: "Accounts", itemIds: ["accounts"] },
+  { title: "Invoices & payments", itemIds: ["invoices", "payments"] },
+  {
+    title: "Collections & disputes",
+    itemIds: ["collections", "reconciliation"],
+  },
+  { title: "Schedules & tax", itemIds: ["configuration"] },
+];
+
 function unwrap<T>(payload: unknown): T | undefined {
   if (payload == null) return undefined;
   if (typeof payload === "object" && payload !== null && "data" in payload) {
@@ -90,9 +111,21 @@ function asRows(payload: unknown): Record<string, unknown>[] {
 }
 
 export default function EdgeBillingPage() {
-  const { permissions, isLoading: platformLoading } = useEdgePlatform();
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading billing studio…" />}>
+      <EdgeBillingStudio />
+    </Suspense>
+  );
+}
+
+function EdgeBillingStudio() {
+  const { permissions, isLoading: platformLoading, activeVerticalId } =
+    useEdgePlatform();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useStudioSectionParam<Tab>(
+    "overview",
+    BILLING_SECTION_IDS,
+  );
   const [accountForm, setAccountForm] = useState({
     commercialAccountId: "",
     currency: "USD",
@@ -179,23 +212,28 @@ export default function EdgeBillingPage() {
   );
 
   const overviewQuery = useQuery({
-    queryKey: ["edge", "billing", "overview"],
-    queryFn: () => edgeApi.getBillingOverview(),
+    queryKey: ["edge", "billing", "overview", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getBillingOverview({ verticalId: activeVerticalId ?? undefined }),
     enabled:
       (tab === "overview" || tab === "reports") && canReadAny,
   });
 
   const analyticsQuery = useQuery({
-    queryKey: ["edge", "billing", "analytics"],
-    queryFn: () => edgeApi.getBillingAnalytics(),
+    queryKey: ["edge", "billing", "analytics", activeVerticalId],
+    queryFn: () =>
+      edgeApi.getBillingAnalytics({ verticalId: activeVerticalId ?? undefined }),
     enabled:
       (tab === "overview" || tab === "reports") && canReadAny,
   });
 
   const cashTruthQuery = useQuery({
-    queryKey: ["edge", "billing", "cash-truth"],
+    queryKey: ["edge", "billing", "cash-truth", activeVerticalId],
     queryFn: async () => {
-      const res = await edgeApi.getBillingCashTruth({ currency: "USD" });
+      const res = await edgeApi.getBillingCashTruth({
+        currency: "USD",
+        verticalId: activeVerticalId ?? undefined,
+      });
       return (
         unwrap<Record<string, unknown>>(res) ??
         (res as { data?: Record<string, unknown> })?.data ??
@@ -226,8 +264,12 @@ export default function EdgeBillingPage() {
   });
 
   const invoicesQuery = useQuery({
-    queryKey: ["edge", "billing", "invoices"],
-    queryFn: () => edgeApi.listBillingInvoices({ limit: 50 }),
+    queryKey: ["edge", "billing", "invoices", activeVerticalId],
+    queryFn: () =>
+      edgeApi.listBillingInvoices({
+        limit: 50,
+        verticalId: activeVerticalId ?? undefined,
+      }),
     enabled:
       (tab === "invoices" ||
         tab === "collections" ||
@@ -605,6 +647,17 @@ export default function EdgeBillingPage() {
     },
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    return BILLING_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .map((id) => TABS.find((t) => t.id === id))
+        .filter((t): t is (typeof TABS)[number] => Boolean(t))
+        .filter((t) => hasEdgePermission(permissions, t.permission))
+        .map((t) => ({ id: t.id, label: t.label })),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (platformLoading) {
     return <EdgeLoadingState label="Loading billing…" />;
   }
@@ -643,53 +696,30 @@ export default function EdgeBillingPage() {
   const serverPayments = asRows(paymentsQuery.data);
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            Billing &amp; Financial Operations
-          </p>
+    <EdgeStudioShell
+      title="Billing studio"
+      description="Billing accounts, invoicing, payment intents, and financial reporting. Collected = succeeded intents; recognized revenue follows the active policy (default CASH_BASED_NET after migrate 094)."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as Tab)}
+      actions={
+        <>
           <LiveCompleteAdapterStatusBadge />
-        </div>
-        <h1 className="font-display text-3xl tracking-tight">
-          Okapi Edge Billing
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Billing accounts, invoicing, payment intents, and financial reporting.
-          Collected = succeeded intents; recognized revenue follows the active
-          policy (default CASH_BASED_NET after migrate 094).
-        </p>
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <Link
             href="/edge/subscriptions"
-            className="text-primary underline-offset-2 hover:underline"
+            className="type-sm text-[var(--primary)] underline-offset-2 hover:underline"
           >
-            Subscriptions console →
+            Subscriptions →
           </Link>
           <Link
             href="/edge/billing/portal"
-            className="text-primary underline-offset-2 hover:underline"
+            className="type-sm text-[var(--primary)] underline-offset-2 hover:underline"
           >
-            Open customer billing portal →
+            Customer portal →
           </Link>
-        </p>
-      </header>
-
-      <nav className="flex flex-wrap gap-2 border-b border-border/60 pb-3">
-        {TABS.map((t) =>
-          hasEdgePermission(permissions, t.permission) ? (
-            <Button
-              key={t.id}
-              size="sm"
-              variant={tab === t.id ? "default" : "ghost"}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ) : null,
-        )}
-      </nav>
-
+        </>
+      }
+    >
       {tab === "overview" || tab === "reports" ? (
         overviewQuery.isLoading && analyticsQuery.isLoading ? (
           <EdgeLoadingState label="Loading financial snapshot…" />
@@ -2168,7 +2198,7 @@ export default function EdgeBillingPage() {
           </section>
         </EdgePermissionGate>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }
 

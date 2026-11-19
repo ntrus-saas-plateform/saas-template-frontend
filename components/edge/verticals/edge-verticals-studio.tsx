@@ -4,14 +4,13 @@
  * Verticals studio — list, create, detail lifecycle, config, memberships, products.
  * Wired to Edge control-plane APIs only (no invented state).
  */
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fieldControlClass } from "@/components/ui/field-control";
-import { Tabs } from "@/components/ui/tabs";
 import { BackLink } from "@/components/ui/back-link";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
@@ -20,6 +19,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { edgeApi, EdgeApiError } from "@/lib/api/edge";
 import { hasEdgePermission } from "@/lib/edge/permissions";
 import { useEdgePlatform } from "@/providers/edge-platform-provider";
@@ -47,9 +51,26 @@ function slugify(input: string) {
 const LIST_TABS = [
   { id: "registry", label: "Registry" },
   { id: "create", label: "Create" },
+] as const;
+
+type ListTabId = (typeof LIST_TABS)[number]["id"];
+
+const LIST_SECTION_IDS = LIST_TABS.map((t) => t.id) as ListTabId[];
+
+const LIST_STUDIO_GROUPS: { title: string; itemIds: ListTabId[] }[] = [
+  { title: "Registry", itemIds: ["registry"] },
+  { title: "Create", itemIds: ["create"] },
 ];
 
 export function EdgeVerticalsListStudio() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading verticals studio…" />}>
+      <EdgeVerticalsListInner />
+    </Suspense>
+  );
+}
+
+function EdgeVerticalsListInner() {
   const { permissions } = useEdgePlatform();
   const permissionKnown = permissions.length > 0;
   const allowed =
@@ -58,7 +79,7 @@ export function EdgeVerticalsListStudio() {
   const canCreate =
     !permissionKnown ||
     hasEdgePermission(permissions, "platform:verticals:create");
-  const [tab, setTab] = useState("registry");
+  const [tab, setTab] = useStudioSectionParam<ListTabId>("registry", LIST_SECTION_IDS);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const queryClient = useQueryClient();
@@ -69,7 +90,7 @@ export function EdgeVerticalsListStudio() {
     if (searchParams.get("create") === "1" && canCreate) {
       setTab("create");
     }
-  }, [searchParams, canCreate]);
+  }, [searchParams, canCreate, setTab]);
 
   const query = useQuery({
     queryKey: ["edge", "verticals", "studio", search, status],
@@ -105,6 +126,21 @@ export function EdgeVerticalsListStudio() {
     onError: (err) => setFormError(errMessage(err)),
   });
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const ids = canCreate
+      ? LIST_SECTION_IDS
+      : LIST_SECTION_IDS.filter((id) => id !== "create");
+    return LIST_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => ids.includes(id))
+        .map((id) => {
+          const t = LIST_TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [canCreate]);
+
   if (!allowed) {
     return (
       <EdgeForbiddenState description="Requires platform:verticals:read." />
@@ -112,18 +148,13 @@ export function EdgeVerticalsListStudio() {
   }
 
   return (
-    <div className="space-y-[var(--space-5)]">
-      <header className="flex flex-wrap items-end justify-between gap-[var(--space-3)]">
-        <div className="space-y-[var(--space-1)]">
-          <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-            Verticals studio
-          </h1>
-          <p className="type-sm text-[var(--text-secondary)]">
-            Create, activate, and administer industry workspaces. Product
-            bindings and Business Backend control live under Catalog and Product
-            Control.
-          </p>
-        </div>
+    <EdgeStudioShell
+      title="Verticals studio"
+      description="Create, activate, and administer industry workspaces. Product bindings and Business Backend control live under Catalog and Product Control."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as ListTabId)}
+      actions={
         <div className="flex flex-wrap gap-[var(--space-2)]">
           <Button asChild variant="outline">
             <Link href="/edge/catalog">Catalog</Link>
@@ -137,13 +168,8 @@ export function EdgeVerticalsListStudio() {
             </Link>
           </Button>
         </div>
-      </header>
-
-      <Tabs
-        tabs={canCreate ? LIST_TABS : LIST_TABS.filter((t) => t.id !== "create")}
-        value={tab}
-        onChange={setTab}
-      />
+      }
+    >
 
       {tab === "registry" ? (
         <section className="space-y-[var(--space-4)]">
@@ -305,11 +331,19 @@ export function EdgeVerticalsListStudio() {
           </Button>
         </form>
       ) : null}
-    </div>
+    </EdgeStudioShell>
   );
 }
 
-const DETAIL_TABS = [
+type DetailTabId =
+  | "overview"
+  | "lifecycle"
+  | "products"
+  | "memberships"
+  | "configuration"
+  | "history";
+
+const DETAIL_TABS: { id: DetailTabId; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "lifecycle", label: "Lifecycle" },
   { id: "products", label: "Products" },
@@ -318,14 +352,34 @@ const DETAIL_TABS = [
   { id: "history", label: "History" },
 ];
 
+const DETAIL_SECTION_IDS = DETAIL_TABS.map((t) => t.id) as DetailTabId[];
+
+const DETAIL_STUDIO_GROUPS: { title: string; itemIds: DetailTabId[] }[] = [
+  { title: "Overview", itemIds: ["overview"] },
+  { title: "Lifecycle", itemIds: ["lifecycle"] },
+  { title: "Registry", itemIds: ["products", "memberships"] },
+  { title: "Governance", itemIds: ["configuration", "history"] },
+];
+
 export function EdgeVerticalDetailStudio({ verticalId }: { verticalId: string }) {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading vertical studio…" />}>
+      <EdgeVerticalDetailStudioInner verticalId={verticalId} />
+    </Suspense>
+  );
+}
+
+function EdgeVerticalDetailStudioInner({ verticalId }: { verticalId: string }) {
   const { permissions, switchWorkspace, activeVerticalId } = useEdgePlatform();
   const permissionKnown = permissions.length > 0;
   const allowed =
     !permissionKnown ||
     hasEdgePermission(permissions, "platform:verticals:read");
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useStudioSectionParam<DetailTabId>(
+    "overview",
+    DETAIL_SECTION_IDS,
+  );
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -640,6 +694,18 @@ export function EdgeVerticalDetailStudio({ verticalId }: { verticalId: string })
     return items;
   }, [status]);
 
+  const studioGroups: StudioSectionGroup[] = useMemo(
+    () =>
+      DETAIL_STUDIO_GROUPS.map((g) => ({
+        title: g.title,
+        items: g.itemIds.map((id) => {
+          const t = DETAIL_TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+      })),
+    [],
+  );
+
   if (!allowed) {
     return (
       <EdgeForbiddenState description="Requires platform:verticals:read." />
@@ -657,20 +723,17 @@ export function EdgeVerticalDetailStudio({ verticalId }: { verticalId: string })
         />
       ) : null}
       {verticalQuery.data ? (
-        <>
-          <header className="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
-            <div className="space-y-[var(--space-1)]">
-              <h1 className="type-xl font-semibold text-[var(--text-primary)]">
-                {verticalLabel(verticalQuery.data)}
-              </h1>
-              <p className="type-sm text-[var(--text-secondary)]">
-                {[verticalQuery.data.code, verticalQuery.data.slug]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+        <EdgeStudioShell
+          title={verticalLabel(verticalQuery.data)}
+          description={[verticalQuery.data.code, verticalQuery.data.slug]
+            .filter(Boolean)
+            .join(" · ")}
+          groups={studioGroups}
+          section={tab}
+          onSectionChange={(id) => setTab(id as DetailTabId)}
+          actions={
+            <div className="flex flex-wrap items-center gap-[var(--space-2)]">
               <Badge>{verticalQuery.data.status ?? "—"}</Badge>
-            </div>
-            <div className="flex flex-wrap gap-[var(--space-2)]">
               <Button
                 variant="outline"
                 onClick={() => void switchWorkspace(verticalId)}
@@ -689,20 +752,17 @@ export function EdgeVerticalDetailStudio({ verticalId }: { verticalId: string })
                   BB · Product Control
                 </Link>
               </Button>
+              {actionErr ? (
+                <p className="type-sm text-[var(--danger)]" role="alert">
+                  {actionErr}
+                </p>
+              ) : null}
+              {actionMsg ? (
+                <p className="type-sm text-[var(--success)]">{actionMsg}</p>
+              ) : null}
             </div>
-          </header>
-
-          {actionErr ? (
-            <p className="type-sm text-[var(--danger)]" role="alert">
-              {actionErr}
-            </p>
-          ) : null}
-          {actionMsg ? (
-            <p className="type-sm text-[var(--success)]">{actionMsg}</p>
-          ) : null}
-
-          <Tabs tabs={DETAIL_TABS} value={tab} onChange={setTab} />
-
+          }
+        >
           {tab === "overview" ? (
             <section className="space-y-[var(--space-4)] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-[var(--space-5)]">
               <EdgePermissionGate permission="platform:verticals:update">
@@ -1090,7 +1150,7 @@ export function EdgeVerticalDetailStudio({ verticalId }: { verticalId: string })
               ) : null}
             </section>
           ) : null}
-        </>
+        </EdgeStudioShell>
       ) : null}
     </div>
   );

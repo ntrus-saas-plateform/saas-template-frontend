@@ -8,7 +8,7 @@
  * It MUST NOT expose tenant end-users, tenant organizations, tenant business
  * roles/permissions, or customer invitations (P7.7 boundary).
  */
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { fieldControlClass } from "@/components/ui/field-control";
 import { Select } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
 import { EdgePermissionGate } from "@/components/edge/permission-gate";
 import {
   EdgeEmptyState,
@@ -24,6 +23,11 @@ import {
   EdgeForbiddenState,
   EdgeLoadingState,
 } from "@/components/edge/states";
+import {
+  EdgeStudioShell,
+  useStudioSectionParam,
+  type StudioSectionGroup,
+} from "@/components/edge/studio";
 import { hasAnyEdgePermission, hasEdgePermission } from "@/lib/edge/permissions";
 import { unwrapInfraList } from "@/lib/edge/infrastructure";
 import { edgeApi } from "@/lib/api/edge";
@@ -204,10 +208,25 @@ const TABS: { id: TabId; label: string; permission: string }[] = [
   { id: "history", label: "Historique", permission: "platform:keycloak:history:read" },
 ];
 
+const KC_SECTION_IDS = TABS.map((t) => t.id) as TabId[];
+
+const KC_STUDIO_GROUPS: { title: string; itemIds: TabId[] }[] = [
+  { title: "Infrastructure", itemIds: ["servers", "topologies"] },
+  { title: "Audit", itemIds: ["history"] },
+];
+
 export function EdgeKeycloakModule() {
+  return (
+    <Suspense fallback={<EdgeLoadingState label="Loading keycloak studio…" />}>
+      <EdgeKeycloakStudio />
+    </Suspense>
+  );
+}
+
+function EdgeKeycloakStudio() {
   const { permissions } = useEdgePlatform();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>("servers");
+  const [tab, setTab] = useStudioSectionParam<TabId>("servers", KC_SECTION_IDS);
   const [selectedTopologyId, setSelectedTopologyId] = useState<string>("");
   const [historyTopologyId, setHistoryTopologyId] = useState<string>("");
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -311,6 +330,23 @@ export function EdgeKeycloakModule() {
 
   const historyItems = useMemo(() => history.items, [history.items]);
 
+  const studioGroups: StudioSectionGroup[] = useMemo(() => {
+    const visibleIds = new Set(
+      TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map(
+        (t) => t.id,
+      ),
+    );
+    return KC_STUDIO_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.itemIds
+        .filter((id) => visibleIds.has(id))
+        .map((id) => {
+          const t = TABS.find((x) => x.id === id)!;
+          return { id: t.id, label: t.label };
+        }),
+    })).filter((g) => g.items.length > 0);
+  }, [permissions]);
+
   if (!hasAnyEdgePermission(permissions, ["platform:keycloak:read"])) {
     return <EdgeForbiddenState />;
   }
@@ -321,7 +357,14 @@ export function EdgeKeycloakModule() {
   }
 
   return (
-    <div className="flex flex-col gap-[var(--space-6)]" data-testid="kc-module">
+    <EdgeStudioShell
+      title="Keycloak studio"
+      description="Infrastructure topology only — never tenant users, orgs, roles, or invitations."
+      groups={studioGroups}
+      section={tab}
+      onSectionChange={(id) => setTab(id as TabId)}
+      testId="kc-module"
+    >
       {registerServer.isError ? (
         <Alert tone="error" title="Enregistrement refusé">
           {(registerServer.error as Error).message}
@@ -333,14 +376,6 @@ export function EdgeKeycloakModule() {
         </Alert>
       ) : null}
 
-      <Tabs
-        tabs={TABS.filter((t) => hasEdgePermission(permissions, t.permission)).map((t) => ({
-          id: t.id,
-          label: t.label,
-        }))}
-        value={tab}
-        onChange={(id) => setTab(id as TabId)}
-      />
 
       {tab === "servers" && (
         <EdgePermissionGate permission="platform:keycloak:read">
@@ -649,6 +684,6 @@ export function EdgeKeycloakModule() {
           </div>
         </EdgePermissionGate>
       )}
-    </div>
+    </EdgeStudioShell>
   );
 }
